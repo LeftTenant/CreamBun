@@ -14,6 +14,17 @@ There is no build CLI — all iteration happens in the Godot editor. Scripts can
 
 This is a beginner project, so always keep things as simple as possible. Favor easy to read and understand code over efficiency unless implementing code in critical sections of the game loop that demand performance. Document code well and explain why code is written as it is, not just what is implemented.
 
+## Code Style
+
+GDScript files use **tabs** for indentation (size 4). All files use LF line endings and UTF-8. See `.editorconfig` for the full ruleset.
+
+All GDScript should follow the official [GDScript style guide](https://docs.godotengine.org/en/stable/tutorials/scripting/gdscript/gdscript_styleguide.html). Key points:
+
+- `snake_case` for functions, variables, signals; `PascalCase` for classes/enums; `SCREAMING_SNAKE_CASE` for constants
+- Prefix private members with `_underscore`
+- Use type hints on variables, parameters, and return types
+- Script member ordering: class_name, extends, signals, enums, constants, @export vars, public vars, private vars, @onready vars, built-in overrides (`_ready`, `_process`, `_physics_process`), public methods, private methods
+
 ## Architecture
 
 ### Autoloads (3 only)
@@ -40,18 +51,27 @@ Set `process_mode = ALWAYS` (value `3`) on all `CanvasLayer` nodes so UI remains
 
 ## Folder Structure
 
-Scenes, scripts, and resources are co-located by area:
+Scenes and scripts are co-located by area:
 
-- `player/` — player scene, script, and related resources
-- `world/` — world scene, map logic; `art/tilesets/` for tile assets
-- `npc/` — NPC scenes, scripts; `resources/character/` for `NpcData`/`CharacterStats`
+- `player/` — player scene and script
+- `world/` — world scene and map logic
+- `npc/` — NPC scenes and scripts
 - `ui/` — all UI scenes and scripts
-- `combat/` — combat logic and `resources/combat/`
+- `combat/` — combat logic
 - `autoloads/` — the 3 autoload scripts
 
-## Code Style
+### Resources (`resources/`)
 
-GDScript files use **tabs** for indentation (size 4). All files use LF line endings and UTF-8. See `.editorconfig` for the full ruleset.
+All assets and data files live in `resources/`, organized by type:
+
+- `resources/tilesets/` — tileset images and `.tres` TileSet resources
+- `resources/sprites/` — character spritesheets, object sprites, UI icons
+- `resources/sounds/` — sound effects (`.wav`, `.ogg`)
+- `resources/music/` — background music tracks
+- `resources/fonts/` — custom fonts
+- `resources/data/` — custom resource `.gd` scripts and their `.tres` instances (`ItemData`, `CharacterStats`, `NpcData`, `AbilityData`)
+
+When adding a new asset, put the file in the matching type folder. If a subfolder would help (e.g. `resources/sprites/player/`, `resources/data/items/`), create one — but keep the top-level grouping by type.
 
 ## Input Actions
 
