@@ -1,27 +1,21 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
 ## Project
 
-CreamBun is a cozy isometric RPG built in **Godot 4.4** using the **Mobile renderer**. The player character is Cream Bun — a small round creature who forages ingredients, brews drinks, and sells them at market. No combat; no enemies. The tone is cozy life-sim.
+CreamBun is a cozy isometric RPG built in **Godot 4.4** using the **Mobile renderer**. The player character is Cream Bun — a small round creature who forages ingredients, brews drinks, and sells them at market. No combat; no enemies. The tone is cozy life-sim. The `combat/` folder and `COMBAT` game state are stubs reserved for future design — do not implement combat mechanics.
+
+See `README.md` in the root project folder for more details on project requirements and the intended game experience.
 
 ## Development
 
-Open the project in Godot 4: `/Applications/Godot.app` or edit files directly in VSCode where coding convenience is desired (configured in `.vscode/settings.json`).
+There is no build CLI or automated test suite — all iteration and testing happens in the Godot editor. Scripts can be edited externally; Godot hot-reloads them.
 
-There is no build CLI — all iteration happens in the Godot editor. Scripts can be edited externally; Godot hot-reloads them. The `.godot/` cache directory is gitignored.
-
-This is a beginner project, so always keep things as simple as possible. Favor easy to read and understand code over efficiency unless implementing code in critical sections of the game loop that demand performance. Document code well and explain why code is written as it is, not just what is implemented.
+This is a beginner project, so always keep things as simple as possible. Favor easy to read and understand code over efficiency unless implementing code in critical sections of the game loop that demand performance. Document code well and explain why code is written as it is, not just what is implemented. Include links to documentation in comments whenever new APIs are used.
 
 ## Code Style
 
-GDScript files use **tabs** for indentation (size 4). All files use LF line endings and UTF-8. See `.editorconfig` for the full ruleset.
+Follow the official [GDScript style guide](https://docs.godotengine.org/en/stable/tutorials/scripting/gdscript/gdscript_styleguide.html). Additional project rules:
 
-All GDScript should follow the official [GDScript style guide](https://docs.godotengine.org/en/stable/tutorials/scripting/gdscript/gdscript_styleguide.html). Key points:
-
-- `snake_case` for functions, variables, signals; `PascalCase` for classes/enums; `SCREAMING_SNAKE_CASE` for constants
-- Prefix private members with `_underscore`
 - Use type hints on variables, parameters, and return types
 - Script member ordering: class_name, extends, signals, enums, constants, @export vars, public vars, private vars, @onready vars, built-in overrides (`_ready`, `_process`, `_physics_process`), public methods, private methods
 
@@ -49,34 +43,7 @@ Y Sort must be enabled on `TileMapLayer` nodes **and** their parent `Node2D`. Us
 ### UI during pause
 Set `process_mode = ALWAYS` (value `3`) on all `CanvasLayer` nodes so UI remains responsive when the game is paused.
 
-## Folder Structure
+### Resources folder
+Assets live in `resources/`, organized by type (`tilesets/`, `sprites/`, `sounds/`, `music/`, `fonts/`, `data/`). Add subfolders within a type when helpful, but keep the top-level grouping by type.
 
-Scenes and scripts are co-located by area:
-
-- `player/` — player scene and script
-- `world/` — world scene and map logic
-- `npc/` — NPC scenes and scripts
-- `ui/` — all UI scenes and scripts
-- `combat/` — combat logic
-- `autoloads/` — the 3 autoload scripts
-
-### Resources (`resources/`)
-
-All assets and data files live in `resources/`, organized by type:
-
-- `resources/tilesets/` — tileset images and `.tres` TileSet resources
-- `resources/sprites/` — character spritesheets, object sprites, UI icons
-- `resources/sounds/` — sound effects (`.wav`, `.ogg`)
-- `resources/music/` — background music tracks
-- `resources/fonts/` — custom fonts
-- `resources/data/` — custom resource `.gd` scripts and their `.tres` instances (`ItemData`, `CharacterStats`, `NpcData`, `AbilityData`)
-
-When adding a new asset, put the file in the matching type folder. If a subfolder would help (e.g. `resources/sprites/player/`, `resources/data/items/`), create one — but keep the top-level grouping by type.
-
-## Input Actions
-
-Defined in `project.godot`:
-- Movement: `move_up`, `move_down`, `move_left`, `move_right` (WASD + arrows)
-- `interact` — E / Space
-- `open_inventory` — I / Tab
-- `pause` — Escape
+There is also an `art/` folder with original game assets from which resources are derived. Never reference this folder in code or configuration files directly, unless it is to automate the creation of resources from the original assets.
