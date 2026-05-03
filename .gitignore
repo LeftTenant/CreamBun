@@ -2,6 +2,9 @@
 .godot/
 /android/
 
+# Art source assets — never referenced by Godot directly
+art/**/*.import
+
 # VS Code
 .vscode/
 
