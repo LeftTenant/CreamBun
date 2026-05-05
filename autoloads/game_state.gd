@@ -6,9 +6,11 @@ enum State {
 	MAIN_MENU,
 	PLAYING,
 	DIALOGUE,
-	INVENTORY,
+	# NOTEBOOK replaces INVENTORY: the notebook IS the pause mechanism.
+	# Opening the notebook freezes world time; there is no separate PAUSED state.
+	# See docs/features/notebook/design.md for the full rationale.
+	NOTEBOOK,
 	COMBAT,
-	PAUSED,
 	LOADING,
 }
 

@@ -122,7 +122,27 @@ This tab lists options for creating a new game session (a.k.a. Story), or moving
 
 ---
 
+## Development Setup
+
+After cloning, install the GUT testing addon before running tests:
+
+**Option A — Godot Asset Library (recommended)**
+1. Open the project in Godot 4
+2. Click the **AssetLib** tab at the top of the editor
+3. Search for **"GUT - Godot Unit Testing"**
+4. Install version **9.3.1 or later**
+
+**Option B — GitHub**
+1. Download a release (9.3.1 or later) from [github.com/bitwes/Gut/releases](https://github.com/bitwes/Gut/releases)
+2. Copy the `addons/gut/` folder from the archive into the project's `addons/` folder
+3. Enable the plugin in **Project → Project Settings → Plugins**
+
+The `addons/gut/` folder is excluded from version control, so every developer must complete this step once after cloning.
+
+---
+
 ## Built With
 
 - [Godot 4](https://godotengine.org/) — game engine
 - GDScript — scripting language
+- [GUT](https://github.com/bitwes/Gut) — Godot Unit Testing framework

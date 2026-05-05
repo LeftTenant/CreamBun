@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="QuestData" format=3]
+
+[ext_resource type="Script" path="res://resources/data/quests/quest_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"the_foraging_book"
+title = "The Foraging Book"
+description = "Doug the bookshop keeper gave you a guide to foraging ingredients for brewing. This was the beginning of your adventure in Brewhamton."
+objectives = ["Meet Doug at the bookshop", "Receive the foraging guide", "Read the introduction"]
+is_main = true

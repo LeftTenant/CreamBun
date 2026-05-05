@@ -5,6 +5,13 @@
 # Art source assets — never referenced by Godot directly
 art/**/*.import
 
+# GUT testing addon — install from Godot AssetLib (search "GUT - Godot Unit Testing")
+# or download from https://github.com/bitwes/Gut (minimum version: 9.3.1)
+addons/gut/
+
+# Claude Code agent memory (local to each developer's machine)
+.claude/
+
 # VS Code
 .vscode/
 
