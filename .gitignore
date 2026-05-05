@@ -10,7 +10,8 @@ art/**/*.import
 addons/gut/
 
 # Claude Code agent memory (local to each developer's machine)
-.claude/
+.claude/agent-memory
+.claude/worktrees
 
 # VS Code
 .vscode/
