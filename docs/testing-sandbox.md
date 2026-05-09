@@ -55,7 +55,8 @@ The server accepts HTTP POST requests with a JSON body. Each request contains a 
 | `press_action` | `action: String` | `{ ok: true }` | Press a named Input Map action |
 | `release_action` | `action: String` | `{ ok: true }` | Release a named Input Map action |
 | `press_key` | `keycode: int`, `duration_frames: int` | `{ ok: true }` | Press a physical key for N frames |
-| `mouse_click` | `x: int`, `y: int`, `button: int` | `{ ok: true }` | Click at viewport coordinates |
+| `mouse_button_press` | `x: int`, `y: int`, `button: int` | `{ ok: true }` | Press a mouse button at viewport coordinates without releasing |
+| `mouse_button_release` | `x: int`, `y: int`, `button: int` | `{ ok: true }` | Release a mouse button at viewport coordinates |
 | `mouse_move` | `x: int`, `y: int` | `{ ok: true }` | Move mouse to viewport coordinates |
 | `get_game_state` | — | `{ state: "PLAYING" }` | Read the current `GameState` enum name |
 | `get_node_property` | `path: String`, `property: String` | `{ value: <any> }` | Read a property from a node in the active scene tree |
@@ -80,7 +81,8 @@ Each MCP tool maps 1:1 to a plugin command. Two additional tools are provided at
 | `press_action` | Presses a named action |
 | `release_action` | Releases a named action |
 | `press_key` | Presses a keycode for N frames |
-| `mouse_click` | Clicks at (x, y) in the game window |
+| `mouse_button_press` | Presses a mouse button at (x, y) without releasing — use before `mouse_move` for drags |
+| `mouse_button_release` | Releases a mouse button at (x, y) |
 | `mouse_move` | Moves the cursor to (x, y) |
 | `get_game_state` | Returns the current GameState name |
 | `get_node_property` | Reads a property from a scene node |
@@ -262,6 +264,7 @@ After implementing a feature:
 
 - Always call `wait_frames` after input actions before taking a screenshot. UI transitions, animations, and signal responses need at least a few frames to settle. 5–10 frames is usually enough; 30 frames for animations.
 - Use `get_game_state` and `get_node_property` for hard assertions. Screenshots catch visual regressions; property checks catch logic bugs.
+- To drag an item, use `mouse_button_press` at the source, one or more `mouse_move` calls along the path, then `mouse_button_release` at the destination. Call `wait_frames` between press and the first move so Godot recognises the drag gesture before the cursor leaves the origin.
 - Use `load_scene` to jump straight to the feature under test rather than playing through the full game flow from `MAIN_MENU` each time.
 - Use `emit_game_event` to set up preconditions (e.g. add an item to the player's inventory before testing the inventory screen) rather than playing through the flow that normally produces those conditions.
 
