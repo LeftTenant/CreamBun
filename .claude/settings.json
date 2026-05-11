@@ -1,0 +1,13 @@
+{
+  "extraKnownMarketplaces": {
+    "creambun-local": {
+      "source": {
+        "source": "directory",
+        "path": "."
+      }
+    }
+  },
+  "enabledPlugins": {
+    "godot-testing@creambun-local": true
+  }
+}

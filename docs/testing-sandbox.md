@@ -41,7 +41,7 @@ All of this is exposed over a local HTTP server that only runs in debug builds o
 └─────────────────────────────────────────────────┘
 ```
 
-### Godot Testing Plugin (`testing/testing_server.gd`)
+### Godot Testing Plugin (`plugins/godot-testing/godot/testing_server.gd`)
 
 An autoload script that opens a `TCPServer` listening on `127.0.0.1:9080`. It is only active when `OS.is_debug_build()` returns `true`, so it compiles away in release exports.
 
@@ -67,9 +67,9 @@ The server accepts HTTP POST requests with a JSON body. Each request contains a 
 
 Input actions (`press_action` / `release_action`) use the names defined in Project Settings → Input Map (e.g. `"move_left"`, `"interact"`, `"open_notebook"`). This keeps tests device-agnostic.
 
-### MCP Server (`testing/mcp_server.py`)
+### MCP Server (`plugins/godot-testing/server/mcp_server.py`)
 
-A Python MCP server (stdio transport) that wraps each HTTP command as a named tool. Claude Code loads it via `.claude/settings.json`.
+A Python MCP server (stdio transport) that wraps each HTTP command as a named tool. The plugin's `.mcp.json` registers it with Claude Code automatically once the plugin is installed.
 
 Each MCP tool maps 1:1 to a plugin command. Two additional tools are provided at the process level:
 
@@ -95,25 +95,25 @@ Each MCP tool maps 1:1 to a plugin command. Two additional tools are provided at
 
 ## Setup
 
-### 1. Register the autoload
+### 1. Install the Claude Code plugin
 
-In `project.godot`, add `testing/testing_server.gd` as an autoload named `TestingServer`. The plugin itself will disable all behavior when not in a debug build, so it is safe to leave registered permanently.
+The repo ships a local Claude Code marketplace at `.claude-plugin/marketplace.json` that exposes a single plugin named `godot-testing` (under `plugins/godot-testing/`). The project-shared `.claude/settings.json` already lists the marketplace under `extraKnownMarketplaces` and enables the plugin by default — Claude Code will prompt to install on first launch.
 
-### 2. Configure the MCP server
+To install manually from the project root:
 
-Add the following to `.claude/settings.json` under `mcpServers`:
-
-```json
-"testing-sandbox": {
-  "command": "python3",
-  "args": ["testing/mcp_server.py"],
-  "env": {
-    "GODOT_PROJECT_PATH": "/home/user/CreamBun",
-    "GODOT_BIN": "godot4",
-    "TESTING_SERVER_PORT": "9080"
-  }
-}
 ```
+/plugin marketplace add ./
+/plugin install godot-testing@creambun-local
+```
+
+Once installed, the plugin's MCP server (`testing-sandbox`), the `godot-test-engineer` agent, and the three test skills (`test-unit`, `test-integration`, `test-e2e`) all become available to Claude.
+
+### 2. Autoload + Python deps
+
+No manual setup required:
+
+- The Godot autoload is already registered in `project.godot` as `res://plugins/godot-testing/godot/testing_server.gd`. It compiles out of release builds via `OS.is_debug_build()`.
+- The Python MCP server's bash launcher (`plugins/godot-testing/server/launch.sh`) auto-creates a project-local venv and installs `mcp` from `requirements.txt` on first invocation. The venv lives at `plugins/godot-testing/server/.venv/` and is git-ignored.
 
 ### 3. Verify
 
@@ -123,8 +123,10 @@ With the game open in the editor, press Play (`F5`). In a terminal:
 curl -s -X POST http://localhost:9080 \
   -H "Content-Type: application/json" \
   -d '{"command":"get_game_state"}'
-# → {"state":"MAIN_MENU"}
+# → {"state":"PLAYING"}
 ```
+
+To verify the MCP layer, restart Claude Code so it picks up the plugin, then call `mcp__testing-sandbox__get_game_state` from any agent.
 
 ---
 

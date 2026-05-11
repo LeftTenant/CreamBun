@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "godot-testing",
+  "version": "0.1.0",
+  "description": "Visual end-to-end testing sandbox + GUT helper agent and skills for Godot 4 projects. Drives the running game via an in-process MCP server (input injection + viewport screenshots) so Claude can author and execute unit, integration, and e2e tests without touching the host desktop.",
+  "keywords": ["godot", "testing", "e2e", "gut", "visual-testing"]
+}

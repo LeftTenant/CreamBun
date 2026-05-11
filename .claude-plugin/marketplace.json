@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "creambun-local",
+  "owner": {
+    "name": "CreamBun"
+  },
+  "plugins": [
+    {
+      "name": "godot-testing",
+      "source": "./plugins/godot-testing",
+      "description": "Visual e2e + GUT testing for the CreamBun Godot project."
+    }
+  ]
+}

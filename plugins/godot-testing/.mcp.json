@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "testing-sandbox": {
+      "command": "${CLAUDE_PLUGIN_ROOT}/server/launch.sh",
+      "env": {
+        "TESTING_SERVER_PORT": "9080"
+      }
+    }
+  }
+}

@@ -13,6 +13,9 @@ addons/gut/
 .claude/agent-memory
 .claude/worktrees
 
+# godot-testing plugin — Python MCP server venv (auto-created on first run)
+plugins/godot-testing/server/.venv/
+
 # VS Code
 .vscode/
 
