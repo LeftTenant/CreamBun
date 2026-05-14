@@ -37,6 +37,12 @@ func _ready() -> void:
 		set_process(false)
 		return
 
+	# Keep _process running while the SceneTree is paused — otherwise tests
+	# that drive UI which pauses the game (e.g. opening the notebook) would
+	# stall the server, and every subsequent MCP call would time out.
+	# https://docs.godotengine.org/en/4.4/classes/class_node.html#enum-node-processmode
+	process_mode = Node.PROCESS_MODE_ALWAYS
+
 	_server = TCPServer.new()
 	var err: int = _server.listen(PORT, BIND_HOST)
 	if err != OK:
@@ -180,7 +186,7 @@ func _dispatch(client: StreamPeerTCP, body: String) -> void:
 	# We wrap dispatch in a match so adding a command is a one-line change.
 	match command:
 		"screenshot":
-			result = _cmd_screenshot()
+			result = _cmd_screenshot(request)
 		"press_action":
 			result = _cmd_press_action(request)
 		"release_action":
@@ -217,7 +223,7 @@ func _dispatch(client: StreamPeerTCP, body: String) -> void:
 # Command handlers
 # ---------------------------------------------------------------------------
 
-func _cmd_screenshot() -> Dictionary:
+func _cmd_screenshot(request: Dictionary) -> Dictionary:
 	# get_viewport() on an autoload returns the root SubViewport / Window.
 	# get_texture() is GPU-side; get_image() reads it back to CPU memory.
 	#
@@ -232,6 +238,19 @@ func _cmd_screenshot() -> Dictionary:
 	var image: Image = get_viewport().get_texture().get_image()
 	if image == null:
 		return {"error": "viewport texture unavailable"}
+
+	# If save_to is provided, write the PNG to disk and return only the path.
+	# This avoids round-tripping ~50 KB of base64 through the MCP layer for
+	# every baseline capture during a test run. Accepts absolute paths and
+	# res://user:// URIs.
+	# https://docs.godotengine.org/en/4.4/classes/class_image.html#class-image-method-save-png
+	var save_to: String = String(request.get("save_to", ""))
+	if save_to != "":
+		var err: int = image.save_png(save_to)
+		if err != OK:
+			return {"error": "save_png failed (err=%d) for %s" % [err, save_to]}
+		return {"saved": save_to}
+
 	var png: PackedByteArray = image.save_png_to_buffer()
 	return {"image": Marshalls.raw_to_base64(png)}
 

@@ -203,9 +203,19 @@ def stop_game() -> dict:
 # ---------------------------------------------------------------------------
 
 @mcp.tool()
-def screenshot() -> dict:
-    """Capture the current viewport frame. Returns {image: "<base64 PNG>"}."""
-    return _send("screenshot")
+def screenshot(save_to: str = "") -> dict:
+    """Capture the current viewport frame.
+
+    Without `save_to`, returns {image: "<base64 PNG>"} — convenient for ad-hoc
+    inspection but heavy on context (a typical frame is tens of KB of base64).
+
+    With `save_to` set to an absolute filesystem path (or res:// / user:// URI),
+    writes the PNG directly to disk on the Godot side and returns
+    {saved: "<path>"}. Use this for baseline captures during scenario runs:
+    read the resulting file back with the Read tool when visual review is
+    needed.
+    """
+    return _send("screenshot", save_to=save_to)
 
 
 @mcp.tool()
