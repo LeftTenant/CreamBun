@@ -23,10 +23,11 @@ extends NotebookTab
 var _settings: GameSettings
 
 # Slider refs kept so the reset buttons can programmatically restore defaults
-# without rebuilding the entire UI. Both are null until populate_left() runs.
+# without rebuilding the entire UI. All four are null until populate_left() runs.
 var _master_slider: HSlider
 var _music_slider: HSlider
 var _sfx_slider: HSlider
+var _text_speed_slider: HSlider
 
 # OptionButton ref so _on_reset_right_pressed() can call select() on it.
 # Null until populate_right() runs.
@@ -92,9 +93,9 @@ func populate_left(parent: Control) -> void:
 	gameplay_label.focus_mode = Control.FOCUS_NONE
 	vbox.add_child(gameplay_label)
 
-	var text_speed_slider: HSlider = _make_slider(
+	_text_speed_slider = _make_slider(
 			"Text Speed", 0.0, 200.0, _settings.text_speed * 100.0, vbox)
-	text_speed_slider.value_changed.connect(_on_text_speed_changed)
+	_text_speed_slider.value_changed.connect(_on_text_speed_changed)
 
 	# --- Reset button ---
 	var reset_btn: Button = Button.new()
@@ -194,8 +195,8 @@ func _on_window_scale_changed(index: int) -> void:
 
 
 ## Reset all audio and gameplay settings to their default values and sync
-## the slider widgets. Guards against null sliders in case populate_left()
-## was never called (e.g. the right page was shown first).
+## the slider widgets. Slider refs are guaranteed non-null by populate_left()
+## having run — guards below are for symmetry with _on_reset_right_pressed().
 func _on_reset_left_pressed() -> void:
 	_settings.master_volume = 1.0
 	_settings.music_volume = 1.0
@@ -210,6 +211,8 @@ func _on_reset_left_pressed() -> void:
 		_music_slider.value = 100.0
 	if _sfx_slider != null:
 		_sfx_slider.value = 100.0
+	if _text_speed_slider != null:
+		_text_speed_slider.value = 100.0
 
 
 ## Reset the window scale to the default (2×) and sync the OptionButton.

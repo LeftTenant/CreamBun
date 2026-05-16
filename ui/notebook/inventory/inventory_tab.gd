@@ -58,6 +58,11 @@ var _recycle_button: Button = null
 # without passing the parent through multiple method calls.
 var _right_page_parent: Control = null
 
+# Stored ref to the freshly-built ItemList VBoxContainer so _rebind_selected_row
+# can walk it directly instead of navigating by node-name path each time.
+# Assigned at the end of every _build_right_page() call.
+var _item_list: VBoxContainer = null
+
 
 # ---------------------------------------------------------------------------
 # Built-in overrides
@@ -126,7 +131,12 @@ func populate_left(parent: Control) -> void:
 	_equipment_slots.clear()
 
 	var vbox: VBoxContainer = VBoxContainer.new()
+	vbox.name = "EquipmentVBox"
 	parent.add_child(vbox)
+	# PRESET_FULL_RECT makes the VBoxContainer fill its parent Control completely.
+	# Without this, a plain Control parent won't resize its children automatically —
+	# only Container subclasses do that. See: https://docs.godotengine.org/en/stable/classes/class_control.html#class-control-method-set-anchors-and-offsets-preset
+	vbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
 	var header: Label = Label.new()
 	header.text = "Equipment"
@@ -148,6 +158,9 @@ func populate_left(parent: Control) -> void:
 
 	for slot_enum: int in slots:
 		var slot_node: EquipmentSlot = EquipmentSlot.new()
+		# Name slots by enum key (`Slot_BACKPACK`, `Slot_CLOTHING`, ...) so the
+		# mapping is stable if the enum is reordered or values are renumbered.
+		slot_node.name = "Slot_%s" % ItemData.EquipSlot.find_key(slot_enum)
 		vbox.add_child(slot_node)
 		# Pass the currently equipped item (null when empty) so the slot shows
 		# either the slot-name label or the item icon straight away.
@@ -207,6 +220,14 @@ func _do_equip() -> void:
 
 ## Remove one unit of the selected item from the bag and emit item_dropped.
 ## Does nothing when nothing is selected.
+##
+## After the remove we rebuild the right page (via _refresh_both_pages). Because
+## the rebuild destroys all row nodes, _selected_row would become a dangling
+## reference. We save the item_id before the rebuild and then restore the
+## selection by looking up the new row for the same id. This lets the player
+## hold T to deplete a stack one unit at a time without re-clicking.
+## If the last unit was just removed the item_id won't be found and
+## _selected_row is left null — clearing both the pointer and the visual state.
 func _do_throw() -> void:
 	if _selected_row == null or _selected_row._stack == null:
 		return
@@ -216,11 +237,22 @@ func _do_throw() -> void:
 	if item == null:
 		return
 
+	# Remember which item was selected before the rebuild destroys all row nodes.
+	var prev_item_id: StringName = stack.item_id
+
 	_inventory.remove(item, 1)
 	GameEvents.item_dropped.emit(item, 1)
 	GameEvents.inventory_changed.emit()
+
+	# Clear the pointer before rebuilding — _refresh_both_pages → _build_right_page
+	# calls child.free() on every existing row, so keeping the old reference would
+	# leave _selected_row pointing at a freed object.
 	_selected_row = null
 	_refresh_both_pages()
+
+	# After the rebuild, try to re-select the same item's new row. If the stack
+	# was fully depleted the lookup returns null and the selection stays cleared.
+	_rebind_selected_row(prev_item_id)
 
 
 ## Recycle one unit of the selected item: remove it and add the yield items.
@@ -275,17 +307,17 @@ func _on_slot_drop(stack: ItemStack, slot: int) -> void:
 	_refresh_both_pages()
 
 
-## Called when the player left-clicks a row to select it.
-## Clears any equipment-slot selection so only one thing is selected at a time.
-##
-## @param event - the InputEvent forwarded from the row's gui_input signal
-## @param row   - the InventoryRow that was clicked
-func _on_row_gui_input(event: InputEvent, row: InventoryRow) -> void:
-	if event is InputEventMouseButton:
-		var mb: InputEventMouseButton = event as InputEventMouseButton
-		if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
-			_selected_row = row
-			_selected_slot = null
+# Exactly one of _selected_row or _selected_slot is non-null at any time.
+# Clearing _selected_slot here enforces that contract — verb handlers (_do_equip,
+# _do_throw, _do_recycle) branch on which one is set.
+# We also clear the previous row's visual highlight so only one row ever
+# shows the selection indicator at a time.
+func _on_row_selected(row: InventoryRow) -> void:
+	if _selected_row != null:
+		_selected_row.set_selected(false)
+	_selected_row = row
+	_selected_row.set_selected(true)
+	_selected_slot = null
 
 
 # ---------------------------------------------------------------------------
@@ -304,7 +336,12 @@ func _build_right_page() -> void:
 		child.free()
 
 	var vbox: VBoxContainer = VBoxContainer.new()
+	vbox.name = "RightVBox"
 	_right_page_parent.add_child(vbox)
+	# PRESET_FULL_RECT makes the VBoxContainer fill its parent Control completely.
+	# Without this, a plain Control parent won't resize its children automatically —
+	# only Container subclasses do that. See: https://docs.godotengine.org/en/stable/classes/class_control.html#class-control-method-set-anchors-and-offsets-preset
+	vbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
 	# Weight header — shows current / max so the player always knows their load.
 	_weight_label = Label.new()
@@ -316,12 +353,17 @@ func _build_right_page() -> void:
 	# ScrollContainer so long item lists don't overflow the page.
 	# https://docs.godotengine.org/en/stable/classes/class_scrollcontainer.html
 	var scroll: ScrollContainer = ScrollContainer.new()
+	scroll.name = "ItemScroll"
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vbox.add_child(scroll)
 
 	var item_list: VBoxContainer = VBoxContainer.new()
+	item_list.name = "ItemList"
 	item_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(item_list)
+	# Store a direct ref so _rebind_selected_row can walk this container without
+	# navigating by name (which would break if the tree shape ever changed).
+	_item_list = item_list
 
 	# Add one row per stack. Stacks are ordered by insertion — the order the
 	# player picked items up. Phase 2 may add sorting controls.
@@ -334,15 +376,17 @@ func _build_right_page() -> void:
 			continue  # Skip orphaned stacks gracefully.
 
 		var row: InventoryRow = InventoryRow.new()
+		# Node names disallow spaces, `/`, and `:` — Godot silently replaces them
+		# with `@`, breaking any test that addresses the node via a literal string.
+		# Sanitize the item id so names like "Row_sample_leaf" are stable.
+		var safe_id: String = str(stack.item_id).replace(" ", "_").replace("/", "_").replace(":", "_")
+		row.name = "Row_%s" % safe_id
 		item_list.add_child(row)
 		row.setup(stack, item)
-		# Connect gui_input with the row bound into the lambda so each callback
-		# knows which row was clicked. GDScript lambdas capture by reference, so
-		# we capture an explicit local to avoid the loop-variable aliasing bug.
-		# https://docs.godotengine.org/en/stable/tutorials/scripting/gdscript/gdscript_basics.html#lambdas
-		var captured_row: InventoryRow = row
-		row.gui_input.connect(
-			func(event: InputEvent) -> void: _on_row_gui_input(event, captured_row))
+		# `_gui_input` on the row emits this signal on left-click; we connect to it
+		# instead of the row's `gui_input` signal because the latter is swallowed by
+		# the surrounding ScrollContainer.
+		row.selected.connect(_on_row_selected)
 
 	# Footer buttons — three actions side by side.
 	var footer: HBoxContainer = HBoxContainer.new()
@@ -376,6 +420,34 @@ func _refresh_both_pages() -> void:
 
 	# Rebuild the right page — item list and weight header.
 	_build_right_page()
+
+
+## After a _build_right_page() call, find the newly created row whose stack
+## matches item_id and restore it as the visual selection.
+##
+## This is the "rebuild + rebind" pattern: we always rebuild the whole page on
+## inventory change (simple, no partial-update bookkeeping), but we save the
+## selected item_id across the rebuild so the selection survives.
+##
+## @param item_id - the StringName id of the item we want to keep selected.
+##                  If no row with this id exists (stack fully depleted) the
+##                  method is a no-op and _selected_row stays null.
+func _rebind_selected_row(item_id: StringName) -> void:
+	# _item_list is assigned at the end of every _build_right_page() call.
+	# If it's null here, the page was never built — bail silently.
+	if _item_list == null:
+		return
+
+	# Walk the rows and match by item_id — not by node name or array position,
+	# since names are derived from ids and positions can shift after a depletion.
+	for child: Node in _item_list.get_children():
+		var row: InventoryRow = child as InventoryRow
+		if row == null:
+			continue
+		if row._stack != null and row._stack.item_id == item_id:
+			_selected_row = row
+			_selected_row.set_selected(true)
+			return
 
 
 ## Update the weight header text to reflect the current inventory state.

@@ -62,3 +62,8 @@ needed for its assertions, and saves its screenshots under
 - After any `press_action`, wait at least 5 frames before reading state or
   screenshotting — the notebook rebuilds its pages on tab switch and the new
   content does not exist on the same frame as the input.
+- **2× coordinate scaling**: the project renders at 640×480 and stretches to a
+  1280×960 window. All mouse coordinates passed to the testing-sandbox tools must
+  be **2× the viewport-space values** reported by `get_node_property` (e.g. a
+  node whose `global_position` is (120, 80) requires mouse coords (240, 160)).
+  Forgetting this makes clicks land in empty space with no error.
