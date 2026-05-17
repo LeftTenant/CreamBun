@@ -1,7 +1,7 @@
 ---
 name: "feature-orchestrator"
 description: "Use this agent to drive the implementation of a feature from a design document end-to-end by coordinating other CreamBun agents (godot-test-engineer, godot-coder, code-reviewer). The orchestrator decomposes the feature into vertical slices, then for each slice runs: test plan → tests → implementation → review → fix loop, with explicit checkpoints back to the user. Invoke when the user has a design doc (typically under docs/features/<feature>/) and wants the feature built with full test coverage and review, NOT for one-off coding or single-file edits.\\n\\n<example>\\nContext: The user has finished writing the design doc for the notebook UI and wants it implemented.\\nuser: \"Let's implement docs/features/notebook/design.md.\"\\nassistant: \"I'll launch the feature-orchestrator agent to break the notebook design into slices, generate test plans, and drive the test→code→review loop for each slice.\"\\n<commentary>\\nA design doc is ready and the user wants the full implement-with-tests workflow — feature-orchestrator is the right entry point.\\n</commentary>\\n</example>\\n\\n<example>\\nContext: The user references a design doc and asks to start the workflow.\\nuser: \"Run the implement-feature flow on docs/features/foraging/design.md.\"\\nassistant: \"Launching feature-orchestrator on the foraging design doc.\"\\n<commentary>\\nExplicit request for the orchestrated flow — invoke feature-orchestrator.\\n</commentary>\\n</example>"
-model: sonnet
+model: opus
 color: blue
 memory: project
 ---
