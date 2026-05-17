@@ -82,6 +82,7 @@ Each numbered step is independently auditable: an input or setup line, a settle 
 
 - **Always wait after input.** Animations and signal cascades take frames to settle. 5–10 frames for UI, 30 for animations.
 - **Drag with explicit press → wait → move → release.** Call `mouse_button_press` at the source, `wait_frames` 1–2 (so Godot recognizes the drag gesture before the cursor leaves the origin), one or more `mouse_move` calls along the path, then `mouse_button_release` at the destination.
+- **Mouse coordinates are viewport-space.** Pass `(x, y)` in the game's viewport coordinate system (the same space `get_node_property` returns for Control rects, e.g. 640×480 in CreamBun). The testing server rescales to window pixels internally, so scenarios stay correct across all `window_scale` values, including mid-scenario resizes.
 - **Prefer Input Map actions over raw keycodes.** Tests stay device-agnostic; bindings can change without rewriting scenarios.
 - **Jump straight to the feature.** Don't replay through `MAIN_MENU` every time — `load_scene` + `emit_game_event` skips the prelude.
 

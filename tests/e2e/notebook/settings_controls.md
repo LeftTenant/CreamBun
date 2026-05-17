@@ -24,6 +24,18 @@ will resize the host window — that is the expected behaviour and the test
 deliberately exercises it. Run this scenario last in a batch so the resize
 does not interfere with other scenarios' screenshots.
 
+TODO: strengthen this scenario by changing the window scale to a non-default
+value (e.g. 1× or 4×) via the OptionButton popup **before** clicking the
+right-page reset. As written, `GameSettings.window_scale` already defaults
+to `2`, so the right-page reset is a no-op for window size and the scenario
+does not actually exercise a mid-scenario `DisplayServer.window_set_size`
+call. Adding a pre-step that pops the OptionButton, selects a different
+scale, then clicks a left-page slider in viewport coords would prove that
+the testing-sandbox's per-call viewport→window conversion in
+`plugins/godot-testing/godot/testing_server.gd:_viewport_to_window` keeps
+mouse coords accurate across a live window resize — which is the case this
+scenario is meant to be the canonical proof for.
+
 ## Setup
 - Load scene: `res://world/world.tscn`
 - Wait: 10 frames
@@ -50,15 +62,27 @@ does not interfere with other scenarios' screenshots.
   ("1× / 2× / 3× / 4×"). Record its current `selected` index for comparison
   after the reset.
 
-### Step 2: Move the master volume slider to 0
+### Step 2: Move sliders away from their defaults
+**2a — Master Volume to 0**
 - Mouse move to: leftmost edge of the Master Volume HSlider
 - Mouse button press: `LEFT`
 - Mouse button release: `LEFT`
 - Wait: 5 frames
-- Screenshot → save / compare reference: `settings_controls_step_02_master_zero.png`
 - Assert: the Master Volume slider's `value` is `0.0`
-  (the click on the leftmost edge drags the thumb to the slider minimum)
-- Assert: the active `SettingsTab._settings.master_volume` reads as `0.0`
+  (click on the leftmost edge drives the thumb to the slider minimum)
+- Assert: `SettingsTab._settings.master_volume` reads as `0.0`
+
+**2b — Text Speed to 0**
+- Mouse move to: leftmost edge of the Text Speed HSlider
+- Mouse button press: `LEFT`
+- Mouse button release: `LEFT`
+- Wait: 5 frames
+- Screenshot → save / compare reference: `settings_controls_step_02_sliders_moved.png`
+- Assert: the Text Speed slider's `value` is `0.0`
+  (clicking the leftmost edge drives the thumb to the slider minimum of 0)
+- Assert: `SettingsTab._settings.text_speed` reads as `0.0`
+  (this is the assertion that would have caught the bug where `_text_speed_slider`
+  was a local variable and the reset handler could not update the widget)
 
 ### Step 3: Click "Reset Audio & Gameplay to Defaults"
 - Mouse move to: centre of the "Reset Audio & Gameplay to Defaults" button
@@ -67,11 +91,15 @@ does not interfere with other scenarios' screenshots.
 - Wait: 10 frames
 - Screenshot → save / compare reference: `settings_controls_step_03_left_reset.png`
 - Assert: all three volume sliders are back to `value == 100.0`
-- Assert: the Text Speed slider is back to `value == 100.0`
+- Assert: the Text Speed slider widget `value` is exactly `100.0`
+  (not "approximately default" — the reset handler must explicitly set
+  `_text_speed_slider.value = 100.0`; a value of `0.0` here is the failure mode
+  the scenario was previously unable to detect)
 - Assert: `SettingsTab._settings.master_volume` == `1.0`
 - Assert: `SettingsTab._settings.music_volume` == `1.0`
 - Assert: `SettingsTab._settings.sfx_volume` == `1.0`
 - Assert: `SettingsTab._settings.text_speed` == `1.0`
+  (data model must be restored alongside the widget)
 
 ### Step 4: Click "Reset Display to Defaults"
 - Mouse move to: centre of the "Reset Display to Defaults" button on the right

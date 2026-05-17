@@ -298,8 +298,35 @@ func _cmd_press_key(request: Dictionary) -> Dictionary:
 	return {"ok": true}
 
 
+## Convert a viewport-space coordinate to window-space pixels.
+##
+## All three mouse command handlers below run incoming (x, y) through this so
+## scenario authors can write coordinates in the same space that
+## `get_node_property` reports Control rects in (the 640×480 viewport), without
+## having to know the current window scale.
+##
+## Why the conversion is needed: `Input.parse_input_event()` injects events as
+## if they came from the OS, so their `position` is interpreted in window
+## pixels. With `window/stretch/mode = "viewport"` the window is larger than
+## the viewport (e.g. 1280×960 OS window over a 640×480 game viewport), so a
+## viewport-space click at (120, 80) must be sent as window-space (240, 160).
+##
+## The ratio is computed per-call because the game can resize its own window
+## at runtime (the Settings tab lets the player pick 1×–4× scale, and the
+## e2e scenarios exercise that path). For any stretch mode where viewport
+## size already equals window size, the ratio is 1.0 and this is a no-op.
+##   https://docs.godotengine.org/en/4.4/tutorials/rendering/multiple_resolutions.html
+func _viewport_to_window(pos: Vector2) -> Vector2:
+	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
+	if viewport_size.x <= 0.0 or viewport_size.y <= 0.0:
+		return pos
+	var window_size := Vector2(DisplayServer.window_get_size())
+	return pos * (window_size / viewport_size)
+
+
 func _cmd_mouse_button_press(request: Dictionary) -> Dictionary:
-	var pos := Vector2(float(request.get("x", 0)), float(request.get("y", 0)))
+	var pos: Vector2 = _viewport_to_window(
+			Vector2(float(request.get("x", 0)), float(request.get("y", 0))))
 	var button: int = int(request.get("button", MOUSE_BUTTON_LEFT))
 	# Move the cursor to the press location first so any hover-driven UI state
 	# (highlights, drag-source detection) sees the button-down at this point.
@@ -318,7 +345,8 @@ func _cmd_mouse_button_press(request: Dictionary) -> Dictionary:
 
 
 func _cmd_mouse_button_release(request: Dictionary) -> Dictionary:
-	var pos := Vector2(float(request.get("x", 0)), float(request.get("y", 0)))
+	var pos: Vector2 = _viewport_to_window(
+			Vector2(float(request.get("x", 0)), float(request.get("y", 0))))
 	var button: int = int(request.get("button", MOUSE_BUTTON_LEFT))
 	var event: InputEventMouseButton = InputEventMouseButton.new()
 	event.button_index = button
@@ -330,7 +358,8 @@ func _cmd_mouse_button_release(request: Dictionary) -> Dictionary:
 
 
 func _cmd_mouse_move(request: Dictionary) -> Dictionary:
-	var pos := Vector2(float(request.get("x", 0)), float(request.get("y", 0)))
+	var pos: Vector2 = _viewport_to_window(
+			Vector2(float(request.get("x", 0)), float(request.get("y", 0))))
 	var event: InputEventMouseMotion = InputEventMouseMotion.new()
 	event.position = pos
 	event.global_position = pos
@@ -356,7 +385,18 @@ func _cmd_get_node_property(request: Dictionary) -> Dictionary:
 	if node == null:
 		return {"error": "node not found: %s" % path}
 
-	var value: Variant = node.get(property)
+	# Support dot-separated property chains so callers can reach sub-object
+	# fields without needing a separate node path for each level.
+	# Example: property="_settings.master_volume" walks node._settings first,
+	# then reads master_volume on the resulting Resource.
+	# https://docs.godotengine.org/en/4.4/classes/class_object.html#class-object-method-get
+	var segments: PackedStringArray = property.split(".")
+	var value: Variant = node
+	for segment in segments:
+		if not (value is Object):
+			return {"error": "property chain broken at '%s': intermediate value is not an Object" % segment}
+		value = (value as Object).get(segment)
+
 	# Some Variant types (Object, Resource, RID) don't survive JSON round-trips
 	# meaningfully — stringify them so callers at least get a useful identifier.
 	if value is Object or value is RID:
