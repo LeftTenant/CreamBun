@@ -48,6 +48,14 @@ func _ready() -> void:
 	# Both children occupy the full slot area; label is shown when empty,
 	# icon_rect when filled.
 
+	# Without an explicit minimum size, a plain Control collapses to 0×0 inside a
+	# VBoxContainer, which makes every slot in the inventory left page render on
+	# top of every other slot. Match InventoryRow's pattern: expand horizontally
+	# to fill the page, and reserve a comfortable height for the slot name or icon.
+	# https://docs.godotengine.org/en/stable/classes/class_control.html#class-control-property-custom-minimum-size
+	size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	custom_minimum_size = Vector2(0, 28)
+
 	_slot_label = Label.new()
 	_slot_label.name = "SlotLabel"
 	# Center text inside the slot area so it reads clearly regardless of size.
