@@ -15,6 +15,15 @@ extends NotebookTab
 
 
 # ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+# Integer multipliers offered in the window-scale OptionButton. The OptionButton
+# index for a scale is `scale - 1` (1× → 0, 2× → 1, etc).
+const _WINDOW_SCALE_OPTIONS: Array[int] = [1, 2, 3, 4]
+
+
+# ---------------------------------------------------------------------------
 # Private vars — set in _ready() or during populate calls
 # ---------------------------------------------------------------------------
 
@@ -123,13 +132,13 @@ func populate_right(parent: Control) -> void:
 	vbox.add_child(display_label)
 
 	_window_scale_option = OptionButton.new()
-	# The four options map directly to integer scale factors 1–4.
-	# The resolution shown is scale × 320 by scale × 180 (base viewport).
+	# Labels are generated from the project's base viewport size so changing
+	# `display/window/size/viewport_*` in project.godot keeps the displayed
+	# resolutions accurate without code edits.
 	# https://docs.godotengine.org/en/stable/classes/class_optionbutton.html
-	_window_scale_option.add_item("1× (640×480)")
-	_window_scale_option.add_item("2× (1280×960)")
-	_window_scale_option.add_item("3× (1920×1440)")
-	_window_scale_option.add_item("4× (2560×1920)")
+	for scale: int in _WINDOW_SCALE_OPTIONS:
+		var size: Vector2i = _scaled_window_size(scale)
+		_window_scale_option.add_item("%d× (%d×%d)" % [scale, size.x, size.y])
 	# _settings.window_scale is 1–4; OptionButton indices are 0–3, so subtract 1.
 	_window_scale_option.selected = _settings.window_scale - 1
 	vbox.add_child(_window_scale_option)
@@ -190,8 +199,7 @@ func _on_text_speed_changed(value: float) -> void:
 ## https://docs.godotengine.org/en/stable/classes/class_displayserver.html#class-displayserver-method-window-set-size
 func _on_window_scale_changed(index: int) -> void:
 	_settings.window_scale = index + 1
-	DisplayServer.window_set_size(
-			Vector2i(640 * _settings.window_scale, 480 * _settings.window_scale))
+	DisplayServer.window_set_size(_scaled_window_size(_settings.window_scale))
 
 
 ## Reset all audio and gameplay settings to their default values and sync
@@ -220,11 +228,10 @@ func _on_reset_left_pressed() -> void:
 func _on_reset_right_pressed() -> void:
 	_settings.window_scale = 2
 	if _window_scale_option != null:
-		# Index 1 corresponds to scale 2 (2× / 1280×960).
-		_window_scale_option.selected = 1
+		# Index = scale - 1.
+		_window_scale_option.selected = _settings.window_scale - 1
 	# Apply the change directly since item_selected won't fire for select().
-	DisplayServer.window_set_size(
-			Vector2i(640 * _settings.window_scale, 480 * _settings.window_scale))
+	DisplayServer.window_set_size(_scaled_window_size(_settings.window_scale))
 
 
 # ---------------------------------------------------------------------------
@@ -269,3 +276,16 @@ func _make_slider(label_text: String, min_val: float, max_val: float,
 	vbox.add_child(slider)
 
 	return slider
+
+
+## Return the window pixel size for the given integer scale factor, derived
+## from the project's base viewport dimensions. project.godot is the single
+## source of truth so the labels and resize math stay in sync when the
+## viewport size changes.
+## https://docs.godotengine.org/en/stable/classes/class_projectsettings.html#class-projectsettings-method-get-setting
+func _scaled_window_size(scale: int) -> Vector2i:
+	var width: int = ProjectSettings.get_setting(
+			"display/window/size/viewport_width", 640)
+	var height: int = ProjectSettings.get_setting(
+			"display/window/size/viewport_height", 360)
+	return Vector2i(width * scale, height * scale)
