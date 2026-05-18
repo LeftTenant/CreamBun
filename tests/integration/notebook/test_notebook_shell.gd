@@ -67,15 +67,16 @@ func after_each() -> void:
 # ---------------------------------------------------------------------------
 
 func _make_notebook() -> Notebook:
-	# Instantiate directly from the class — the .tscn scene does not exist yet.
-	# When the scene is created later, integration tests should load it via
-	# load("res://ui/notebook/notebook.tscn").instantiate() instead.
+	# Load and instantiate the notebook from its .tscn scene file so that the
+	# full child subtree (Book/Pages/LeftPage, Book/Pages/RightPage, etc.) is
+	# present when _ready() fires and resolves @onready variables.
+	# Bare Notebook.new() produces an empty CanvasLayer with no children, which
+	# caused "$Book/Pages/LeftPage" NodePath lookups to fail under GUT 9.6.0
+	# (which promotes engine ERRORs to test failures via failure_error_types).
 	# See: https://docs.godotengine.org/en/stable/classes/class_node.html
-	var nb: Notebook = Notebook.new()
-	# process_mode = ALWAYS so the node keeps processing while the tree is
-	# paused. The implementation must set this; we rely on it here.
-	# See CLAUDE.md: "Set process_mode = ALWAYS on all CanvasLayer nodes."
-	nb.process_mode = Node.PROCESS_MODE_ALWAYS
+	var nb: Notebook = load("res://ui/notebook/notebook.tscn").instantiate()
+	# The .tscn already sets process_mode = ALWAYS (process_mode = 3) on the
+	# root CanvasLayer node, so no manual assignment is needed here.
 	add_child_autofree(nb)
 	_notebook = nb
 	return nb

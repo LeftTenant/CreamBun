@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://decnb3x78bgdc"
-path="res://.godot/imported/inventory_actions_step_02_boots_selected.png-c4ff232b80585b360069ab512ed364d3.ctex"
+uid="uid://c2b3n71oxupvn"
+path="res://.godot/imported/settings_controls_step_02_sliders_moved.png-6a940f55e6af27726090f3b82906b945.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://tests/e2e/notebook/screenshots/inventory_actions_step_02_boots_selected.png"
-dest_files=["res://.godot/imported/inventory_actions_step_02_boots_selected.png-c4ff232b80585b360069ab512ed364d3.ctex"]
+source_file="res://tests/e2e/notebook/screenshots/settings_controls_step_02_sliders_moved.png"
+dest_files=["res://.godot/imported/settings_controls_step_02_sliders_moved.png-6a940f55e6af27726090f3b82906b945.ctex"]
 
 [params]
 

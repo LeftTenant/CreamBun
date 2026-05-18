@@ -220,6 +220,14 @@ func test_inventory_row_get_drag_data_returns_correct_structure() -> void:
 	var row: InventoryRow = add_child_autofree(InventoryRow.new())
 	row.setup(stack, item)
 
+	# Godot 4.6 added a gui_is_dragging() assertion inside set_drag_preview()
+	# that fires when no active drag context exists. force_drag() establishes a
+	# drag context (sets gui_is_dragging() = true on the viewport) so the
+	# subsequent _get_drag_data() call can safely invoke set_drag_preview().
+	# We pass a throwaway payload and no preview to start the context cheaply.
+	# See: https://docs.godotengine.org/en/stable/classes/class_control.html#class-control-method-force-drag
+	row.force_drag({}, null)
+
 	# _get_drag_data's return type is Variant per Godot's drag API contract.
 	var data: Variant = row._get_drag_data(Vector2.ZERO)
 

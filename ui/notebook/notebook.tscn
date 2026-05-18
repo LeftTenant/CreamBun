@@ -1,34 +1,40 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene format=3]
 
 [ext_resource type="Script" path="res://ui/notebook/notebook.gd" id="1"]
 
-[node name="Notebook" type="CanvasLayer"]
-layer = 128
+[node name="Notebook" type="CanvasLayer" unique_id=1831674500]
 process_mode = 3
-script = ExtResource("1")
+layer = 128
 visible = false
+script = ExtResource("1")
 
-[node name="Dimmer" type="ColorRect" parent="."]
+[node name="Dimmer" type="ColorRect" parent="." unique_id=74563966]
+anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 color = Color(0, 0, 0, 0.6)
 
-[node name="Book" type="Panel" parent="."]
+[node name="Book" type="Panel" parent="." unique_id=1732993694]
+anchors_preset = -1
 anchor_left = 0.1
 anchor_top = 0.1
 anchor_right = 0.9
 anchor_bottom = 0.9
 
-[node name="Pages" type="HBoxContainer" parent="Book"]
+[node name="Pages" type="HBoxContainer" parent="Book" unique_id=1843206210]
+layout_mode = 0
 anchor_right = 1.0
 anchor_bottom = 1.0
 
-[node name="LeftPage" type="Control" parent="Book/Pages"]
+[node name="LeftPage" type="Control" parent="Book/Pages" unique_id=188234719]
+layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 
-[node name="Divider" type="VSeparator" parent="Book/Pages"]
+[node name="Divider" type="VSeparator" parent="Book/Pages" unique_id=1011444597]
+layout_mode = 2
 
-[node name="RightPage" type="Control" parent="Book/Pages"]
+[node name="RightPage" type="Control" parent="Book/Pages" unique_id=1324878082]
+layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3

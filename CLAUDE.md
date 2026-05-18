@@ -2,7 +2,7 @@
 
 ## Project
 
-CreamBun is a cozy isometric RPG built in **Godot 4.4** using the **Mobile renderer**. The player character is Cream Bun — a small round creature who forages ingredients, brews drinks, and sells them at market. No combat; no enemies. The tone is cozy life-sim. The `combat/` folder and `COMBAT` game state are stubs reserved for future design — do not implement combat mechanics.
+CreamBun is a cozy isometric RPG built in **Godot 4.6** using the **Mobile renderer**. The player character is Cream Bun — a small round creature who forages ingredients, brews drinks, and sells them at market. No combat; no enemies. The tone is cozy life-sim. The `combat/` folder and `COMBAT` game state are stubs reserved for future design — do not implement combat mechanics.
 
 See `README.md` in the root project folder for more details on project requirements and the intended game experience.
 
