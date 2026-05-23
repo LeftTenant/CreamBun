@@ -71,6 +71,16 @@ func populate_left(parent: Control) -> void:
 	# https://docs.godotengine.org/en/stable/classes/class_vboxcontainer.html
 	var vbox: VBoxContainer = VBoxContainer.new()
 	parent.add_child(vbox)
+	# Anchor the VBox to fill the parent page so children (sliders) get a real
+	# width to expand into; without this, the VBox shrinks to its minimum size
+	# and HSliders overflow horizontally. Negative right/bottom offsets pull
+	# the edges inward when anchors are 1.0, giving a 10px margin on all sides.
+	# https://docs.godotengine.org/en/stable/classes/class_control.html#class-control-method-set-anchors-and-offsets-preset
+	vbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	vbox.offset_left = 10
+	vbox.offset_top = 10
+	vbox.offset_right = -10
+	vbox.offset_bottom = -10
 
 	# --- Audio section ---
 	var audio_label: Label = Label.new()
@@ -79,6 +89,13 @@ func populate_left(parent: Control) -> void:
 	# so the player's Tab key skips straight to the first interactive control.
 	# https://docs.godotengine.org/en/stable/classes/class_control.html#enum-control-focusmode
 	audio_label.focus_mode = Control.FOCUS_NONE
+	# AUTOWRAP_WORD_SMART lets the label wrap onto a second line if the page
+	# is narrow, instead of forcing the VBox to grow to fit the text width.
+	# Paired with SIZE_EXPAND_FILL so the label takes the page's column width
+	# rather than dictating it. Same pattern is reused on every label below.
+	# https://docs.godotengine.org/en/stable/classes/class_label.html#enum-label-autowrapmode
+	audio_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	audio_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	vbox.add_child(audio_label)
 
 	_master_slider = _make_volume_slider(
@@ -100,6 +117,9 @@ func populate_left(parent: Control) -> void:
 	var gameplay_label: Label = Label.new()
 	gameplay_label.text = "Gameplay"
 	gameplay_label.focus_mode = Control.FOCUS_NONE
+	# See audio_label above for rationale (autowrap + expand-fill).
+	gameplay_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	gameplay_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	vbox.add_child(gameplay_label)
 
 	_text_speed_slider = _make_slider(
@@ -107,8 +127,12 @@ func populate_left(parent: Control) -> void:
 	_text_speed_slider.value_changed.connect(_on_text_speed_changed)
 
 	# --- Reset button ---
+	# Short label ("Reset to Defaults") keeps the button's min width below the
+	# page's available width (~230px after margins) so the VBox doesn't expand
+	# past its anchored right edge. The button sits below the Gameplay section,
+	# whose heading already conveys what "defaults" applies to.
 	var reset_btn: Button = Button.new()
-	reset_btn.text = "Reset Audio & Gameplay to Defaults"
+	reset_btn.text = "Reset to Defaults"
 	vbox.add_child(reset_btn)
 	reset_btn.pressed.connect(_on_reset_left_pressed)
 
@@ -124,11 +148,22 @@ func populate_right(parent: Control) -> void:
 
 	var vbox: VBoxContainer = VBoxContainer.new()
 	parent.add_child(vbox)
+	# Same anchoring + margin scheme as populate_left() so the right-page VBox
+	# fills its parent and keeps a consistent 10px breathing room from the seam
+	# and outer notebook edge. See populate_left() for the rationale.
+	vbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	vbox.offset_left = 10
+	vbox.offset_top = 10
+	vbox.offset_right = -10
+	vbox.offset_bottom = -10
 
 	# --- Display section ---
 	var display_label: Label = Label.new()
 	display_label.text = "Display"
 	display_label.focus_mode = Control.FOCUS_NONE
+	# See populate_left() for rationale on autowrap + expand-fill.
+	display_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	display_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	vbox.add_child(display_label)
 
 	_window_scale_option = OptionButton.new()
@@ -148,8 +183,10 @@ func populate_right(parent: Control) -> void:
 	_window_scale_option.item_selected.connect(_on_window_scale_changed)
 
 	# --- Reset button ---
+	# Short label ("Reset to Defaults") matches the left-page button for visual
+	# consistency. The Display heading above already provides scope context.
 	var reset_btn: Button = Button.new()
-	reset_btn.text = "Reset Display to Defaults"
+	reset_btn.text = "Reset to Defaults"
 	vbox.add_child(reset_btn)
 	reset_btn.pressed.connect(_on_reset_right_pressed)
 
@@ -264,6 +301,15 @@ func _make_slider(label_text: String, min_val: float, max_val: float,
 	var label: Label = Label.new()
 	label.text = label_text
 	label.focus_mode = Control.FOCUS_NONE
+	# AUTOWRAP_WORD_SMART + SIZE_EXPAND_FILL means the label conforms to the
+	# page's column width and wraps onto a second line instead of forcing the
+	# parent VBox to grow horizontally past the page's anchored right edge.
+	# Without these flags, a wide label dictates the VBox's combined_minimum_size
+	# and the sliders below it overflow the page. See populate_left() for full
+	# rationale on the anchored-VBox layout.
+	# https://docs.godotengine.org/en/stable/classes/class_label.html#enum-label-autowrapmode
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	vbox.add_child(label)
 
 	var slider: HSlider = HSlider.new()
@@ -273,6 +319,12 @@ func _make_slider(label_text: String, min_val: float, max_val: float,
 	# step = 1 gives integer tick marks and prevents floating-point noise from
 	# appearing in the value_changed callback.
 	slider.step = 1.0
+	# SIZE_EXPAND_FILL (value 3 = EXPAND | FILL) makes the slider claim all the
+	# horizontal space the VBox can give it. Without EXPAND the slider would
+	# render at its minimum width and look squashed; without FILL it would not
+	# actually stretch to occupy the claimed space.
+	# https://docs.godotengine.org/en/stable/classes/class_control.html#enum-control-sizeflags
+	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	vbox.add_child(slider)
 
 	return slider
