@@ -1,0 +1,4 @@
+- [Project Testing Setup](project_testing_setup.md) — GUT not installed; tests/ folder created 2026-05-02; installation steps
+- [Inventory Design Decisions](project_inventory_design_decisions.md) — current_weight registry pattern, capacity enforcement rule, equip/unequip stack interaction
+- [Tree-Pause Testing Pattern](tree_pause_testing_pattern.md) — how to safely test Notebook.open()/close() without leaking get_tree().paused into adjacent tests
+- [setup()-after-add_child() Pattern](setup_after_add_child_pattern.md) — nodes that build children in _ready() must be in the tree before setup() is called

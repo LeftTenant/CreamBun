@@ -9,8 +9,10 @@ art/**/*.import
 # or download from https://github.com/bitwes/Gut (minimum version: 9.6.0 for Godot 4.6)
 addons/gut/
 
-# Claude Code agent memory (local to each developer's machine)
-.claude/agent-memory
+# Per-developer agent memory overlay (personal profiles, machine-specific paths)
+.claude/agent-memory-local
+
+# Claude Code worktrees (per-developer scratch space)
 .claude/worktrees
 
 # godot-testing plugin — Python MCP server venv (auto-created on first run)
