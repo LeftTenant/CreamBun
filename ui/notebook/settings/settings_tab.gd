@@ -87,9 +87,13 @@ func populate_left(parent: Control) -> void:
 	_ensure_pages_built()
 
 	# Add the LeftPage VBox into the real page Control provided by notebook.gd.
-	# _ensure_pages_built() already detached it from the temporary scene instance,
-	# so add_child here is safe and does not require a prior parent.
+	# _ensure_pages_built() already detached it from the temporary scene instance.
+	# Guard against re-entry: if _left_page already has a parent (because
+	# populate_left() was called twice on the same SettingsTab instance), detach
+	# it first so add_child does not fail.
 	# https://docs.godotengine.org/en/stable/classes/class_node.html#class-node-method-add-child
+	if _left_page.get_parent() != null:
+		_left_page.get_parent().remove_child(_left_page)
 	parent.add_child(_left_page)
 
 	# Anchor the VBox to fill the parent page so children (sliders) get a real
@@ -122,16 +126,23 @@ func populate_left(parent: Control) -> void:
 	# Wire signals. value_changed fires whenever the slider moves, including
 	# programmatic changes; _on_*_changed applies the setting immediately so
 	# there is no separate "Apply" step.
+	# Guard each connection with is_connected() so calling populate_left() a
+	# second time on the same SettingsTab instance does not register duplicates.
 	# https://docs.godotengine.org/en/stable/classes/class_range.html#signal-value-changed
-	_master_slider.value_changed.connect(_on_master_volume_changed)
-	_music_slider.value_changed.connect(_on_music_volume_changed)
-	_sfx_slider.value_changed.connect(_on_sfx_volume_changed)
-	_text_speed_slider.value_changed.connect(_on_text_speed_changed)
+	if not _master_slider.value_changed.is_connected(_on_master_volume_changed):
+		_master_slider.value_changed.connect(_on_master_volume_changed)
+	if not _music_slider.value_changed.is_connected(_on_music_volume_changed):
+		_music_slider.value_changed.connect(_on_music_volume_changed)
+	if not _sfx_slider.value_changed.is_connected(_on_sfx_volume_changed):
+		_sfx_slider.value_changed.connect(_on_sfx_volume_changed)
+	if not _text_speed_slider.value_changed.is_connected(_on_text_speed_changed):
+		_text_speed_slider.value_changed.connect(_on_text_speed_changed)
 
 	# Wire the left reset button. The button is named in the scene so we can
 	# find it reliably without walking the tree by index.
 	var reset_btn: Button = _left_page.get_node("ResetLeftButton") as Button
-	reset_btn.pressed.connect(_on_reset_left_pressed)
+	if not reset_btn.pressed.is_connected(_on_reset_left_pressed):
+		reset_btn.pressed.connect(_on_reset_left_pressed)
 
 
 ## Populate the right page with the display / window scale option button.
@@ -151,6 +162,10 @@ func populate_right(parent: Control) -> void:
 	# Same anchoring + margin scheme as populate_left() so the right-page VBox
 	# fills its parent and keeps a consistent 10px breathing room from the seam
 	# and outer notebook edge. See populate_left() for the rationale.
+	# Guard against re-entry: if _right_page already has a parent, detach it first.
+	# https://docs.godotengine.org/en/stable/classes/class_node.html#class-node-method-remove-child
+	if _right_page.get_parent() != null:
+		_right_page.get_parent().remove_child(_right_page)
 	parent.add_child(_right_page)
 	_right_page.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_right_page.offset_left = 10
@@ -166,21 +181,26 @@ func populate_right(parent: Control) -> void:
 	# in project.godot keeps the displayed resolutions accurate without code edits.
 	# Items are added here (not in the .tscn) because their labels include live
 	# project settings values that cannot be baked into a static scene file.
+	# Guard with get_item_count() so re-entrant calls do not double the list.
 	# https://docs.godotengine.org/en/stable/classes/class_optionbutton.html
-	for scale: int in WINDOW_SCALE_OPTIONS:
-		var size: Vector2i = _scaled_window_size(scale)
-		_window_scale_option.add_item("%d× (%d×%d)" % [scale, size.x, size.y])
+	if _window_scale_option.get_item_count() == 0:
+		for scale: int in WINDOW_SCALE_OPTIONS:
+			var size: Vector2i = _scaled_window_size(scale)
+			_window_scale_option.add_item("%d× (%d×%d)" % [scale, size.x, size.y])
 
 	# _settings.window_scale is 1–4; OptionButton indices are 0–3, so subtract 1.
 	_window_scale_option.selected = _settings.window_scale - 1
 
 	# item_selected fires only on player-driven changes (not programmatic select()),
 	# which prevents an infinite loop when the reset button calls select() below.
+	# Guard with is_connected() for the same re-entry reason as populate_left().
 	# https://docs.godotengine.org/en/stable/classes/class_optionbutton.html#signal-item-selected
-	_window_scale_option.item_selected.connect(_on_window_scale_changed)
+	if not _window_scale_option.item_selected.is_connected(_on_window_scale_changed):
+		_window_scale_option.item_selected.connect(_on_window_scale_changed)
 
 	var reset_btn: Button = _right_page.get_node("ResetRightButton") as Button
-	reset_btn.pressed.connect(_on_reset_right_pressed)
+	if not reset_btn.pressed.is_connected(_on_reset_right_pressed):
+		reset_btn.pressed.connect(_on_reset_right_pressed)
 
 
 # ---------------------------------------------------------------------------

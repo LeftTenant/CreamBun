@@ -1,6 +1,6 @@
 ---
 name: scene-migration-pattern
-description: The _ensure_pages_built() pattern used in the notebook UI scene migration (Slice 1), its orphan trade-off, and conventions established for subsequent slices
+description: The _ensure_pages_built() pattern used in the notebook UI scene migration (Slices 1–2), its orphan trade-off, re-entrancy guards, and conventions for subsequent slices
 metadata:
   type: project
 ---
@@ -24,5 +24,17 @@ The two pages are later `add_child`'d into real page Controls inside `populate_l
 **Constant naming quirk:** `TAB_SCENE` has no underscore (public-style constant, used only internally). `_WINDOW_SCALE_OPTIONS` has underscore prefix (project's private-member convention). GDScript style guide does not prefix private constants — apply consistently in Slices 2–5 (prefer no underscore on constants, or be consistent within each file).
 
 **notebook.gd still uses `SettingsTab.new()`** (not `TAB_SCENE.instantiate()`). This is correct — the tab controller node is separate from the scene shell; `_ensure_pages_built()` instantiates the scene internally.
+
+## Slice 2 additions and confirmed conventions
+
+**Re-entrancy guards confirmed (Slice 2):** Both `populate_left` and `populate_right` now guard against being called twice on the same instance. Pattern: `if node.get_parent() != null: node.get_parent().remove_child(node)` before `parent.add_child(node)`. Signal connections guarded with `if not signal.is_connected(handler)`. OptionButton items guarded with `if get_item_count() == 0`. These guards were backported to `settings_tab.gd` as part of the same PR.
+
+**EQUIPMENT_SLOT_SCENE constant kept for documentation only:** `inventory_tab.gd` declares `const EQUIPMENT_SLOT_SCENE` even though the script never calls `instantiate()` on it at runtime (slots live in the .tscn as instanced children). This is a deliberate documentation choice. Future reviewers should not flag it as dead code without reading the comment.
+
+**_scroll_container stored-but-unused var:** `_scroll_container` is resolved inside `populate_right()` and stored as a private var, but as of Slice 2 nothing else reads it. It is a forward provision; acceptable for Phase 1 but worth noting in later reviews if it is still unused by Slice 5.
+
+**"B2 edit" breadcrumbs in test_inventory_tab.gd:** Each updated test has an inline `# B2 edit:` comment explaining the change from `.new()` to scene instantiation. These are migration-history comments, not spec documents. They are appropriate in test files (where future developers may wonder why the pattern changed) but should not appear in production scripts. This convention has been applied consistently throughout Slices 1–2.
+
+**`_refresh_both_pages()` null safety removed intentionally:** After Slice 2 the empty-slots guard (`if not _equipment_slots.is_empty()`) was removed from `_refresh_both_pages()`. The loop body is a no-op when the array is empty, so the guard was redundant. Consistent with how `_rows_container` null check in `_build_right_page()` acts as the real guard for the right page.
 
 **Related:** [[project_patterns]]

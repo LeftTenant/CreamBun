@@ -1,22 +1,26 @@
 class_name InventoryRow
 extends Control
 ## A single row in the inventory right-page item list.
+##
+## Shows the item name, a count badge (only when count > 1), and the item
+## weight. The row also acts as a drag source — the player can drag it onto
+## an EquipmentSlot to equip the item.
+##
+## Static layout (SelectionRect, HBox, NameLabel, CountLabel, WeightLabel and
+## all size/anchor/color properties) lives in inventory_row.tscn — this script
+## only handles data binding, selection state, and drag logic.
+##
+## Call setup() after the node is in the scene tree so that @onready refs
+## are guaranteed non-null before data is written.
+##
+## Drag-and-drop API:
+##   https://docs.godotengine.org/en/stable/tutorials/ui/gui_drag_and_drop.html
 
 ## Emitted when the row is clicked with the left mouse button.
 ## Use this instead of connecting to the built-in `gui_input` signal — `gui_input`
 ## doesn't fire when the row sits inside a `ScrollContainer`, but the `_gui_input`
 ## override (which emits this signal) does.
 signal selected(row: InventoryRow)
-##
-## Shows the item name, a count badge (only when count > 1), and the item
-## weight. The row also acts as a drag source — the player can drag it onto
-## an EquipmentSlot to equip the item.
-##
-## Call setup() after adding this node to the scene tree so that _ready()
-## has already run and child nodes exist.
-##
-## Drag-and-drop API:
-##   https://docs.godotengine.org/en/stable/tutorials/ui/gui_drag_and_drop.html
 
 
 # ---------------------------------------------------------------------------
@@ -26,88 +30,42 @@ signal selected(row: InventoryRow)
 # The ItemStack this row represents. Set by setup().
 var _stack: ItemStack = null
 
-# Item name displayed on the left of the row.
-var _name_label: Label
 
-# Count badge shown only when stack.count > 1 (e.g. "×3").
-# Hidden for non-stackable items and stacks of exactly one.
-var _count_label: Label
-
-# Weight shown on the right (e.g. "0.5 kg").
-var _weight_label: Label
+# ---------------------------------------------------------------------------
+# @onready vars
+# ---------------------------------------------------------------------------
+# All initialization happens via these @onready bindings and the setup() call.
+# There is no _ready() override — none is needed.
 
 # Background highlight rect shown when this row is selected.
-# Created in _ready() as the first child (so it draws behind the HBox),
-# hidden by default, revealed by set_selected(true).
+# Declared in inventory_row.tscn as the first child (renders behind HBox),
+# hidden by default, warm-cream tint (Color(1, 0.9, 0.6, 0.35)), with
+# PRESET_FULL_RECT anchors and MOUSE_FILTER_PASS so clicks reach this node.
 # https://docs.godotengine.org/en/stable/classes/class_colorrect.html
-var _selection_rect: ColorRect
+@onready var _selection_rect: ColorRect = $SelectionRect
+
+# HBoxContainer holding name, count, and weight labels side by side.
+# Declared in inventory_row.tscn with SIZE_EXPAND_FILL and PRESET_FULL_RECT.
+# https://docs.godotengine.org/en/stable/classes/class_hboxcontainer.html
+@onready var _hbox: HBoxContainer = $HBox
+
+# Item name displayed on the left of the row.
+# In the scene: SIZE_EXPAND_FILL so it pushes count and weight rightward;
+# autowrap_mode = AUTOWRAP_WORD_SMART handles long display names gracefully
+# per ui/CLAUDE.md rule 4.
+@onready var _name_label: Label = $HBox/NameLabel
+
+# Count badge shown only when stack.count > 1 (e.g. "×3"). Hidden in the
+# scene file so single-item stacks never flash a stale badge before setup().
+@onready var _count_label: Label = $HBox/CountLabel
+
+# Weight shown on the right (e.g. "0.5 kg").
+@onready var _weight_label: Label = $HBox/WeightLabel
 
 
 # ---------------------------------------------------------------------------
 # Built-in overrides
 # ---------------------------------------------------------------------------
-
-func _ready() -> void:
-	# SIZE_EXPAND_FILL makes this row fill the full width of the parent VBoxContainer.
-	# Without this, the Control's clickable area is only as wide as its text content,
-	# so mouse clicks near the right edge of the page won't register on the row.
-	# https://docs.godotengine.org/en/stable/classes/class_control.html#class-control-property-size-flags-horizontal
-	size_flags_horizontal = Control.SIZE_EXPAND_FILL
-
-	# Give every row a minimum height of 20px so it is always comfortably clickable.
-	custom_minimum_size = Vector2(0, 20)
-
-	# mouse_filter = STOP (the default) is required for _gui_input to fire at all.
-	# Without it, clicks pass through this control to ancestors without calling
-	# _gui_input. The default is already STOP, but stating it explicitly makes the
-	# intent clear for future readers.
-	# https://docs.godotengine.org/en/stable/classes/class_control.html#class-control-property-mouse-filter
-	mouse_filter = Control.MOUSE_FILTER_STOP
-
-	# Selection highlight — must be the first child so it renders behind all
-	# content children. We use PRESET_FULL_RECT to anchor it to the four
-	# corners of this Control so it always fills the row regardless of height.
-	# https://docs.godotengine.org/en/stable/classes/class_control.html#class-control-method-set-anchors-preset
-	_selection_rect = ColorRect.new()
-	_selection_rect.name = "SelectionRect"
-	# A warm cream tint at 35% opacity is visible but stays within the cozy palette.
-	_selection_rect.color = Color(1.0, 0.9, 0.6, 0.35)
-	_selection_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
-	# mouse_filter PASS lets clicks fall through to this Control's own _gui_input
-	# handler instead of being consumed by the ColorRect child.
-	# https://docs.godotengine.org/en/stable/classes/class_control.html#enum-control-mousefilter
-	_selection_rect.mouse_filter = Control.MOUSE_FILTER_PASS
-	_selection_rect.visible = false
-	add_child(_selection_rect)
-
-	# Use an HBoxContainer to lay name, count, and weight side by side.
-	# The layout is built in _ready() so the .tscn stays minimal.
-	# https://docs.godotengine.org/en/stable/classes/class_hboxcontainer.html
-	var hbox: HBoxContainer = HBoxContainer.new()
-	hbox.name = "HBox"
-	# Expand to fill the row's width so weight aligns to the right edge.
-	hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	add_child(hbox)
-
-	_name_label = Label.new()
-	_name_label.name = "NameLabel"
-	# Expand so it pushes count and weight to the right.
-	_name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_name_label.focus_mode = Control.FOCUS_NONE
-	hbox.add_child(_name_label)
-
-	_count_label = Label.new()
-	_count_label.name = "CountLabel"
-	_count_label.focus_mode = Control.FOCUS_NONE
-	# Hidden until setup() finds count > 1.
-	_count_label.visible = false
-	hbox.add_child(_count_label)
-
-	_weight_label = Label.new()
-	_weight_label.name = "WeightLabel"
-	_weight_label.focus_mode = Control.FOCUS_NONE
-	hbox.add_child(_weight_label)
-
 
 # Godot calls `_gui_input` during the engine's built-in control-event dispatch.
 # Unlike the `gui_input` *signal*, `_gui_input` fires reliably even when the
