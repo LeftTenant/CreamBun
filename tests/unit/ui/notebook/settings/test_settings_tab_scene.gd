@@ -1,0 +1,228 @@
+## test_settings_tab_scene.gd
+## Scene-as-data contract tests for the Settings tab scene migration (Slice 1).
+##
+## WHAT THESE TESTS GUARD
+## ----------------------
+## After the migration (B3), settings_tab.tscn is no longer an empty Control —
+## it declares the full static layout as saved editor nodes. These tests load the
+## .tscn and walk the resulting tree to assert that the named nodes the script
+## depends on are present and of the correct type.
+##
+## WHY THESE FAIL BEFORE B3
+## ------------------------
+## settings_tab.tscn currently contains only a bare Control node with no children.
+## Every test that instantiates the scene and looks for a named child (MasterSlider,
+## etc.) will fail until B3 builds the layout in the editor. That is intentional:
+## these tests exist to tell B3 exactly what the scene must contain. They become
+## the "definition of done" for the scene build.
+##
+## WHY SCENE-AS-DATA TESTS MATTER
+## --------------------------------
+## The contract between settings_tab.gd and settings_tab.tscn is not enforced by
+## the type system — get_node("MasterSlider") returns null at runtime with no
+## editor warning if the node was accidentally renamed or deleted. A test that
+## loads the PackedScene and walks the instantiated tree catches that breakage at
+## CI time rather than at runtime during QA.
+##
+## Requires GUT: https://github.com/bitwes/Gut
+## Install via Godot Asset Library (search "GUT - Godot Unit Testing").
+##
+## Run in the Godot editor:
+##   Project > Tools > GUT > Run All Tests
+## or via CLI:
+##   godot --headless -s addons/gut/gut_cmdln.gd -gselect=test_settings_tab_scene.gd -gexit
+
+class_name TestSettingsTabScene
+extends GutTest
+
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+# Canonical path for the scene under test. Using a constant makes it easy to
+# update if the file moves and ensures all tests in this file reference the
+# same path.
+const SCENE_PATH: String = "res://ui/notebook/settings/settings_tab.tscn"
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+## Instantiate SCENE_PATH and add it to the scene tree so @onready vars and
+## child nodes are fully resolved. The instance is autofreed.
+##
+## @return the instantiated SettingsTab root node, added as a child of the test
+func _make_scene_instance() -> Control:
+	var packed: PackedScene = load(SCENE_PATH) as PackedScene
+	var instance: Control = packed.instantiate() as Control
+	add_child_autofree(instance)
+	return instance
+
+
+## Walk the subtree of root depth-first and collect every node that satisfies
+## the type_check Callable. Used because named nodes may live at any depth
+## inside the VBoxContainer hierarchy.
+##
+## @param root       the node whose subtree to search
+## @param type_check Callable(Node) -> bool; returns true for matching nodes
+## @return Array of matching nodes in depth-first order
+func _find_nodes_of_type(root: Node, type_check: Callable) -> Array[Node]:
+	var result: Array[Node] = []
+	for child: Node in root.get_children():
+		if type_check.call(child):
+			result.append(child)
+		result.append_array(_find_nodes_of_type(child, type_check))
+	return result
+
+
+# ---------------------------------------------------------------------------
+# Test 1 — Scene file loads as a valid PackedScene
+# ---------------------------------------------------------------------------
+
+func test_scene_loads_without_error() -> void:
+	# If the .tscn file is corrupt, mis-formatted, or references a missing
+	# resource, load() will return null. This is the cheapest possible check
+	# and gates every subsequent test: if load fails there is no point
+	# instantiating the scene.
+	var packed: PackedScene = load(SCENE_PATH) as PackedScene
+	assert_not_null(packed,
+			"settings_tab.tscn must load as a non-null PackedScene")
+
+
+# ---------------------------------------------------------------------------
+# Test 2 — Scene declares a node named MasterSlider of type HSlider
+# ---------------------------------------------------------------------------
+
+func test_scene_declares_master_slider() -> void:
+	# MasterSlider is the named-node contract that settings_tab.gd depends on
+	# to store a ref, init the value, and wire value_changed. If a developer
+	# renames or removes this node in the editor, this test fails immediately
+	# rather than silently producing a null ref at runtime.
+	var instance: Control = _make_scene_instance()
+
+	var node: Node = instance.find_child("MasterSlider", true, false)
+	assert_not_null(node,
+			"settings_tab.tscn must declare a node named 'MasterSlider'")
+	if node == null:
+		return  # Guard: skip cast assertion if the node is missing.
+	assert_true(node is HSlider,
+			"'MasterSlider' must be an HSlider, got %s" % node.get_class())
+
+
+# ---------------------------------------------------------------------------
+# Test 3 — Scene declares MusicSlider, SfxSlider, and TextSpeedSlider
+# ---------------------------------------------------------------------------
+
+func test_scene_declares_remaining_sliders() -> void:
+	# The four sliders form the complete left-page audio + gameplay controls.
+	# Each name must exist and be the correct type; a wrong type would cause a
+	# silent null cast when the script assigns the node ref.
+	var instance: Control = _make_scene_instance()
+
+	var slider_names: Array[String] = ["MusicSlider", "SfxSlider", "TextSpeedSlider"]
+	for slider_name: String in slider_names:
+		var node: Node = instance.find_child(slider_name, true, false)
+		assert_not_null(node,
+				"settings_tab.tscn must declare a node named '%s'" % slider_name)
+		if node == null:
+			continue
+		assert_true(node is HSlider,
+				"'%s' must be an HSlider, got %s" % [slider_name, node.get_class()])
+
+
+# ---------------------------------------------------------------------------
+# Test 4 — Scene declares a node named WindowScaleOption of type OptionButton
+# ---------------------------------------------------------------------------
+
+func test_scene_declares_window_scale_option() -> void:
+	# WindowScaleOption is the only OptionButton in the scene. The script finds
+	# it by name to wire item_selected and to call select() during resets.
+	var instance: Control = _make_scene_instance()
+
+	var node: Node = instance.find_child("WindowScaleOption", true, false)
+	assert_not_null(node,
+			"settings_tab.tscn must declare a node named 'WindowScaleOption'")
+	if node == null:
+		return
+	assert_true(node is OptionButton,
+			"'WindowScaleOption' must be an OptionButton, got %s" % node.get_class())
+
+
+# ---------------------------------------------------------------------------
+# Test 5 — Scene declares at least two Button nodes (the two reset buttons)
+# ---------------------------------------------------------------------------
+
+func test_scene_declares_at_least_two_reset_buttons() -> void:
+	# The two reset buttons have stable names in the scene (ResetLeftButton,
+	# ResetRightButton), but this test asserts on type-and-count rather than
+	# name so it catches "a reset button was accidentally deleted in the editor"
+	# — a different failure mode than the name-based contract tests elsewhere
+	# in this file.
+	var instance: Control = _make_scene_instance()
+
+	var buttons: Array[Node] = _find_nodes_of_type(instance,
+			func(n: Node) -> bool: return n is Button and not n is OptionButton)
+
+	assert_true(buttons.size() >= 2,
+			"settings_tab.tscn must declare at least 2 Button nodes (one reset per page), found %d" % buttons.size())
+
+
+# ---------------------------------------------------------------------------
+# Test 6 — Scene declares Labels with text "Audio" and "Display"
+# ---------------------------------------------------------------------------
+
+func test_scene_declares_audio_and_display_section_headers() -> void:
+	# Section header Labels are baked into the .tscn rather than injected at
+	# runtime. This test confirms the static content is present and correctly
+	# spelled — a typo in the editor would go undetected by any other test.
+	var instance: Control = _make_scene_instance()
+
+	var labels: Array[Node] = _find_nodes_of_type(instance,
+			func(n: Node) -> bool: return n is Label)
+
+	var label_texts: Array[String] = []
+	for label_node: Node in labels:
+		label_texts.append((label_node as Label).text)
+
+	assert_true("Audio" in label_texts,
+			"settings_tab.tscn must contain a Label with text 'Audio' (left-page section header)")
+	assert_true("Display" in label_texts,
+			"settings_tab.tscn must contain a Label with text 'Display' (right-page section header)")
+
+
+# ---------------------------------------------------------------------------
+# Test 7 — populate_left(null) does not crash
+# ---------------------------------------------------------------------------
+
+func test_populate_left_with_null_parent_does_not_crash() -> void:
+	# The NotebookTab contract documents that populate_left / populate_right
+	# must guard against null. After the migration the guard must survive even
+	# though the script body changes significantly. Crashing here would abort
+	# the notebook _show_tab flow if the controller ever passes a missing page.
+	var instance: Control = _make_scene_instance()
+	var tab: SettingsTab = instance as SettingsTab
+	assert_not_null(tab,
+			"settings_tab.tscn root must be castable to SettingsTab")
+	if tab == null:
+		return
+	# No assertion needed — the test fails if this call throws an error.
+	tab.populate_left(null)
+	assert_true(true, "populate_left(null) completed without error")
+
+
+# ---------------------------------------------------------------------------
+# Test 8 — populate_right(null) does not crash
+# ---------------------------------------------------------------------------
+
+func test_populate_right_with_null_parent_does_not_crash() -> void:
+	# Mirrors test 7 for the right-page populate method.
+	var instance: Control = _make_scene_instance()
+	var tab: SettingsTab = instance as SettingsTab
+	assert_not_null(tab,
+			"settings_tab.tscn root must be castable to SettingsTab")
+	if tab == null:
+		return
+	tab.populate_right(null)
+	assert_true(true, "populate_right(null) completed without error")
