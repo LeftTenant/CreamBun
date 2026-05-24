@@ -40,6 +40,16 @@ label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 ```
 This lets the label take whatever column width is available rather than forcing the column wider.
 
+**When to apply:** only to Labels whose text could plausibly exceed the column width — long descriptions, dynamic strings, localizable text that might grow. Do NOT apply to short fixed labels like section headers ("Audio", "Display") or field captions ("Master Volume") — those will fit on one line at any reasonable column width, and enabling autowrap on them triggers Godot's "Labels with autowrapping enabled must have a custom minimum size" warning without providing any benefit.
+
 For Buttons: either shorten the text or set `clip_text = true`.
 
 Note: `HSlider`'s default `size_flags_horizontal` is `FILL` (1), **not** `EXPAND_FILL` (3). If you want the slider to claim slack space alongside other expanding children, set `Control.SIZE_EXPAND_FILL` explicitly.
+
+## When building layouts in the editor
+
+The same rules above apply, but several of them are easier to apply as editor properties than runtime calls:
+- `Layout → Anchor preset → Full Rect` on any container that should fill its parent (rule 1).
+- Labels in narrow columns: `Autowrap → Word, Smart` and `Size Flags → Expand + Fill` (rule 4).
+- `HSlider` and `VSlider`: `Size Flags → Expand + Fill` (the default is `FILL`, not `EXPAND_FILL` — must be set explicitly; rule 4 note).
+- Inset offsets (rule 2) still get applied at runtime in `populate_left/right` for now; see issue #10.
