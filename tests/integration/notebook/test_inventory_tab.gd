@@ -10,6 +10,20 @@
 ## files exist — that is by design. Run them after implementing each class to
 ## confirm the contract is met.
 ##
+## --- B2 EDIT NOTE ---
+## Tests 2–7 previously used EquipmentSlot.new() and InventoryRow.new() to
+## construct their subjects directly. They have been updated to instantiate from
+## the respective .tscn scenes instead.
+##
+## WHY: After B3, both scripts will use @onready references to named children
+## that only exist when the node is instantiated from the scene — bare .new() will
+## leave _slot_label, _icon_rect, _name_label etc. as null and every meaningful
+## assertion will fail or crash. Switching to scene instantiation now (in B2)
+## makes the failure list clean: these tests WILL PASS today (the scenes still
+## build children in _ready(), so instantiate() triggers _ready() just like .new()
+## would), and they will continue to pass after B3 replaces _ready() build code
+## with @onready refs.
+##
 ## Requires GUT: https://github.com/bitwes/Gut
 ## Install via Godot Asset Library (search "GUT - Godot Unit Testing").
 ##
@@ -20,6 +34,18 @@
 
 class_name TestInventoryTab
 extends GutTest
+
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+# Scene paths used by helper factories below. Using scenes (not bare .new())
+# so that @onready refs in the scripts resolve correctly after B3.
+# See the B2 EDIT NOTE in the file header for the full rationale.
+const INVENTORY_TAB_SCENE: String = "res://ui/notebook/inventory/inventory_tab.tscn"
+const EQUIPMENT_SLOT_SCENE: String = "res://ui/notebook/inventory/equipment_slot.tscn"
+const INVENTORY_ROW_SCENE: String = "res://ui/notebook/inventory/inventory_row.tscn"
 
 
 # ---------------------------------------------------------------------------
@@ -90,8 +116,10 @@ func test_inventory_tab_is_a_notebook_tab() -> void:
 	# InventoryTab must extend NotebookTab so the notebook controller can call
 	# populate_left / populate_right polymorphically on all tabs.
 	# https://docs.godotengine.org/en/stable/tutorials/scripting/gdscript/gdscript_basics.html#inheritance
-	var tab: InventoryTab = InventoryTab.new()
-	autofree(tab)
+	#
+	# Instantiate from scene so @onready refs resolve correctly.
+	var packed: PackedScene = load(INVENTORY_TAB_SCENE) as PackedScene
+	var tab: InventoryTab = add_child_autofree(packed.instantiate() as InventoryTab)
 
 	assert_true(tab is NotebookTab,
 			"InventoryTab must be a NotebookTab (extend NotebookTab)")
@@ -104,7 +132,10 @@ func test_inventory_tab_is_a_notebook_tab() -> void:
 func test_equipment_slot_setup_does_not_crash() -> void:
 	# setup() with a null item (empty slot) must be safe — it is the initial
 	# state before the player has equipped anything.
-	var slot: EquipmentSlot = add_child_autofree(EquipmentSlot.new())
+	#
+	# Instantiate from scene so @onready refs resolve correctly.
+	var packed: PackedScene = load(EQUIPMENT_SLOT_SCENE) as PackedScene
+	var slot: EquipmentSlot = add_child_autofree(packed.instantiate() as EquipmentSlot)
 
 	# If this raises an error GUT records a failure automatically.
 	slot.setup(ItemData.EquipSlot.BOOTS, null)
@@ -119,7 +150,10 @@ func test_equipment_slot_setup_does_not_crash() -> void:
 func test_equipment_slot_stores_slot_type() -> void:
 	# _slot is the internal record that _can_drop_data() compares against
 	# incoming drag data. It must match the value passed to setup().
-	var slot: EquipmentSlot = add_child_autofree(EquipmentSlot.new())
+	#
+	# Instantiate from scene so @onready refs resolve correctly.
+	var packed: PackedScene = load(EQUIPMENT_SLOT_SCENE) as PackedScene
+	var slot: EquipmentSlot = add_child_autofree(packed.instantiate() as EquipmentSlot)
 	slot.setup(ItemData.EquipSlot.GLOVES, null)
 
 	assert_eq(slot._slot, ItemData.EquipSlot.GLOVES,
@@ -143,7 +177,9 @@ func test_equipment_slot_can_drop_returns_false_for_wrong_slot() -> void:
 	stack.item = gloves  # set runtime reference so _can_drop_data can read equip_slot
 	autofree(stack)
 
-	var eq: EquipmentSlot = add_child_autofree(EquipmentSlot.new())
+	# Instantiate from scene so @onready refs resolve correctly.
+	var eq_packed: PackedScene = load(EQUIPMENT_SLOT_SCENE) as PackedScene
+	var eq: EquipmentSlot = add_child_autofree(eq_packed.instantiate() as EquipmentSlot)
 	eq.setup(ItemData.EquipSlot.BOOTS, null)
 
 	var data: Dictionary = {"kind": "item", "stack": stack}
@@ -165,7 +201,9 @@ func test_equipment_slot_can_drop_returns_true_for_matching_slot() -> void:
 	stack.item = boots
 	autofree(stack)
 
-	var eq: EquipmentSlot = add_child_autofree(EquipmentSlot.new())
+	# Instantiate from scene so @onready refs resolve correctly.
+	var eq_packed: PackedScene = load(EQUIPMENT_SLOT_SCENE) as PackedScene
+	var eq: EquipmentSlot = add_child_autofree(eq_packed.instantiate() as EquipmentSlot)
 	eq.setup(ItemData.EquipSlot.BOOTS, null)
 
 	var data: Dictionary = {"kind": "item", "stack": stack}
@@ -191,7 +229,9 @@ func test_inventory_row_setup_sets_name_label() -> void:
 	stack.item = item
 	autofree(stack)
 
-	var row: InventoryRow = add_child_autofree(InventoryRow.new())
+	# Instantiate from scene so @onready refs resolve correctly.
+	var row_packed: PackedScene = load(INVENTORY_ROW_SCENE) as PackedScene
+	var row: InventoryRow = add_child_autofree(row_packed.instantiate() as InventoryRow)
 	row.setup(stack, item)
 
 	var matches: Array[Label] = _find_labels(row,
@@ -217,7 +257,9 @@ func test_inventory_row_get_drag_data_returns_correct_structure() -> void:
 	stack.item = item
 	autofree(stack)
 
-	var row: InventoryRow = add_child_autofree(InventoryRow.new())
+	# Instantiate from scene so @onready refs resolve correctly.
+	var row_packed: PackedScene = load(INVENTORY_ROW_SCENE) as PackedScene
+	var row: InventoryRow = add_child_autofree(row_packed.instantiate() as InventoryRow)
 	row.setup(stack, item)
 
 	# Godot 4.6 added a gui_is_dragging() assertion inside set_drag_preview()
@@ -246,7 +288,9 @@ func test_inventory_row_get_drag_data_returns_correct_structure() -> void:
 func test_inventory_tab_populate_left_adds_six_slots() -> void:
 	# One EquipmentSlot per non-NONE EquipSlot value (BACKPACK, CLOTHING,
 	# BOOTS, GLOVES, GOGGLES, NECKLACE). NONE is never rendered.
-	var tab: InventoryTab = add_child_autofree(InventoryTab.new())
+	# Instantiate from scene so @onready refs resolve correctly.
+	var packed: PackedScene = load(INVENTORY_TAB_SCENE) as PackedScene
+	var tab: InventoryTab = add_child_autofree(packed.instantiate() as InventoryTab)
 	var parent: Control = add_child_autofree(Control.new())
 
 	tab.populate_left(parent)
@@ -263,7 +307,9 @@ func test_inventory_tab_populate_left_adds_six_slots() -> void:
 func test_inventory_tab_populate_right_adds_weight_header() -> void:
 	# The weight header tells the player their current carry weight at a glance.
 	# It must appear as a Label that starts with "Weight:" (case-sensitive).
-	var tab: InventoryTab = add_child_autofree(InventoryTab.new())
+	# Instantiate from scene so @onready refs resolve correctly.
+	var packed: PackedScene = load(INVENTORY_TAB_SCENE) as PackedScene
+	var tab: InventoryTab = add_child_autofree(packed.instantiate() as InventoryTab)
 	var parent: Control = add_child_autofree(Control.new())
 
 	tab.populate_right(parent)
@@ -282,7 +328,9 @@ func test_inventory_tab_populate_right_adds_weight_header() -> void:
 func test_inventory_tab_do_equip_emits_inventory_changed() -> void:
 	# When the player selects an equippable item row and presses E, the bag
 	# must emit inventory_changed so the HUD weight bar can refresh.
-	var tab: InventoryTab = add_child_autofree(InventoryTab.new())
+	# Instantiate from scene so @onready refs resolve correctly.
+	var packed: PackedScene = load(INVENTORY_TAB_SCENE) as PackedScene
+	var tab: InventoryTab = add_child_autofree(packed.instantiate() as InventoryTab)
 	var left_parent: Control = add_child_autofree(Control.new())
 	var right_parent: Control = add_child_autofree(Control.new())
 
@@ -321,7 +369,9 @@ func test_inventory_tab_do_equip_emits_inventory_changed() -> void:
 func test_inventory_tab_do_throw_emits_item_dropped() -> void:
 	# Throwing an item must notify the world (for future particle effects, etc.)
 	# via the GameEvents signal bus.
-	var tab: InventoryTab = add_child_autofree(InventoryTab.new())
+	# Instantiate from scene so @onready refs resolve correctly.
+	var packed: PackedScene = load(INVENTORY_TAB_SCENE) as PackedScene
+	var tab: InventoryTab = add_child_autofree(packed.instantiate() as InventoryTab)
 	var parent: Control = add_child_autofree(Control.new())
 	tab.populate_right(parent)
 
@@ -351,7 +401,9 @@ func test_inventory_tab_do_throw_emits_item_dropped() -> void:
 func test_inventory_tab_do_recycle_does_nothing_when_not_recyclable() -> void:
 	# Leaves are not recyclable by default (is_recyclable == false).
 	# _do_recycle() must silently skip them rather than crashing or removing items.
-	var tab: InventoryTab = add_child_autofree(InventoryTab.new())
+	# Instantiate from scene so @onready refs resolve correctly.
+	var packed: PackedScene = load(INVENTORY_TAB_SCENE) as PackedScene
+	var tab: InventoryTab = add_child_autofree(packed.instantiate() as InventoryTab)
 	var parent: Control = add_child_autofree(Control.new())
 	tab.populate_right(parent)
 

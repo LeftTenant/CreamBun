@@ -1,6 +1,50 @@
 [gd_scene format=3]
 
 [ext_resource type="Script" path="res://ui/notebook/inventory/inventory_tab.gd" id="1"]
+[ext_resource type="PackedScene" path="res://ui/notebook/inventory/equipment_slot.tscn" id="2"]
 
 [node name="InventoryTab" type="Control"]
 script = ExtResource("1")
+
+[node name="LeftPage" type="VBoxContainer" parent="."]
+
+[node name="EquipmentHeader" type="Label" parent="LeftPage"]
+focus_mode = 0
+size_flags_horizontal = 3
+text = "Equipment"
+
+[node name="Slot_BACKPACK" parent="LeftPage" instance=ExtResource("2")]
+
+[node name="Slot_CLOTHING" parent="LeftPage" instance=ExtResource("2")]
+
+[node name="Slot_BOOTS" parent="LeftPage" instance=ExtResource("2")]
+
+[node name="Slot_GLOVES" parent="LeftPage" instance=ExtResource("2")]
+
+[node name="Slot_GOGGLES" parent="LeftPage" instance=ExtResource("2")]
+
+[node name="Slot_NECKLACE" parent="LeftPage" instance=ExtResource("2")]
+
+[node name="RightPage" type="VBoxContainer" parent="."]
+
+[node name="WeightLabel" type="Label" parent="RightPage"]
+focus_mode = 0
+size_flags_horizontal = 3
+text = "Weight: 0.0 / ∞"
+
+[node name="ScrollContainer" type="ScrollContainer" parent="RightPage"]
+size_flags_vertical = 3
+
+[node name="RowsContainer" type="VBoxContainer" parent="RightPage/ScrollContainer"]
+size_flags_horizontal = 3
+
+[node name="Footer" type="HBoxContainer" parent="RightPage"]
+
+[node name="EquipButton" type="Button" parent="RightPage/Footer"]
+text = "Equip (E)"
+
+[node name="ThrowButton" type="Button" parent="RightPage/Footer"]
+text = "Throw (T)"
+
+[node name="RecycleButton" type="Button" parent="RightPage/Footer"]
+text = "Recycle (R)"

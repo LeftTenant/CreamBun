@@ -4,3 +4,27 @@
 
 [node name="EquipmentSlot" type="Control"]
 script = ExtResource("1")
+size_flags_horizontal = 3
+custom_minimum_size = Vector2(0, 28)
+
+[node name="SlotLabel" type="Label" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+focus_mode = 0
+size_flags_horizontal = 3
+size_flags_vertical = 3
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="IconRect" type="TextureRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+focus_mode = 0
+size_flags_horizontal = 3
+size_flags_vertical = 3
+stretch_mode = 3
+visible = false

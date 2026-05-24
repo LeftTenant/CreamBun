@@ -7,6 +7,9 @@ extends Control
 ## dragging them onto the matching slot. The parent InventoryTab handles the
 ## actual Inventory.equip() call after receiving slot_drop_received.
 ##
+## Static layout (SlotLabel, IconRect, size/anchor properties) lives in
+## equipment_slot.tscn — this script only handles data binding and drop logic.
+##
 ## Drag-and-drop overview:
 ##   https://docs.godotengine.org/en/stable/tutorials/ui/gui_drag_and_drop.html
 
@@ -29,14 +32,23 @@ var _slot: ItemData.EquipSlot = ItemData.EquipSlot.NONE
 # Updated by setup() so the slot can show the correct state.
 var _item: ItemData = null
 
+
+# ---------------------------------------------------------------------------
+# @onready vars
+# ---------------------------------------------------------------------------
+
 # Shows the slot name ("Boots", "Gloves", etc.) when the slot is empty.
 # Replaced visually by _icon_rect when an item is present.
-var _slot_label: Label
+# Declared in equipment_slot.tscn with PRESET_FULL_RECT anchors and centered
+# alignment — this script only toggles visibility and sets text.
+@onready var _slot_label: Label = $SlotLabel
 
 # Shows the item icon when an item is equipped. Hidden when slot is empty.
 # We use a TextureRect because it scales the Texture2D to fill the node bounds.
 # https://docs.godotengine.org/en/stable/classes/class_texturerect.html
-var _icon_rect: TextureRect
+# Declared in equipment_slot.tscn with STRETCH_KEEP_ASPECT_CENTERED and
+# PRESET_FULL_RECT — starts hidden (visible = false in the scene).
+@onready var _icon_rect: TextureRect = $IconRect
 
 
 # ---------------------------------------------------------------------------
@@ -44,41 +56,9 @@ var _icon_rect: TextureRect
 # ---------------------------------------------------------------------------
 
 func _ready() -> void:
-	# Build child nodes here so the .tscn file stays minimal.
-	# Both children occupy the full slot area; label is shown when empty,
-	# icon_rect when filled.
-
-	# Without an explicit minimum size, a plain Control collapses to 0×0 inside a
-	# VBoxContainer, which makes every slot in the inventory left page render on
-	# top of every other slot. Match InventoryRow's pattern: expand horizontally
-	# to fill the page, and reserve a comfortable height for the slot name or icon.
-	# https://docs.godotengine.org/en/stable/classes/class_control.html#class-control-property-custom-minimum-size
-	size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	custom_minimum_size = Vector2(0, 28)
-
-	_slot_label = Label.new()
-	_slot_label.name = "SlotLabel"
-	# Center text inside the slot area so it reads clearly regardless of size.
-	# https://docs.godotengine.org/en/stable/classes/class_label.html#class-label-property-horizontal-alignment
-	_slot_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_slot_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_slot_label.focus_mode = Control.FOCUS_NONE
-	# Expand to fill the slot so the centered text has room.
-	_slot_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_slot_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	add_child(_slot_label)
-
-	_icon_rect = TextureRect.new()
-	_icon_rect.name = "IconRect"
-	# STRETCH_KEEP_ASPECT_CENTERED keeps item art proportional inside the slot.
-	# https://docs.godotengine.org/en/stable/classes/class_texturerect.html#enum-texturerect-stretchmode
-	_icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	_icon_rect.focus_mode = Control.FOCUS_NONE
-	_icon_rect.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_icon_rect.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	add_child(_icon_rect)
-
-	# Start in the "empty" display state until setup() is called.
+	# Child nodes (SlotLabel, IconRect) are declared in equipment_slot.tscn.
+	# _ready() just initialises the display to match the "empty" state so the
+	# slot shows the slot-name label immediately after instantiation.
 	_update_display()
 
 
@@ -147,12 +127,12 @@ func _drop_data(_at_position: Vector2, data: Variant) -> void:
 
 ## Refresh the child nodes to reflect the current _item state.
 ## Label is shown when empty; icon_rect is shown when filled.
+##
+## @onready guarantees _slot_label and _icon_rect are non-null by the time
+## _ready() runs, and setup() is always called after _ready(), so the null
+## guard that was needed when children were built with .new() is no longer
+## required here.
 func _update_display() -> void:
-	# Guard for the brief window between new() and _ready() where children
-	# do not yet exist. setup() calls this again once children are ready.
-	if _slot_label == null or _icon_rect == null:
-		return
-
 	if _item == null:
 		# Empty slot — show the slot name so the player knows what goes here.
 		_slot_label.text = _slot_name()

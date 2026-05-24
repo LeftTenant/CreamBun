@@ -13,12 +13,46 @@ extends NotebookTab
 ##   - Drag a row onto an equipment slot to equip it.
 ##   - Press E/T/R (or click the corresponding button) to act on selection.
 ##
+## The static layout (page subtrees, named nodes) lives in inventory_tab.tscn.
+## populate_left() / populate_right() instantiate that scene once, extract
+## the LeftPage / RightPage subtrees, and reparent them into the Controls
+## provided by notebook.gd. The same pattern is established in SettingsTab.
+##
 ## _inventory and _item_registry are populated in _ready() with sample data
 ## for Phase 1 so the tab is never visually empty during development.
 ## In a later phase the notebook controller will inject the real player
 ## Inventory via a setter before calling populate_left/right.
 ##
 ## Design doc: docs/features/notebook/design.md §3.1 (Inventory Tab)
+## Refactor:   docs/refactors/notebook-ui-scene-migration/design.md
+
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+# The scene that holds the complete static layout for this tab.
+# Loaded once at class parse time; Godot caches PackedScene objects so
+# multiple instantiate() calls are cheap.
+# https://docs.godotengine.org/en/stable/classes/class_packedscene.html
+const TAB_SCENE: PackedScene = preload("res://ui/notebook/inventory/inventory_tab.tscn")
+
+# Row scene instantiated once per visible stack in the right page.
+# Using scene instantiation (not InventoryRow.new()) so that @onready refs
+# inside inventory_row.gd are fully resolved when setup() writes to them.
+const INVENTORY_ROW_SCENE: PackedScene = preload("res://ui/notebook/inventory/inventory_row.tscn")
+
+# Maps slot enum value (int) to the node name used in inventory_tab.tscn.
+# The script matches scene children by name rather than by position so that
+# reordering children in the editor does not break the slot→enum mapping.
+const SLOT_NODE_NAMES: Dictionary = {
+	ItemData.EquipSlot.BACKPACK: "Slot_BACKPACK",
+	ItemData.EquipSlot.CLOTHING: "Slot_CLOTHING",
+	ItemData.EquipSlot.BOOTS:    "Slot_BOOTS",
+	ItemData.EquipSlot.GLOVES:   "Slot_GLOVES",
+	ItemData.EquipSlot.GOGGLES:  "Slot_GOGGLES",
+	ItemData.EquipSlot.NECKLACE: "Slot_NECKLACE",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -43,25 +77,33 @@ var _selected_row: InventoryRow = null
 # When set, Equip acts as Unequip. Null when a bag row is selected instead.
 var _selected_slot: EquipmentSlot = null
 
-# All six equipment slot nodes, stored so populate_left can iterate them on
-# refresh without re-querying the tree.
+# All six equipment slot nodes, stored so _refresh_both_pages() can iterate
+# them on refresh without re-querying the tree.
 var _equipment_slots: Array[EquipmentSlot] = []
 
 # Stored ref to the weight header so _update_weight_label() can patch just
 # the text without rebuilding the whole right page.
+# Resolved inside populate_right() from the RightPage subtree.
 var _weight_label: Label = null
 
 # Stored ref so we can enable/disable the Recycle button based on selection.
+# Resolved inside populate_right().
 var _recycle_button: Button = null
 
 # Stored so we can clear and rebuild the right page on inventory changes
 # without passing the parent through multiple method calls.
 var _right_page_parent: Control = null
 
-# Stored ref to the freshly-built ItemList VBoxContainer so _rebind_selected_row
-# can walk it directly instead of navigating by node-name path each time.
-# Assigned at the end of every _build_right_page() call.
-var _item_list: VBoxContainer = null
+# Stored ref to the RowsContainer VBoxContainer so _rebind_selected_row()
+# can walk it directly after a _build_right_page() call.
+var _rows_container: VBoxContainer = null
+
+# Cached LeftPage and RightPage VBoxContainers extracted from a single
+# TAB_SCENE instance. Populated on the first populate_left() or
+# populate_right() call and reused for the second call, so we only pay
+# the instantiation cost once per InventoryTab lifetime.
+var _left_page: VBoxContainer = null
+var _right_page: VBoxContainer = null
 
 
 # ---------------------------------------------------------------------------
@@ -121,32 +163,47 @@ func _unhandled_input(event: InputEvent) -> void:
 ## per equippable slot. Each slot is a drop target for dragging items from
 ## the right page.
 ##
+## The six EquipmentSlot nodes (res://ui/notebook/inventory/equipment_slot.tscn)
+## are declared as children of LeftPage in inventory_tab.tscn, named
+## Slot_BACKPACK … Slot_NECKLACE. This method extracts that subtree, reparents
+## it into parent, then resolves each slot by name, calls setup(), and wires
+## the slot_drop_received signal. No additional slots are instantiated at runtime.
+##
 ## @param parent - Control that will receive the page children. Guard for null
 ##                 per NotebookTab contract (tests may omit parent).
 func populate_left(parent: Control) -> void:
 	if parent == null:
 		return
 
-	# Clear previously built slots so re-populating is safe.
+	_ensure_pages_built()
+
+	# Add the LeftPage VBox into the real page Control provided by notebook.gd.
+	# _ensure_pages_built() already detached it from the temporary scene instance.
+	# Guard against re-entry: if _left_page already has a parent (because
+	# populate_left() was called twice on the same InventoryTab instance, as
+	# happens in some tests), detach it first so add_child does not fail.
+	# https://docs.godotengine.org/en/stable/classes/class_node.html#class-node-method-add-child
+	if _left_page.get_parent() != null:
+		_left_page.get_parent().remove_child(_left_page)
+	parent.add_child(_left_page)
+
+	# Anchor the VBox to fill the parent page so children get a real width.
+	# Without this, a plain Control parent won't resize its children automatically.
+	# Negative right/bottom offsets apply a 10 px inset on all sides (rule 2, ui/CLAUDE.md).
+	# https://docs.godotengine.org/en/stable/classes/class_control.html#class-control-method-set-anchors-and-offsets-preset
+	_left_page.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_left_page.offset_left = 10
+	_left_page.offset_top = 10
+	_left_page.offset_right = -10
+	_left_page.offset_bottom = -10
+
+	# Clear previously stored slot refs so a re-populate is safe.
 	_equipment_slots.clear()
 
-	var vbox: VBoxContainer = VBoxContainer.new()
-	vbox.name = "EquipmentVBox"
-	parent.add_child(vbox)
-	# PRESET_FULL_RECT makes the VBoxContainer fill its parent Control completely.
-	# Without this, a plain Control parent won't resize its children automatically —
-	# only Container subclasses do that. See: https://docs.godotengine.org/en/stable/classes/class_control.html#class-control-method-set-anchors-and-offsets-preset
-	vbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-
-	var header: Label = Label.new()
-	header.text = "Equipment"
-	header.focus_mode = Control.FOCUS_NONE
-	vbox.add_child(header)
-
-	# The six equippable slots, in the order they appear in the silhouette
-	# from top to bottom. NONE is not a real slot and is always skipped.
-	# We use a plain Array rather than Array[ItemData.EquipSlot] because
-	# GDScript 4 does not support typed arrays of inner enum types.
+	# Resolve each slot node by its stable name and call setup() on it.
+	# We use a plain Array (not Array[ItemData.EquipSlot]) because GDScript 4
+	# does not support typed arrays of inner enum types — see note in the
+	# original build loop for the full explanation.
 	var slots: Array = [
 		ItemData.EquipSlot.BACKPACK,
 		ItemData.EquipSlot.CLOTHING,
@@ -157,32 +214,84 @@ func populate_left(parent: Control) -> void:
 	]
 
 	for slot_enum: int in slots:
-		var slot_node: EquipmentSlot = EquipmentSlot.new()
-		# Name slots by enum key (`Slot_BACKPACK`, `Slot_CLOTHING`, ...) so the
-		# mapping is stable if the enum is reordered or values are renumbered.
-		slot_node.name = "Slot_%s" % ItemData.EquipSlot.find_key(slot_enum)
-		vbox.add_child(slot_node)
+		var node_name: String = SLOT_NODE_NAMES.get(slot_enum, "")
+		if node_name.is_empty():
+			continue
+		var slot_node: EquipmentSlot = _left_page.get_node(node_name) as EquipmentSlot
+		if slot_node == null:
+			push_warning("InventoryTab: expected slot node '%s' not found in LeftPage" % node_name)
+			continue
+
 		# Pass the currently equipped item (null when empty) so the slot shows
 		# either the slot-name label or the item icon straight away.
-		# slot_enum is an int at runtime (GDScript enums are int aliases), so
-		# the type system accepts it for the EquipSlot parameter.
 		slot_node.setup(slot_enum, _inventory.equipped.get(slot_enum, null))
+
 		# When a drop lands on this slot, _on_slot_drop() calls Inventory.equip()
-		# and refreshes both pages.
-		slot_node.slot_drop_received.connect(_on_slot_drop)
+		# and refreshes both pages. Guard against duplicate connections: if
+		# populate_left() is called more than once on the same InventoryTab instance,
+		# the slot nodes are reused and the signal would be connected a second time.
+		if not slot_node.slot_drop_received.is_connected(_on_slot_drop):
+			slot_node.slot_drop_received.connect(_on_slot_drop)
 		_equipment_slots.append(slot_node)
 
 
 ## Build the right page: a weight header, a scrollable item list, and a
 ## footer with action buttons.
 ##
+## Extracts the RightPage subtree from inventory_tab.tscn, reparents it into
+## parent, resolves named-node references (_weight_label, _rows_container,
+## footer buttons), wires button signals, then calls _build_right_page() to
+## populate the RowsContainer with one InventoryRow per inventory stack.
+##
 ## @param parent - Control that will receive the page children. Guard for null.
 func populate_right(parent: Control) -> void:
 	if parent == null:
 		return
 
-	# Store so _refresh_right_page() can rebuild on inventory changes.
+	_ensure_pages_built()
+
+	# Add the RightPage VBox into the notebook's right page Control.
+	# Same anchoring + margin scheme as populate_left() for consistent insets.
+	# Guard against re-entry: if _right_page already has a parent (because
+	# populate_right() was called twice on the same InventoryTab instance), detach
+	# it first so add_child does not fail.
+	# https://docs.godotengine.org/en/stable/classes/class_node.html#class-node-method-remove-child
+	if _right_page.get_parent() != null:
+		_right_page.get_parent().remove_child(_right_page)
+	parent.add_child(_right_page)
+	_right_page.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_right_page.offset_left = 10
+	_right_page.offset_top = 10
+	_right_page.offset_right = -10
+	_right_page.offset_bottom = -10
+
+	# Resolve named-node references from the RightPage subtree.
+	# Paths are relative to _right_page; using get_node() rather than @onready
+	# because the tree shape is established here (inside populate_right) rather
+	# than at _ready time.
+	_weight_label = _right_page.get_node("WeightLabel") as Label
+	_rows_container = _right_page.get_node("ScrollContainer/RowsContainer") as VBoxContainer
+
+	# Wire footer button signals. The buttons are already in the scene;
+	# this call makes the script the handler for each pressed event.
+	# Guard each connection with is_connected() so calling populate_right() a
+	# second time on the same InventoryTab instance does not register duplicates.
+	var equip_btn: Button = _right_page.get_node("Footer/EquipButton") as Button
+	if not equip_btn.pressed.is_connected(_do_equip):
+		equip_btn.pressed.connect(_do_equip)
+
+	var throw_btn: Button = _right_page.get_node("Footer/ThrowButton") as Button
+	if not throw_btn.pressed.is_connected(_do_throw):
+		throw_btn.pressed.connect(_do_throw)
+
+	_recycle_button = _right_page.get_node("Footer/RecycleButton") as Button
+	if not _recycle_button.pressed.is_connected(_do_recycle):
+		_recycle_button.pressed.connect(_do_recycle)
+
+	# Store the parent so _refresh_both_pages() can rebuild on inventory changes.
 	_right_page_parent = parent
+
+	# Populate the RowsContainer with initial inventory data.
 	_build_right_page()
 
 
@@ -324,46 +433,66 @@ func _on_row_selected(row: InventoryRow) -> void:
 # Private helpers
 # ---------------------------------------------------------------------------
 
-## Build or rebuild the entire right page from scratch.
-## Called by populate_right() on first open and by _refresh_both_pages() on
-## any inventory change.
-func _build_right_page() -> void:
-	if _right_page_parent == null:
+## Instantiate TAB_SCENE once per InventoryTab lifetime, extract both page
+## VBoxContainers, and discard the scene shell. Called at the start of each
+## populate_* method so either method can be called first without ordering
+## constraints.
+##
+## We detach the pages from the scene instance rather than reparenting the
+## whole instance, because the notebook only needs the page subtrees and the
+## bare InventoryTab root Control from the .tscn has no purpose at runtime.
+## This is the same pattern established in SettingsTab._ensure_pages_built().
+func _ensure_pages_built() -> void:
+	if _left_page != null:
+		# Already extracted on a previous call; nothing to do.
 		return
 
-	# Remove all previously built children before rebuilding.
-	for child in _right_page_parent.get_children():
+	# Instantiate the scene to get a fully-formed node tree with editor
+	# properties (labels, size flags, button text) already applied.
+	# https://docs.godotengine.org/en/stable/classes/class_packedscene.html#class-packedscene-method-instantiate
+	var instance: Control = TAB_SCENE.instantiate() as Control
+
+	# Grab references before detaching. Nodes are still children of instance
+	# at this point, so get_node paths are relative to instance.
+	_left_page = instance.get_node("LeftPage") as VBoxContainer
+	_right_page = instance.get_node("RightPage") as VBoxContainer
+
+	# Detach both pages so they survive when the shell is freed.
+	# remove_child does not free the node — it simply unparents it.
+	# https://docs.godotengine.org/en/stable/classes/class_node.html#class-node-method-remove-child
+	instance.remove_child(_left_page)
+	instance.remove_child(_right_page)
+
+	# Clear the owner on both detached pages. After remove_child the nodes still
+	# retain their .owner (the TAB_SCENE root). When add_child'd into a different
+	# scene tree Godot emits an owner-inconsistency warning that GUT counts as a
+	# test failure. Setting owner to null severs that link.
+	# https://docs.godotengine.org/en/stable/classes/class_node.html#class-node-property-owner
+	_left_page.owner = null
+	_right_page.owner = null
+
+	# The bare InventoryTab Control shell is no longer needed.
+	# queue_free() defers deletion to end-of-frame; safe because we removed all
+	# nodes we care about before calling it.
+	# https://docs.godotengine.org/en/stable/classes/class_node.html#class-node-method-queue-free
+	instance.queue_free()
+
+
+## Clear the RowsContainer and rebuild it with one InventoryRow per stack.
+## Called by populate_right() on first open and by _refresh_both_pages() on
+## any inventory change.
+##
+## This does NOT rebuild the static right-page chrome (WeightLabel, buttons)
+## — those are set up once in populate_right() and persist across rebuilds.
+func _build_right_page() -> void:
+	if _rows_container == null:
+		return
+
+	# Remove all previously built row children before rebuilding.
+	# free() (not queue_free()) is intentional here: the rows are leaf nodes
+	# with no children to defer and we want them gone before we add new ones.
+	for child: Node in _rows_container.get_children():
 		child.free()
-
-	var vbox: VBoxContainer = VBoxContainer.new()
-	vbox.name = "RightVBox"
-	_right_page_parent.add_child(vbox)
-	# PRESET_FULL_RECT makes the VBoxContainer fill its parent Control completely.
-	# Without this, a plain Control parent won't resize its children automatically —
-	# only Container subclasses do that. See: https://docs.godotengine.org/en/stable/classes/class_control.html#class-control-method-set-anchors-and-offsets-preset
-	vbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-
-	# Weight header — shows current / max so the player always knows their load.
-	_weight_label = Label.new()
-	_weight_label.name = "WeightLabel"
-	_weight_label.focus_mode = Control.FOCUS_NONE
-	vbox.add_child(_weight_label)
-	_update_weight_label()
-
-	# ScrollContainer so long item lists don't overflow the page.
-	# https://docs.godotengine.org/en/stable/classes/class_scrollcontainer.html
-	var scroll: ScrollContainer = ScrollContainer.new()
-	scroll.name = "ItemScroll"
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	vbox.add_child(scroll)
-
-	var item_list: VBoxContainer = VBoxContainer.new()
-	item_list.name = "ItemList"
-	item_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(item_list)
-	# Store a direct ref so _rebind_selected_row can walk this container without
-	# navigating by name (which would break if the tree shape ever changed).
-	_item_list = item_list
 
 	# Add one row per stack. Stacks are ordered by insertion — the order the
 	# player picked items up. Phase 2 may add sorting controls.
@@ -375,50 +504,35 @@ func _build_right_page() -> void:
 		if item == null:
 			continue  # Skip orphaned stacks gracefully.
 
-		var row: InventoryRow = InventoryRow.new()
+		# Instantiate from the scene so @onready refs inside inventory_row.gd
+		# are resolved before setup() writes to them.
+		var row: InventoryRow = INVENTORY_ROW_SCENE.instantiate() as InventoryRow
+
 		# Node names disallow spaces, `/`, and `:` — Godot silently replaces them
 		# with `@`, breaking any test that addresses the node via a literal string.
 		# Sanitize the item id so names like "Row_sample_leaf" are stable.
 		var safe_id: String = str(stack.item_id).replace(" ", "_").replace("/", "_").replace(":", "_")
 		row.name = "Row_%s" % safe_id
-		item_list.add_child(row)
+		_rows_container.add_child(row)
 		row.setup(stack, item)
+
 		# `_gui_input` on the row emits this signal on left-click; we connect to it
 		# instead of the row's `gui_input` signal because the latter is swallowed by
 		# the surrounding ScrollContainer.
 		row.selected.connect(_on_row_selected)
 
-	# Footer buttons — three actions side by side.
-	var footer: HBoxContainer = HBoxContainer.new()
-	vbox.add_child(footer)
-
-	var equip_btn: Button = Button.new()
-	equip_btn.text = "Equip (E)"
-	equip_btn.pressed.connect(_do_equip)
-	footer.add_child(equip_btn)
-
-	var throw_btn: Button = Button.new()
-	throw_btn.text = "Throw (T)"
-	throw_btn.pressed.connect(_do_throw)
-	footer.add_child(throw_btn)
-
-	_recycle_button = Button.new()
-	_recycle_button.text = "Recycle (R)"
-	_recycle_button.pressed.connect(_do_recycle)
-	footer.add_child(_recycle_button)
+	_update_weight_label()
 
 
 ## Refresh both pages after an inventory change so equipment slots and the
 ## item list stay in sync. Cheaper than a full populate_left/right because
 ## it reuses the stored parent references.
 func _refresh_both_pages() -> void:
-	# Rebuild the left page if it was ever built (parent still valid).
-	if not _equipment_slots.is_empty():
-		# Update each slot's equipped item without rebuilding from scratch.
-		for slot_node in _equipment_slots:
-			slot_node.setup(slot_node._slot, _inventory.equipped.get(slot_node._slot, null))
+	# Update each slot's equipped item without rebuilding from scratch.
+	for slot_node: EquipmentSlot in _equipment_slots:
+		slot_node.setup(slot_node._slot, _inventory.equipped.get(slot_node._slot, null))
 
-	# Rebuild the right page — item list and weight header.
+	# Rebuild the row list — item list and weight header.
 	_build_right_page()
 
 
@@ -433,14 +547,14 @@ func _refresh_both_pages() -> void:
 ##                  If no row with this id exists (stack fully depleted) the
 ##                  method is a no-op and _selected_row stays null.
 func _rebind_selected_row(item_id: StringName) -> void:
-	# _item_list is assigned at the end of every _build_right_page() call.
-	# If it's null here, the page was never built — bail silently.
-	if _item_list == null:
+	# _rows_container is assigned in populate_right() and stays valid for the
+	# lifetime of the tab. If it's null the right page was never built — bail.
+	if _rows_container == null:
 		return
 
 	# Walk the rows and match by item_id — not by node name or array position,
 	# since names are derived from ids and positions can shift after a depletion.
-	for child: Node in _item_list.get_children():
+	for child: Node in _rows_container.get_children():
 		var row: InventoryRow = child as InventoryRow
 		if row == null:
 			continue

@@ -4,3 +4,35 @@
 
 [node name="InventoryRow" type="Control"]
 script = ExtResource("1")
+size_flags_horizontal = 3
+custom_minimum_size = Vector2(0, 20)
+mouse_filter = 0
+
+[node name="SelectionRect" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(1, 0.9, 0.6, 0.35)
+mouse_filter = 2
+visible = false
+
+[node name="HBox" type="HBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+size_flags_horizontal = 3
+
+[node name="NameLabel" type="Label" parent="HBox"]
+focus_mode = 0
+size_flags_horizontal = 3
+autowrap_mode = 3
+clip_text = false
+
+[node name="CountLabel" type="Label" parent="HBox"]
+focus_mode = 0
+visible = false
+
+[node name="WeightLabel" type="Label" parent="HBox"]
+focus_mode = 0
