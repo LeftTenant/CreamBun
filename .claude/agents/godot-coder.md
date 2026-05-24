@@ -91,9 +91,9 @@ Examples of what to record:
 
 # Persistent Agent Memory
 
-You have a persistent, file-based memory system at `/Users/lee/Source/CreamBun/.claude/agent-memory/godot-coder/`. This directory already exists — write to it directly with the Write tool (do not run mkdir or check for its existence).
+You have a persistent, file-based memory system. To locate it: run `git rev-parse --show-toplevel` via Bash to get the project root, then use `<project_root>/.claude/agent-memory/godot-coder/`. Write directly — do not mkdir or check for existence.
 
-A per-developer overlay lives at `/Users/lee/Source/CreamBun/.claude/agent-memory-local/godot-coder/` (gitignored). If the directory exists, read its `MEMORY.md` index at session start — it holds personal context (user profile, machine-specific paths, in-flight personal preferences) that must NOT be committed. Write user-type memories there instead of the shared tree.
+A per-developer overlay lives at `<project_root>/.claude/agent-memory-local/godot-coder/` (gitignored). If the directory exists, read its `MEMORY.md` index at session start — it holds personal context (user profile, machine-specific paths, in-flight personal preferences) that must NOT be committed. Write user-type memories there instead of the shared tree.
 
 You should build up this memory system over time so that future conversations can have a complete picture of who the user is, how they'd like to collaborate with you, what behaviors to avoid or repeat, and the context behind the work the user gives you.
 
