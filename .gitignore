@@ -17,6 +17,8 @@ addons/gut/
 
 # godot-testing plugin — Python MCP server venv (auto-created on first run)
 plugins/godot-testing/server/.venv/
+# godot-testing plugin — per-machine config (Godot binary path, auto-created)
+plugins/godot-testing/server/.config.json
 
 # VS Code
 .vscode/

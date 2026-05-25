@@ -4,8 +4,11 @@ Exposes the in-Godot HTTP testing server (godot/testing_server.gd) as MCP
 tools so Claude Code agents can drive the game programmatically. See
 docs/testing-sandbox.md for the architecture.
 
-Two tools wrap the OS process (launch_game, stop_game); the rest are 1:1
-proxies for HTTP commands the Godot side already implements.
+Tools fall into three groups:
+
+  Process management  — launch_game, stop_game
+  Testing sandbox     — 1:1 proxies for the in-Godot HTTP commands
+  GUT test runner     — run_gut_tests (headless), configure_godot, get_config
 
 Configuration via environment variables (set in the plugin's .mcp.json):
 
@@ -13,10 +16,15 @@ Configuration via environment variables (set in the plugin's .mcp.json):
                          project.godot. Defaults to two levels above this
                          file, which is correct when the plugin lives at
                          <project>/plugins/godot-testing/.
-    GODOT_BIN            path to a Godot 4 executable. If unset, we probe a
-                         list of common locations across macOS / Linux.
+    GODOT_BIN            path to a Godot 4 executable. If unset, we check
+                         the persistent config file, then probe common
+                         locations across macOS / Linux.
     TESTING_SERVER_PORT  port the in-Godot server is listening on
                          (default 9080).
+
+The Godot binary path is persisted to server/.config.json after first
+successful detection so that subsequent MCP server restarts skip the probe.
+Use the configure_godot tool (or set GODOT_BIN) to override.
 
 Run via stdio (Claude Code launches us automatically); not meant to be invoked
 by hand. To smoke-test by hand, see the curl example in docs/testing-sandbox.md.
@@ -29,6 +37,7 @@ import os
 import shutil
 import signal
 import subprocess
+import sys
 import time
 import urllib.error
 import urllib.request
@@ -40,6 +49,21 @@ from mcp.server.fastmcp import FastMCP
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
+
+_CONFIG_PATH = Path(__file__).resolve().parent / ".config.json"
+
+
+def _load_config() -> dict:
+    """Read the persistent config file, returning {} on any failure."""
+    try:
+        return json.loads(_CONFIG_PATH.read_text())
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return {}
+
+
+def _save_config(config: dict) -> None:
+    """Write the config dict to the persistent config file."""
+    _CONFIG_PATH.write_text(json.dumps(config, indent=2) + "\n")
 
 
 def _default_project_path() -> str:
@@ -56,9 +80,14 @@ def _default_project_path() -> str:
 
 
 def _detect_godot_bin() -> str:
-    """Return the first Godot 4 binary we can find on this machine."""
-    # Order: explicit env var (handled by caller), then common locations on
-    # macOS and Linux, then PATH lookup as last resort.
+    """Return the first Godot 4 binary we can find on this machine.
+
+    Checks (in order): persistent config file, common install paths on
+    macOS/Linux, then PATH lookup."""
+    saved = _load_config().get("godot_bin", "")
+    if saved and os.path.exists(saved):
+        return saved
+
     candidates = [
         "/Applications/Godot.app/Contents/MacOS/Godot",
         "/Applications/Godot_mono.app/Contents/MacOS/Godot",
@@ -79,6 +108,14 @@ GODOT_PROJECT_PATH = os.environ.get("GODOT_PROJECT_PATH") or _default_project_pa
 GODOT_BIN = os.environ.get("GODOT_BIN") or _detect_godot_bin()
 PORT = int(os.environ.get("TESTING_SERVER_PORT", "9080"))
 SERVER_URL = f"http://127.0.0.1:{PORT}"
+
+# Persist the discovered binary so future startups skip the probe.
+if GODOT_BIN and os.path.exists(GODOT_BIN):
+    _cfg = _load_config()
+    if _cfg.get("godot_bin") != GODOT_BIN:
+        _cfg["godot_bin"] = GODOT_BIN
+        _save_config(_cfg)
+        print(f"[testing-sandbox] saved Godot binary: {GODOT_BIN}", file=sys.stderr)
 
 # Single-process model: at most one Godot instance owned by this MCP server.
 _godot_process: subprocess.Popen | None = None
@@ -131,6 +168,64 @@ def _ping() -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Setup & configuration tools
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+def get_config() -> dict:
+    """Return the current plugin configuration: Godot binary path, project
+    path, testing server port, and whether each was auto-detected or
+    explicitly set."""
+    env_bin = os.environ.get("GODOT_BIN", "")
+    saved_bin = _load_config().get("godot_bin", "")
+    return {
+        "godot_bin": GODOT_BIN,
+        "godot_bin_source": (
+            "GODOT_BIN env var" if env_bin
+            else "config file" if saved_bin and saved_bin == GODOT_BIN
+            else "auto-detected" if GODOT_BIN
+            else "not found"
+        ),
+        "godot_bin_exists": bool(GODOT_BIN) and os.path.exists(GODOT_BIN),
+        "project_path": GODOT_PROJECT_PATH,
+        "testing_server_port": PORT,
+    }
+
+
+@mcp.tool()
+def configure_godot(godot_bin: str) -> dict:
+    """Persistently set the Godot binary path. The path is saved to a config
+    file so it survives MCP server restarts. Pass an empty string to clear
+    the saved path and fall back to auto-detection on next restart."""
+    global GODOT_BIN
+
+    if godot_bin and not os.path.exists(godot_bin):
+        raise RuntimeError(
+            f"Path does not exist: {godot_bin}. "
+            "Provide the absolute path to the Godot 4 executable."
+        )
+
+    cfg = _load_config()
+    if godot_bin:
+        cfg["godot_bin"] = godot_bin
+        GODOT_BIN = godot_bin
+    else:
+        cfg.pop("godot_bin", None)
+        GODOT_BIN = _detect_godot_bin()
+    _save_config(cfg)
+
+    return {
+        "godot_bin": GODOT_BIN,
+        "saved": bool(godot_bin),
+        "message": (
+            f"Saved Godot binary path: {GODOT_BIN}"
+            if godot_bin
+            else f"Cleared saved path; auto-detected: {GODOT_BIN or 'not found'}"
+        ),
+    }
+
+
+# ---------------------------------------------------------------------------
 # Process management tools
 # ---------------------------------------------------------------------------
 
@@ -152,8 +247,8 @@ def launch_game(timeout_seconds: int = 30) -> dict:
     if not GODOT_BIN or not os.path.exists(GODOT_BIN):
         raise RuntimeError(
             f"Could not find a Godot 4 binary (looked for: {GODOT_BIN or 'common paths and PATH'}). "
-            "Set GODOT_BIN in the plugin's .mcp.json to the absolute path of "
-            "your Godot 4 executable."
+            "Use the configure_godot tool or set GODOT_BIN in the plugin's "
+            ".mcp.json to the absolute path of your Godot 4 executable."
         )
 
     _godot_process = subprocess.Popen(
@@ -196,6 +291,106 @@ def stop_game() -> dict:
 
     _godot_process = None
     return {"ok": True, "was_running": True}
+
+
+# ---------------------------------------------------------------------------
+# GUT test runner
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+def run_gut_tests(
+    directory: str = "",
+    select: str = "",
+    tests: list[str] | None = None,
+    include_subdirs: bool = True,
+    log_level: int = 1,
+    inner_class: str = "",
+    unit_test_name: str = "",
+    timeout_seconds: int = 120,
+) -> dict:
+    """Run GUT tests headlessly and return the output.
+
+    This is the primary way to execute unit and integration tests. The tool
+    handles locating the Godot binary and building the correct command line —
+    callers never need to know the binary path or construct Bash commands.
+
+    Args:
+        directory: GUT -gdir flag. Run all tests under this res:// directory
+            (e.g. "res://tests/unit/"). Mutually exclusive with `tests`.
+        select: GUT -gselect flag. Filter by filename within `directory`
+            (e.g. "test_inventory_tab.gd").
+        tests: GUT -gtest flag. List of specific res:// test file paths to
+            run (e.g. ["res://tests/unit/test_foo.gd"]). Mutually exclusive
+            with `directory`.
+        include_subdirs: Include subdirectories when using `directory`.
+        log_level: GUT -glog verbosity (0=errors only, 1=default, 2=verbose,
+            3=debug).
+        inner_class: GUT -ginner_class flag. Run only this inner test class.
+        unit_test_name: GUT -gunit_test_name flag. Run only this specific
+            test method.
+        timeout_seconds: Max seconds to wait for the test run (default 120).
+
+    Returns:
+        {"output": "...", "returncode": 0, "passed": true}
+    """
+    if not GODOT_BIN or not os.path.exists(GODOT_BIN):
+        raise RuntimeError(
+            f"Godot binary not found ({GODOT_BIN or 'not configured'}). "
+            "Use the configure_godot tool to set the path."
+        )
+    if not GODOT_PROJECT_PATH:
+        raise RuntimeError("Project path not configured.")
+
+    gut_script = "addons/gut/gut_cmdln.gd"
+    gut_path = os.path.join(GODOT_PROJECT_PATH, gut_script)
+    if not os.path.exists(gut_path):
+        raise RuntimeError(
+            f"GUT not found at {gut_script}. Install GUT via the Godot "
+            "Asset Library or from https://github.com/bitwes/Gut"
+        )
+
+    cmd = [GODOT_BIN, "--headless", "--path", GODOT_PROJECT_PATH,
+           "-s", f"res://{gut_script}"]
+
+    if tests:
+        cmd.append(f"-gtest={','.join(tests)}")
+    elif directory:
+        cmd.append(f"-gdir={directory}")
+        if select:
+            cmd.append(f"-gselect={select}")
+        if include_subdirs:
+            cmd.append("-ginclude_subdirs")
+
+    if inner_class:
+        cmd.append(f"-ginner_class={inner_class}")
+    if unit_test_name:
+        cmd.append(f"-gunit_test_name={unit_test_name}")
+
+    cmd.append(f"-glog={log_level}")
+    cmd.append("-gexit")
+
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=timeout_seconds,
+            cwd=GODOT_PROJECT_PATH,
+        )
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(
+            f"GUT test run timed out after {timeout_seconds}s. "
+            "Try a narrower test selection or increase timeout_seconds."
+        )
+
+    output = result.stdout + result.stderr
+    passed = result.returncode == 0
+
+    return {
+        "output": output,
+        "returncode": result.returncode,
+        "passed": passed,
+    }
 
 
 # ---------------------------------------------------------------------------

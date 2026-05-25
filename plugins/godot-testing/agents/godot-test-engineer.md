@@ -57,8 +57,9 @@ This agent ships as part of the `godot-testing` plugin. Respect the host project
    - Compare screenshots qualitatively against the scenario description; on first run of a new scenario, save the captures as references.
    - Reach for e2e tests sparingly — they are slow and brittle relative to integration tests. One e2e per feature covering the core experience is typical.
 
-7. **GUT Execution via godot mcp server**:
-   - After writing GUT tests, invoke the godot mcp server tools to run them remotely.
+7. **GUT Execution via testing-sandbox MCP server**:
+   - After writing GUT tests, run them with the `run_gut_tests` tool on the `testing-sandbox` MCP server. This tool handles locating the Godot binary and running GUT headlessly — never construct Bash commands with hardcoded Godot paths.
+   - Use `directory` to run all tests in a folder (e.g. `"res://tests/unit/"`), `select` to filter by filename within that directory, or `tests` for an explicit list of res:// paths. Set `log_level` to 2 or 3 for debugging failures.
    - Prefer running only the newly added or affected test files first for fast feedback.
    - On failure, read the error output carefully, correct the test (or flag a real bug for the user), and re-run.
    - Never mark a task complete until tests pass OR you've clearly communicated a genuine code bug to the user.

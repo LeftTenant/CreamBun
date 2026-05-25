@@ -33,7 +33,7 @@ If the behavior is contained to a single class with no scene or autoload depende
 6. **Autoload state**:
    - Read `GameState.current_state` (or equivalent) to assert state transitions
    - Mutate via the public API the system uses, not by setting fields directly — that's what's being verified
-7. **Run via the `godot` MCP server's `run_project` tool**. Read the output; fix failures; re-run until green.
+7. **Run via the `run_gut_tests` tool** on the `testing-sandbox` MCP server. Pass the test directory or specific file paths — the tool handles the Godot binary and headless command. Read the output; fix failures; re-run until green.
 8. **Report**: list new files, summarize the flows covered, call out bugs.
 
 ## Tree-pause / process_mode awareness

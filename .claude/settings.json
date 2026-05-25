@@ -1,4 +1,26 @@
 {
+  "permissions": {
+    "allow": [
+      "mcp__plugin_godot-testing_testing-sandbox__run_gut_tests",
+      "mcp__plugin_godot-testing_testing-sandbox__get_config",
+      "mcp__plugin_godot-testing_testing-sandbox__configure_godot",
+      "mcp__plugin_godot-testing_testing-sandbox__launch_game",
+      "mcp__plugin_godot-testing_testing-sandbox__stop_game",
+      "mcp__plugin_godot-testing_testing-sandbox__screenshot",
+      "mcp__plugin_godot-testing_testing-sandbox__get_game_state",
+      "mcp__plugin_godot-testing_testing-sandbox__get_node_property",
+      "mcp__plugin_godot-testing_testing-sandbox__press_action",
+      "mcp__plugin_godot-testing_testing-sandbox__release_action",
+      "mcp__plugin_godot-testing_testing-sandbox__press_key",
+      "mcp__plugin_godot-testing_testing-sandbox__mouse_button_press",
+      "mcp__plugin_godot-testing_testing-sandbox__mouse_button_release",
+      "mcp__plugin_godot-testing_testing-sandbox__mouse_move",
+      "mcp__plugin_godot-testing_testing-sandbox__emit_game_event",
+      "mcp__plugin_godot-testing_testing-sandbox__load_scene",
+      "mcp__plugin_godot-testing_testing-sandbox__wait_frames",
+      "mcp__plugin_godot-testing_testing-sandbox__reset_state"
+    ]
+  },
   "extraKnownMarketplaces": {
     "creambun-local": {
       "source": {

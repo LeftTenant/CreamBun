@@ -30,7 +30,7 @@ If the test would need to load a scene, mount an autoload, or simulate input, **
    - Arrange / act / assert structure
    - Use `gut.p("...")` for diagnostic output
    - Comments explain WHY non-obvious assertions matter, not WHAT they check
-5. **Run the tests** via the `godot` MCP server's `run_project` tool with the GUT command-line runner. Read the output, fix failures, re-run until green.
+5. **Run the tests** via the `run_gut_tests` tool on the `testing-sandbox` MCP server. Pass the test directory or specific file paths — the tool handles locating the Godot binary and building the headless command. Read the output, fix failures, re-run until green.
 6. **Report**: list new files, summarize coverage, and call out any bugs the tests uncovered in the code under test.
 
 ## Resource-duplication trap
