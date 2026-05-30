@@ -36,6 +36,7 @@ func populate_left(parent: Control) -> void:
 	# https://docs.godotengine.org/en/stable/classes/class_vboxcontainer.html
 	var vbox: VBoxContainer = VBoxContainer.new()
 	parent.add_child(vbox)
+	vbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
 	# Section heading — decorative, so focus_mode = NONE so Tab key skips it
 	# and moves straight to the next interactive control.
@@ -79,6 +80,7 @@ func populate_right(parent: Control) -> void:
 
 	var vbox: VBoxContainer = VBoxContainer.new()
 	parent.add_child(vbox)
+	vbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
 	var heading: Label = Label.new()
 	heading.text = "Local Area"

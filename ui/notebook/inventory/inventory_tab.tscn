@@ -39,12 +39,22 @@ size_flags_vertical = 3
 size_flags_horizontal = 3
 
 [node name="Footer" type="HBoxContainer" parent="RightPage"]
+size_flags_horizontal = 3
 
 [node name="EquipButton" type="Button" parent="RightPage/Footer"]
-text = "Equip (E)"
+size_flags_horizontal = 3
+tooltip_text = "Equip selected item (E)"
+clip_text = true
+text = "Equip"
 
 [node name="ThrowButton" type="Button" parent="RightPage/Footer"]
-text = "Throw (T)"
+size_flags_horizontal = 3
+tooltip_text = "Throw selected item (T)"
+clip_text = true
+text = "Throw"
 
 [node name="RecycleButton" type="Button" parent="RightPage/Footer"]
-text = "Recycle (R)"
+size_flags_horizontal = 3
+tooltip_text = "Recycle selected item (R)"
+clip_text = true
+text = "Recycle"

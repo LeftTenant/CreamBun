@@ -90,6 +90,7 @@ func populate_left(parent: Control) -> void:
 	# https://docs.godotengine.org/en/stable/classes/class_vboxcontainer.html
 	var vbox: VBoxContainer = VBoxContainer.new()
 	parent.add_child(vbox)
+	vbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
 	# Split quests into two buckets so ACTIVE work appears at the top and
 	# COMPLETED entries are relegated to a clearly labelled section below.
@@ -216,6 +217,7 @@ func _refresh_right_page() -> void:
 	# VBoxContainer so title, description, and objectives stack vertically.
 	var vbox: VBoxContainer = VBoxContainer.new()
 	_right_page_parent.add_child(vbox)
+	vbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
 	# Quest title — displayed large/bold via theme in the editor; for Phase 1
 	# we set the label's text and rely on the notebook theme for styling.
