@@ -19,6 +19,9 @@ addons/gut/
 plugins/godot-testing/server/.venv/
 # godot-testing plugin — per-machine config (Godot binary path, auto-created)
 plugins/godot-testing/server/.config.json
+# Python bytecode cache
+__pycache__/
+*.pyc
 
 # VS Code
 .vscode/
