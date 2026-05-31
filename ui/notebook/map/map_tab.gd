@@ -12,7 +12,37 @@ extends NotebookTab
 ## ColorRect with a LocalMap instance showing a static SubViewport snapshot
 ## with a fog-of-war overlay.
 ##
+## Static layout (headings, placeholder rects, Phase 2 notes) lives in
+## map_tab.tscn — see PR 5 of docs/refactors/notebook-ui-scene-migration/design.md.
+## populate_left() / populate_right() instantiate that scene once, extract the
+## LeftPage / RightPage subtrees, and reparent them into the Controls provided
+## by notebook.gd. The same pattern is used in SettingsTab and InventoryTab.
+##
 ## Design doc: docs/features/notebook/design.md §5.3 (Map tab)
+## Refactor:   docs/refactors/notebook-ui-scene-migration/design.md
+
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+# The scene that holds the complete static layout for this tab.
+# Loaded once at class parse time; Godot caches PackedScene objects so
+# multiple instantiate() calls are cheap.
+# https://docs.godotengine.org/en/stable/classes/class_packedscene.html
+const TAB_SCENE: PackedScene = preload("res://ui/notebook/map/map_tab.tscn")
+
+
+# ---------------------------------------------------------------------------
+# Private vars
+# ---------------------------------------------------------------------------
+
+# Cached LeftPage and RightPage VBoxContainers extracted from a single
+# TAB_SCENE instance. Populated on the first populate_left() or
+# populate_right() call and reused for the second call, so we only pay
+# the instantiation cost once per MapTab lifetime.
+var _left_page: VBoxContainer = null
+var _right_page: VBoxContainer = null
 
 
 # ---------------------------------------------------------------------------
@@ -20,8 +50,9 @@ extends NotebookTab
 # ---------------------------------------------------------------------------
 
 ## Populate the left page with a world-map placeholder.
-## Adds a VBoxContainer containing a section heading, a green ColorRect to
-## represent the map area, and a "coming in Phase 2" note below it.
+## Instantiates map_tab.tscn (once), extracts the LeftPage VBoxContainer,
+## and reparents it into parent. The VBoxContainer contains a section heading,
+## a green ColorRect to represent the map area, and a "coming in Phase 2" note.
 ##
 ## The ColorRect gives the page a visual presence so it does not look broken;
 ## the muted green (#334D33 ≈ Color(0.2, 0.3, 0.2)) evokes a printed map.
@@ -32,42 +63,31 @@ func populate_left(parent: Control) -> void:
 	if parent == null:
 		return
 
-	# VBoxContainer stacks the heading, placeholder rect, and note vertically.
-	# https://docs.godotengine.org/en/stable/classes/class_vboxcontainer.html
-	var vbox: VBoxContainer = VBoxContainer.new()
-	parent.add_child(vbox)
-	vbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_ensure_pages_built()
 
-	# Section heading — decorative, so focus_mode = NONE so Tab key skips it
-	# and moves straight to the next interactive control.
-	# https://docs.godotengine.org/en/stable/classes/class_control.html#enum-control-focusmode
-	var heading: Label = Label.new()
-	heading.text = "World Map"
-	heading.focus_mode = Control.FOCUS_NONE
-	vbox.add_child(heading)
+	# Add the LeftPage VBox into the real page Control provided by notebook.gd.
+	# _ensure_pages_built() already detached it from the temporary scene instance.
+	# Guard against re-entry: if _left_page already has a parent (because
+	# populate_left() was called twice on the same MapTab instance), detach it
+	# first so add_child does not fail.
+	# https://docs.godotengine.org/en/stable/classes/class_node.html#class-node-method-add-child
+	if _left_page.get_parent() != null:
+		_left_page.get_parent().remove_child(_left_page)
+	parent.add_child(_left_page)
 
-	# Placeholder rect stands in for the GlobalMap TextureRect until Phase 2
-	# art is ready. The muted green colour reads as "map territory" without
-	# needing real art.
-	# https://docs.godotengine.org/en/stable/classes/class_colorrect.html
-	var map_rect: ColorRect = ColorRect.new()
-	map_rect.color = Color(0.2, 0.3, 0.2)
-	# custom_minimum_size guarantees the rect has a visible area even when the
-	# parent Control has no layout constraints yet (e.g. in tests).
-	map_rect.custom_minimum_size = Vector2(120.0, 80.0)
-	vbox.add_child(map_rect)
-
-	# Phase 2 note — tells the player (and the developer reading the code) what
-	# will appear here once the art pass is complete.
-	var note: Label = Label.new()
-	note.text = "World map coming in Phase 2."
-	note.focus_mode = Control.FOCUS_NONE
-	vbox.add_child(note)
+	# Anchor the VBox to fill the parent page so children get a real width.
+	# Without this, a plain Control parent won't resize its children automatically.
+	# The map tab does not use 10 px insets — the original map_tab.gd did not
+	# apply them, and this migration preserves that visual behaviour unchanged.
+	# https://docs.godotengine.org/en/stable/classes/class_control.html#class-control-method-set-anchors-and-offsets-preset
+	_left_page.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
 
 ## Populate the right page with a local-area map placeholder.
-## Adds a VBoxContainer containing a section heading, a dark-green ColorRect
-## to represent the local map area, and a "coming in Phase 2" note.
+## Instantiates map_tab.tscn (once), extracts the RightPage VBoxContainer,
+## and reparents it into parent. The VBoxContainer contains a section heading,
+## a dark-green ColorRect to represent the local map area, and a "coming in
+## Phase 2" note.
 ##
 ## The slightly darker green (Color(0.15, 0.25, 0.15)) distinguishes the local
 ## map visually from the global map on the left page.
@@ -78,23 +98,66 @@ func populate_right(parent: Control) -> void:
 	if parent == null:
 		return
 
-	var vbox: VBoxContainer = VBoxContainer.new()
-	parent.add_child(vbox)
-	vbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_ensure_pages_built()
 
-	var heading: Label = Label.new()
-	heading.text = "Local Area"
-	heading.focus_mode = Control.FOCUS_NONE
-	vbox.add_child(heading)
+	# Add the RightPage VBox into the notebook's right page Control.
+	# Same anchoring scheme as populate_left() — no insets, per the original
+	# map_tab.gd behaviour.
+	# Guard against re-entry: if _right_page already has a parent (because
+	# populate_right() was called twice on the same MapTab instance), detach
+	# it first so add_child does not fail.
+	# https://docs.godotengine.org/en/stable/classes/class_node.html#class-node-method-remove-child
+	if _right_page.get_parent() != null:
+		_right_page.get_parent().remove_child(_right_page)
+	parent.add_child(_right_page)
+	_right_page.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
-	# Slightly darker than the global map rect so the two placeholders are
-	# visually distinct on the same spread.
-	var map_rect: ColorRect = ColorRect.new()
-	map_rect.color = Color(0.15, 0.25, 0.15)
-	map_rect.custom_minimum_size = Vector2(120.0, 80.0)
-	vbox.add_child(map_rect)
 
-	var note: Label = Label.new()
-	note.text = "Local map coming in Phase 2."
-	note.focus_mode = Control.FOCUS_NONE
-	vbox.add_child(note)
+# ---------------------------------------------------------------------------
+# Private helpers
+# ---------------------------------------------------------------------------
+
+## Instantiate TAB_SCENE once per MapTab lifetime, extract both page
+## VBoxContainers, and discard the scene shell. Called at the start of each
+## populate_* method so either method can be called first without ordering
+## constraints.
+##
+## We detach the pages from the scene instance rather than reparenting the
+## whole instance, because the notebook only needs the page subtrees and the
+## bare MapTab root Control from the .tscn has no purpose at runtime.
+## This is the same pattern used in SettingsTab._ensure_pages_built() and
+## InventoryTab._ensure_pages_built().
+func _ensure_pages_built() -> void:
+	if _left_page != null:
+		# Already extracted on a previous call; nothing to do.
+		return
+
+	# Instantiate the scene to get a fully-formed node tree with editor
+	# properties (labels, colors, minimum sizes) already applied.
+	# https://docs.godotengine.org/en/stable/classes/class_packedscene.html#class-packedscene-method-instantiate
+	var instance: Control = TAB_SCENE.instantiate() as Control
+
+	# Grab references before detaching. Nodes are still children of instance
+	# at this point, so get_node paths are relative to instance.
+	_left_page = instance.get_node("LeftPage") as VBoxContainer
+	_right_page = instance.get_node("RightPage") as VBoxContainer
+
+	# Detach both pages so they survive when the shell is freed.
+	# remove_child does not free the node — it simply unparents it.
+	# https://docs.godotengine.org/en/stable/classes/class_node.html#class-node-method-remove-child
+	instance.remove_child(_left_page)
+	instance.remove_child(_right_page)
+
+	# Clear the owner on both detached pages. After remove_child the nodes still
+	# retain their .owner (the TAB_SCENE root). When add_child'd into a different
+	# scene tree Godot emits an owner-inconsistency warning that GUT counts as a
+	# test failure. Setting owner to null severs that link.
+	# https://docs.godotengine.org/en/stable/classes/class_node.html#class-node-property-owner
+	_left_page.owner = null
+	_right_page.owner = null
+
+	# The bare MapTab Control shell is no longer needed.
+	# queue_free() defers deletion to end-of-frame; safe because we removed all
+	# nodes we care about before calling it.
+	# https://docs.godotengine.org/en/stable/classes/class_node.html#class-node-method-queue-free
+	instance.queue_free()
