@@ -1,3 +1,5 @@
 - [General design approach](feedback_general_design_approach.md) — naming philosophy, fiction-first, simplicity+named phases, lead with recommendations
 - [Input design approach](feedback_input_approach.md) — mnemonic keys, surface conflicts explicitly as numbered items, resolve by removing redundancy
 - [User experience approach](feedback_user_experience.md) — examples of ways to enhance the user's play experience; emphasis on curiousity; quests as a narrative archive
+- [PlayerData architecture](project_playerdata_architecture.md) — central save data = Resource on SaveManager (not autoload); settings split out; phased fields
+- [Data access + signal pattern](project_data_access_pattern.md) — read via SaveManager.current_data, write+announce via GameEvents; tab migration order
