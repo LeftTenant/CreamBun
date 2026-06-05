@@ -91,23 +91,12 @@ func to_resource() -> PlayerDataResource:
     return _resource
 ```
 
-### Why a 4th autoload is the right call here
+### Why a dedicated autoload
 
-The previous design (Resource held by `SaveManager.current_data`) conflated two
-responsibilities in `SaveManager` and introduced a nullable trap:
-
-| Concern | `PlayerData` autoload + `PlayerDataResource` (chosen) | Resource in `SaveManager` |
-| --- | --- | --- |
-| **Access path** | `PlayerData.inventory` — short, obvious | `SaveManager.current_data.inventory` — verbose, wrong semantic owner |
-| **Null safety** | `_resource` initializes in the field declaration; never null | `current_data` is null until `new_game()`/`load_slot()` runs |
-| **Responsibilities** | `SaveManager` = I/O only. `PlayerData` = live state only. | `SaveManager` = I/O + live state. Two unrelated jobs in one class. |
-| **Serialization** | `ResourceSaver.save(PlayerData.to_resource(), path)` — one call | Same — the resource is still the unit of serialization |
-| **New game / load** | `PlayerData._load_resource(data)` — swap one object | `SaveManager.current_data = data` — same, but semantically odd |
-| **Autoload count** | 4 | 3 |
-
-The only cost is one more autoload. That cost is paid back immediately in clarity, null safety,
-and clean separation of responsibilities. `PlayerData` is genuinely application-wide (every
-system that touches game state needs it) with no better natural owner — it passes the bar.
+`PlayerData` is genuinely application-wide — every system that reads or writes game state
+needs it, and there is no better natural owner. As a 4th autoload it has a stable, never-null
+identity and keeps `SaveManager` focused purely on I/O. See §12 for why the main alternative
+(Resource held by `SaveManager`) was rejected.
 
 ### Why the thin-wrapper pattern, not `PlayerData extends Resource`
 
@@ -624,48 +613,22 @@ rewrite is its own task.)
 
 ---
 
-## 12. FAQ — "why not X?"
+## 12. Alternatives considered
 
-**Why use a thin-wrapper autoload instead of keeping PlayerData as a plain Resource?**
-Godot autoloads must extend `Node`. You can't register a `Resource` subclass as an autoload.
-The wrapper delegates everything to the inner `PlayerDataResource`; there's no field
-duplication. The Node is the stable global handle; the Resource is the serializable payload.
+**`PlayerData` as a `Resource` held by `SaveManager.current_data`**
+The original design. Rejected because `SaveManager` ends up with two unrelated responsibilities
+(file I/O *and* owning live state), `current_data` is nullable between launch and the first
+`new_game()` call, and the access path (`SaveManager.current_data.inventory`) is verbose and
+semantically wrong. A dedicated autoload eliminates all three problems.
 
-**Why not keep `PlayerData` as a Resource held by `SaveManager.current_data`?**
-It conflates two responsibilities (`SaveManager` does I/O *and* owns live state), produces a
-nullable access trap, and yields the verbose `SaveManager.current_data.inventory` path.
-See §3 for the full comparison.
+**Single save file containing all slots**
+Rejected because a corrupt slot would take down every story, and switching or deleting a slot
+becomes array surgery instead of a file operation. The Sessions tab is already designed for
+multiple independent stories.
 
-**Why not one giant save file with all slots inside it?**
-A corrupt slot would take down every story, and slot-switching/deletion become array surgery
-instead of file operations. The Sessions tab is already multi-slot by design. See §6.1.
-
-**Why not put `GameSettings` in `PlayerData` "to keep it all together"?**
-Settings are per-device, not per-story. Bundling them means volume changes don't carry across
-stories and a new save resets accessibility choices. Wrong model. See §5.
-
-**Why not store the full `ItemData` inside each `ItemStack` so loading is simpler?**
-Content edits (rebalancing weight) wouldn't reach old saves, and files bloat. The id-only
-pattern already exists in `item_stack.gd`; `rehydrate()` re-links runtime refs once on load.
-See §6.3.
-
-**Why not let tabs keep a local copy and sync it?**
-Two copies of the inventory is exactly today's bug — a berry picked in the world can't update
-an open notebook because they're different objects. One source of truth, read live. See §7.4.
-
-**Why not route every read through a `GameEvents` signal too?**
-Signals are for cross-system announcements where the writer doesn't know the readers. A read
-has a known caller and target — direct property access is simpler and correct. See §7.1.
-
-**Why not autosave on every change now?**
-Disk writes on every berry pick are wasteful and make save timing unpredictable. Explicit saves
-(notebook close / Sessions action) are simpler for Phase 1. See §10.
-
-**Why not inject `PlayerData` itself rather than its sub-resources?**
-You could — `bush.setup(PlayerData)` passes the whole thing. But passing only what a node
-*needs* (e.g. just `Inventory`) makes the dependency explicit in the method signature, keeps
-tests minimal, and prevents nodes from accidentally reading unrelated state. Narrow injection
-beats wide injection.
+**`GameSettings` folded into `PlayerData`**
+Rejected because settings are per-device, not per-story. A volume change should apply across
+all stories; a new save should not reset accessibility choices.
 
 ---
 
