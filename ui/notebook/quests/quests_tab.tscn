@@ -2,5 +2,93 @@
 
 [ext_resource type="Script" path="res://ui/notebook/quests/quests_tab.gd" id="1"]
 
+; EDITOR-PREVIEW NOTE
+; -------------------
+; The notebook creates this tab with QuestsTab.new() (see notebook.gd) and the
+; controller re-anchors / rebuilds the page subtrees at runtime, so the layout
+; values below are PREVIEW ONLY — they make the scene legible in the editor and
+; do not affect the running game:
+;   * The root size and the LeftPage/RightPage offsets are overwritten by
+;     populate_left()/populate_right() (PRESET_FULL_RECT + 10px insets).
+;   * RightPage's Placeholder and QuestDetail subtree are freed and rebuilt from
+;     code in _refresh_right_page(); their sample text exists only so a beginner
+;     can see a representative quest layout in the editor.
+; custom_minimum_size is set on every autowrapping Label both to silence Godot's
+; "Labels with autowrapping enabled must have a custom minimum size" warning and
+; to give each label a sensible preview width.
+
 [node name="QuestsTab" type="Control"]
+offset_right = 480.0
+offset_bottom = 300.0
 script = ExtResource("1")
+
+[node name="LeftPage" type="VBoxContainer" parent="."]
+offset_left = 10.0
+offset_top = 10.0
+offset_right = 230.0
+offset_bottom = 290.0
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="ActiveSection" type="VBoxContainer" parent="LeftPage"]
+size_flags_horizontal = 3
+
+[node name="CompletedSeparator" type="Label" parent="LeftPage"]
+focus_mode = 0
+size_flags_horizontal = 3
+text = "— Completed —"
+visible = false
+
+[node name="CompletedSection" type="VBoxContainer" parent="LeftPage"]
+size_flags_horizontal = 3
+
+[node name="RightPage" type="VBoxContainer" parent="."]
+offset_left = 250.0
+offset_top = 10.0
+offset_right = 470.0
+offset_bottom = 290.0
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="Placeholder" type="Label" parent="RightPage"]
+custom_minimum_size = Vector2(200, 0)
+focus_mode = 0
+size_flags_horizontal = 3
+autowrap_mode = 3
+text = "Select a quest to see details."
+visible = true
+
+[node name="QuestDetail" type="VBoxContainer" parent="RightPage"]
+size_flags_horizontal = 3
+visible = false
+
+[node name="TitleLabel" type="Label" parent="RightPage/QuestDetail"]
+custom_minimum_size = Vector2(200, 0)
+focus_mode = 0
+size_flags_horizontal = 3
+autowrap_mode = 3
+text = "The Foraging Book"
+
+[node name="DescriptionLabel" type="Label" parent="RightPage/QuestDetail"]
+custom_minimum_size = Vector2(200, 0)
+focus_mode = 0
+size_flags_horizontal = 3
+autowrap_mode = 3
+text = "Doug lent you his old foraging notebook. Learn the basics of gathering ingredients in the woods near home."
+
+[node name="ObjectivesContainer" type="VBoxContainer" parent="RightPage/QuestDetail"]
+size_flags_horizontal = 3
+
+[node name="SampleObjective1" type="Label" parent="RightPage/QuestDetail/ObjectivesContainer"]
+custom_minimum_size = Vector2(200, 0)
+focus_mode = 0
+size_flags_horizontal = 3
+autowrap_mode = 3
+text = "[x] Read the foraging notebook"
+
+[node name="SampleObjective2" type="Label" parent="RightPage/QuestDetail/ObjectivesContainer"]
+custom_minimum_size = Vector2(200, 0)
+focus_mode = 0
+size_flags_horizontal = 3
+autowrap_mode = 3
+text = "[ ] Gather three wild berries"

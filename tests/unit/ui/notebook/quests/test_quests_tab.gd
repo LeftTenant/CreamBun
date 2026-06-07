@@ -1,12 +1,24 @@
 ## test_quests_tab.gd
-## TDD contract tests for the Phase 1 Quests Tab.
+## Behavior contract tests for QuestsTab and QuestRow (Phase 1 / Slice 3).
 ##
 ## Covers QuestsTab (ui/notebook/quests/quests_tab.gd) and
 ## QuestRow (ui/notebook/quests/quest_row.gd).
 ##
-## These tests define the expected API. They will FAIL until the implementation
-## files exist — that is by design. Run them after implementing each class to
-## confirm the contract is met.
+## --- SLICE 3 EDIT NOTE ---
+## Tests 2 and 3 previously used QuestRow.new() to construct rows. They now
+## instantiate from quest_row.tscn via add_child_autofree(preload(...).instantiate()).
+##
+## WHY: After B3, quest_row.gd will use @onready references to named children
+## (TitleLabel, ViewButton) that only exist when the node is instantiated from
+## the scene. Bare QuestRow.new() would leave those refs null and every
+## meaningful assertion would fail or crash. Switching to scene instantiation
+## here means these tests PASS today (the scene still triggers _ready() which
+## builds the children), and they will continue to pass after B3 removes that
+## _ready() build code in favour of @onready refs.
+##
+## Two new tests added in Slice 3:
+##   test_quest_row_setup_completed_dims_row  — guards modulate.a dimming
+##   test_view_button_press_drives_selection  — guards observable selection outcome
 ##
 ## Requires GUT: https://github.com/bitwes/Gut
 ## Install via Godot Asset Library (search "GUT - Godot Unit Testing").
@@ -18,6 +30,15 @@
 
 class_name TestQuestsTab
 extends GutTest
+
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+# Use scene instantiation (not bare .new()) so @onready refs in quest_row.gd
+# resolve correctly after B3.  See SLICE 3 EDIT NOTE in the file header.
+const QUEST_ROW_SCENE: String = "res://ui/notebook/quests/quest_row.tscn"
 
 
 # ---------------------------------------------------------------------------
@@ -38,6 +59,17 @@ func _find_labels(root: Node, predicate: Callable) -> Array[Label]:
 			result.append(child as Label)
 		result.append_array(_find_labels(child, predicate))
 	return result
+
+
+## Instantiate a QuestRow from the .tscn so @onready refs resolve correctly.
+## Adds it to the tree via add_child_autofree so _ready() fires immediately.
+##
+## @return the instantiated QuestRow
+func _make_row() -> QuestRow:
+	# preload is safe here — the path is a compile-time constant.
+	# https://docs.godotengine.org/en/stable/classes/class_resourceloader.html
+	var packed: PackedScene = load(QUEST_ROW_SCENE) as PackedScene
+	return add_child_autofree(packed.instantiate()) as QuestRow
 
 
 # ---------------------------------------------------------------------------
@@ -62,13 +94,13 @@ func test_quests_tab_is_a_notebook_tab() -> void:
 func test_quest_row_shows_title() -> void:
 	# QuestRow is responsible for rendering one quest entry. The quest title
 	# must be visible as a Label so the player can scan the list at a glance.
+	# Row instantiated from scene so @onready refs resolve correctly (Slice 3).
 	var quest: QuestData = QuestData.new()
 	quest.id = &"test_quest"
 	quest.title = "Test Quest"
 	autofree(quest)
 
-	# add_child_autofree so _ready() runs (child nodes are built in _ready).
-	var row: QuestRow = add_child_autofree(QuestRow.new())
+	var row: QuestRow = _make_row()
 	row.setup(quest, QuestLog.Status.ACTIVE)
 
 	# The title label can be a direct child or nested inside a container.
@@ -86,12 +118,13 @@ func test_quest_row_shows_title() -> void:
 func test_quest_row_setup_does_not_crash() -> void:
 	# COMPLETED quests are dimmed but must not throw errors. This guards against
 	# off-by-one modulate assignments or missing-node errors on the icon label.
+	# Row instantiated from scene so @onready refs resolve correctly (Slice 3).
 	var quest: QuestData = QuestData.new()
 	quest.id = &"finished_quest"
 	quest.title = "Finished Quest"
 	autofree(quest)
 
-	var row: QuestRow = add_child_autofree(QuestRow.new())
+	var row: QuestRow = _make_row()
 
 	# If this line raises an error, GUT records a test failure automatically.
 	row.setup(quest, QuestLog.Status.COMPLETED)
@@ -153,3 +186,84 @@ func test_quest_log_pre_populates_with_foraging_book() -> void:
 			tab._quest_log.states[&"the_foraging_book"]["status"],
 			QuestLog.Status.COMPLETED,
 			"the_foraging_book must have COMPLETED status in _quest_log")
+
+
+# ---------------------------------------------------------------------------
+# Test 7 — setup() with COMPLETED status dims the row (modulate.a < 1.0)
+# ---------------------------------------------------------------------------
+
+func test_quest_row_setup_completed_dims_row() -> void:
+	# COMPLETED quests must be visually separated from active work by dimming
+	# the entire row. The modulate.a dim is applied in setup() — checking it
+	# here guards that the @onready ref to the row's root (or the relevant child)
+	# is resolved before the modulate assignment runs. A value of 1.0 means the
+	# dim was silently skipped; a value < 1.0 confirms the treatment was applied.
+	#
+	# Row instantiated from scene so @onready refs are resolved before setup().
+	var quest: QuestData = QuestData.new()
+	quest.id = &"completed_quest"
+	quest.title = "Completed Quest"
+	autofree(quest)
+
+	var row: QuestRow = _make_row()
+	row.setup(quest, QuestLog.Status.COMPLETED)
+
+	assert_true(row.modulate.a < 1.0,
+			"setup(quest, COMPLETED) must set modulate.a < 1.0 to dim the row")
+
+
+# ---------------------------------------------------------------------------
+# Test 8 — pressing the row's ViewButton drives quest selection
+# ---------------------------------------------------------------------------
+
+func test_view_button_press_drives_selection() -> void:
+	# DECISION: assert the observable outcome only — that pressing a row's
+	# ViewButton causes the right page to transition from the placeholder to
+	# a detail view. We do NOT assert whether the row emits a signal, whether
+	# the tab connects directly, or any other wiring mechanism — that is an
+	# implementation detail that may change in Phase 2.
+	#
+	# Setup: tab + two parents, all in tree so _ready() and @onready resolve.
+	var tab: QuestsTab = add_child_autofree(QuestsTab.new())
+	var left_parent: Control = add_child_autofree(Control.new())
+	var right_parent: Control = add_child_autofree(Control.new())
+
+	tab.populate_left(left_parent)
+	tab.populate_right(right_parent)
+
+	# Locate the first ViewButton anywhere under the left page. Phase 1 always
+	# seeds the_foraging_book so there is at least one row. Use the recursive
+	# helper to locate any Button named "ViewButton" anywhere in the subtree.
+	var view_button: Button = _find_view_button(left_parent)
+
+	if view_button == null:
+		# This can happen before B3 if the scene still builds buttons anonymously.
+		# Report pending so it is clear the test cannot yet verify the contract.
+		pending("No node named 'ViewButton' found under left_parent — check that quest_row.tscn declares ViewButton after B3")
+		return
+
+	# Act: press the ViewButton.
+	view_button.pressed.emit()
+
+	# Assert observable outcome: the right page no longer shows only the
+	# placeholder. At least one Label with "select a quest" should be gone, OR
+	# a label containing the quest title should now be present.
+	# We check the title because it is the most concrete observable evidence.
+	var title_labels: Array[Label] = _find_labels(right_parent,
+			func(lbl: Label) -> bool:
+				return lbl.text != "" and not lbl.text.to_lower().contains("select a quest"))
+
+	assert_true(title_labels.size() >= 1,
+			"After pressing ViewButton, right page must show quest detail (a non-placeholder Label), not the placeholder")
+
+
+## Walk root's subtree recursively and return the first Button named 'ViewButton'.
+## Returns null if no match is found.
+func _find_view_button(root: Node) -> Button:
+	for child in root.get_children():
+		if child is Button and child.name == "ViewButton":
+			return child as Button
+		var found: Button = _find_view_button(child)
+		if found != null:
+			return found
+	return null

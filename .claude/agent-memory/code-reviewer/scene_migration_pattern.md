@@ -48,3 +48,19 @@ The two pages are later `add_child`'d into real page Controls inside `populate_l
 **`_ensure_pages_built()` guard uses `_left_page != null`:** The guard only checks `_left_page`. If somehow `_right_page` were null while `_left_page` were set (impossible in normal flow since both are assigned in the same block), the method would be a no-op and `_right_page` would stay null. This edge case is theoretical — both are set atomically in the same `_ensure_pages_built()` block, so no real risk. Pattern is consistent with InventoryTab and SettingsTab.
 
 **Related:** [[project_patterns]]
+
+## Slice 3 (Quests tab) — confirmed conventions and new observations
+
+**_refresh_right_page() is a full free-and-rebuild, not show/hide:** The right page frees ALL children on every refresh, then rebuilds from code (`Label.new()`, `VBoxContainer.new()`). This means the `QuestDetail` and `Placeholder` scene nodes in `quests_tab.tscn` are **decorative only** — they are freed on the first `_refresh_right_page()` call and never appear at runtime. The design rationale (documented in code) is that `_find_labels()` in integration tests walks ALL children including hidden ones, so hiding the placeholder would leave it findable; freeing ensures clean assertions. Reviewers should not flag this as inconsistency with the scene; it is intentional.
+
+**Section containers (ActiveSection, CompletedSection) have no null guard at call sites:** `populate_left()` resolves `active_section` and `completed_section` via `get_node()` (can return null if tscn is renamed) and passes them directly to `_add_quest_row()` with no null check. `_add_quest_row()` would crash on `section.add_child(row)` if null. The separator `null` guard (`if separator != null`) is inconsistent with this. This is a known pattern gap — acceptable for Phase 1 since the names are test-covered by `test_quests_tab_scene.gd`, but worth flagging.
+
+**Quests tab right page does NOT store resolved onready refs:** Unlike `inventory_tab.gd` which stores `_weight_label`, `_rows_container` etc. as instance vars, `quests_tab.gd` stores only `_right_page` and rebuilds detail nodes from code each refresh. This is correct for this tab since the detail children are quest-specific and change on every selection.
+
+**Dead code loop in unit test 8:** `test_view_button_press_drives_selection` (test_quests_tab.gd lines 237–241) contains a `for` loop that builds a `candidates` array then immediately `break`s. The `candidates` variable is never used. The actual search uses `_find_view_button(left_parent)` on the next line. The loop is vestigial and should be deleted.
+
+**Missing .uid files for new test files:** New test files `test_quests_tab_scene.gd`, `test_quest_row_scene.gd`, and `tests/integration/notebook/test_quests_tab.gd` have no `.uid` sidecar files. Godot generates these when files are first opened in the editor. They are not critical for test execution but Godot will create and stage them on first import, which creates noise. The existing unit test (`test_quests_tab.gd`) does have a `.uid` file, so the pattern is inconsistent.
+
+**project.godot main scene** was changed in the working tree (notebook.tscn instead of world.tscn) — this is a local dev convenience for testing, not a Slice 3 change. Must not be committed as part of this slice.
+
+**`_quest_log: QuestLog` has type hint** — unlike `_quest` and `_status` in quest_row.gd which lack type hints. The quest_row.gd private vars `var _quest: QuestData` and `var _status: int` both actually DO have type hints in the current code. All type hints present and correct in production files.
