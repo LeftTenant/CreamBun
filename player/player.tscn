@@ -149,7 +149,7 @@ animations = [{
 "texture": SubResource("AtlasTexture_g6k8r")
 }],
 "loop": true,
-"name": &"default",
+"name": &"idle",
 "speed": 8.0
 }, {
 "frames": [{
@@ -259,7 +259,5 @@ shape = SubResource("CircleShape2D_1")
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="." unique_id=1693060602]
 sprite_frames = SubResource("SpriteFrames_boad6")
-animation = &"walk backwards"
-autoplay = "default"
-frame = 8
-frame_progress = 0.056032736
+animation = &"idle"
+autoplay = "idle"
