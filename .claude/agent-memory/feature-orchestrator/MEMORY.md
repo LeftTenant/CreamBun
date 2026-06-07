@@ -1,1 +1,2 @@
-Your MEMORY.md is currently empty. When you save new memories, they will appear here.
+- [Notebook tab scene-migration pattern](notebook-tab-scene-migration-pattern.md) — per-slice test/impl shape for the 5-tab notebook-ui-scene-migration refactor; copy the Slice 2 Inventory pattern
+- [Execution tools not available](execution-tools-not-available.md) — orchestrator is a planner; can't spawn agents or run godot MCP; produce a handoff for the parent instead of executing
