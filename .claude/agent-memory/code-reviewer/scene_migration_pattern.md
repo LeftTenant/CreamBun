@@ -37,4 +37,14 @@ The two pages are later `add_child`'d into real page Controls inside `populate_l
 
 **`_refresh_both_pages()` null safety removed intentionally:** After Slice 2 the empty-slots guard (`if not _equipment_slots.is_empty()`) was removed from `_refresh_both_pages()`. The loop body is a no-op when the array is empty, so the guard was redundant. Consistent with how `_rows_container` null check in `_build_right_page()` acts as the real guard for the right page.
 
+## PR 5 (Map tab) — confirmed conventions and new observations
+
+**Map tab is intentionally inset-free:** `map_tab.gd` calls `set_anchors_and_offsets_preset(PRESET_FULL_RECT)` but omits the 10-px offset block that `inventory_tab.gd` and `settings_tab.gd` apply. This is a deliberate preservation of the original map_tab.gd visual behaviour. The comment in the code explains it explicitly. Reviewers should not flag the omission as a defect.
+
+**`size_flags_horizontal = 3` (EXPAND_FILL) set on all four Label nodes in `map_tab.tscn`:** Labels that might approach the column width carry `SIZE_EXPAND_FILL` per `ui/CLAUDE.md` rule 4. The two heading labels are short fixed strings and technically do not need it, but having it is not harmful (no autowrap, so no Godot warning). The note/phase-2 labels are the ones that actually benefit.
+
+**Color equality: `Color(r,g,b)` vs `Color(r,g,b,1)` in GDScript:** Godot 4 `Color` equality treats `Color(0.2, 0.3, 0.2)` (alpha defaults to 1.0) as equal to `Color(0.2, 0.3, 0.2, 1)`. The tscn stores the 4-component form; test constants use the 3-component form. Tests pass correctly.
+
+**`_ensure_pages_built()` guard uses `_left_page != null`:** The guard only checks `_left_page`. If somehow `_right_page` were null while `_left_page` were set (impossible in normal flow since both are assigned in the same block), the method would be a no-op and `_right_page` would stay null. This edge case is theoretical — both are set atomically in the same `_ensure_pages_built()` block, so no real risk. Pattern is consistent with InventoryTab and SettingsTab.
+
 **Related:** [[project_patterns]]
