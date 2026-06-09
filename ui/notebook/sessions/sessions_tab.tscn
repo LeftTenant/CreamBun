@@ -2,5 +2,49 @@
 
 [ext_resource type="Script" path="res://ui/notebook/sessions/sessions_tab.gd" id="1"]
 
+; EDITOR-PREVIEW NOTE
+; -------------------
+; The notebook creates this tab with SessionsTab.new() (see notebook.gd) and the
+; controller re-anchors / rebuilds the page subtrees at runtime, so the layout
+; values below are PREVIEW ONLY — they make the scene legible in the editor and
+; do not affect the running game:
+;   * The root size and the LeftPage/RightPage offsets are overwritten by
+;     populate_left()/populate_right() (PRESET_FULL_RECT + 10px insets).
+;   * CardsContainer children (StoryCard instances) are added dynamically by
+;     populate_left(); the container is empty in editor preview.
+;   * RightPage's Placeholder text is the entire right-page story for Phase 1;
+;     no dynamic content is added (D2: right page is purely static).
+; custom_minimum_size is set on the Placeholder Label both to silence Godot's
+; "Labels with autowrapping enabled must have a custom minimum size" warning and
+; to give it a sensible preview width.
+
 [node name="SessionsTab" type="Control"]
+offset_right = 480.0
+offset_bottom = 300.0
 script = ExtResource("1")
+
+[node name="LeftPage" type="VBoxContainer" parent="."]
+offset_left = 10.0
+offset_top = 10.0
+offset_right = 230.0
+offset_bottom = 290.0
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="CardsContainer" type="VBoxContainer" parent="LeftPage"]
+size_flags_horizontal = 3
+
+[node name="RightPage" type="VBoxContainer" parent="."]
+offset_left = 250.0
+offset_top = 10.0
+offset_right = 470.0
+offset_bottom = 290.0
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="Placeholder" type="Label" parent="RightPage"]
+custom_minimum_size = Vector2(200, 0)
+focus_mode = 0
+size_flags_horizontal = 3
+autowrap_mode = 3
+text = "Select a Story to see details."
