@@ -9,6 +9,11 @@ art/**/*.import
 # or download from https://github.com/bitwes/Gut (minimum version: 9.6.0 for Godot 4.6)
 addons/gut/
 
+# Transient test artifacts written by the godot-testing plugin: full GUT logs,
+# rendered Markdown reports, JUnit XML, and transient e2e screenshots. Inspect
+# locally; never commit. (Committed e2e baselines live under tests/e2e/.)
+.godot-test-reports/
+
 # Per-developer agent memory overlay (personal profiles, machine-specific paths)
 .claude/agent-memory-local
 

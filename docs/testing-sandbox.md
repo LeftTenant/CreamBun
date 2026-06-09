@@ -130,6 +130,33 @@ To verify the MCP layer, restart Claude Code so it picks up the plugin, then cal
 
 ---
 
+## Running GUT Unit/Integration Tests
+
+Unit and integration tests are run headlessly through the `run_gut_tests` MCP tool — never by constructing Bash commands with hardcoded Godot paths. The tool locates the Godot binary, runs GUT with the right flags, and returns a **parsed, structured** result so agents read the outcome directly instead of scraping free-form text:
+
+```jsonc
+{
+  "passed": true,
+  "summary": { "scripts": 18, "tests": 175, "passing": 174,
+               "failing": 0, "pending": 1, "asserts": 384,
+               "orphans": 163, "time": 0.70 },
+  "summary_text": "174/175 passed, 1 pending, 0 failing (0.70s)",
+  "failures": [],   // [{script, test, message}, ...] — populated only on failure
+  "report_path": "<project>/.godot-test-reports/gut/latest.md",
+  "log_path":    "<project>/.godot-test-reports/gut/latest.log"
+}
+```
+
+- **Green run:** `passed` and `summary_text` are all you need.
+- **Failure:** the `failures` list names each failing script/test with its first message — no text parsing required to know what broke.
+- **Full detail:** the complete raw output is always written to `log_path`, and a rendered Markdown report to `report_path`, both under the gitignored `.godot-test-reports/` dir. Surface those to the user rather than pasting raw output. Pass `full_output=true` to also inline the raw text.
+
+Under the hood, GUT emits a JUnit XML report that `server/gut_report.py` parses (with stdout scraping as a fallback). Parsing logic is unit-tested at `plugins/godot-testing/server/tests/test_gut_report.py` (`python3 -m unittest discover tests`).
+
+> **Why structured?** Returning raw stdout forced agents to write throwaway shell/python to count and clean up results — each one a permission prompt and a context dump. Parsing in the tool removes that work at the source.
+
+---
+
 ## End-to-End Test Scenarios
 
 ### What E2E tests are
@@ -186,6 +213,8 @@ Example structure:
 Screenshots are compared visually by Claude — not by pixel diff. Claude inspects each screenshot and determines whether the visual result matches the description in the scenario. Reference screenshots serve as a baseline for what "correct" looks like; Claude flags regressions when the current output deviates meaningfully.
 
 On the first run of a new scenario (no reference screenshots exist yet), Claude captures and saves the screenshots as the baseline rather than comparing.
+
+**Committed baselines vs. transient captures:** reference baselines that define "correct" are committed under `tests/e2e/<feature>/screenshots/` (or `baselines/`). Any *transient* capture — a comparison shot, a debugging frame, anything not meant to live in the repo — must be written to the gitignored `.godot-test-reports/e2e/` dir instead (get its path from `get_config` → `reports_dir`). Don't drop throwaway frames into the committed `tests/e2e/` tree.
 
 ### How the `godot-test-engineer` agent uses this system
 
