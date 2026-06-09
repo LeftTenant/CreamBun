@@ -46,6 +46,10 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
+# Local module (lives alongside this file): turns raw GUT output into a compact,
+# structured summary so agents never have to parse free-form test text by hand.
+import gut_report
+
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
@@ -108,6 +112,15 @@ GODOT_PROJECT_PATH = os.environ.get("GODOT_PROJECT_PATH") or _default_project_pa
 GODOT_BIN = os.environ.get("GODOT_BIN") or _detect_godot_bin()
 PORT = int(os.environ.get("TESTING_SERVER_PORT", "9080"))
 SERVER_URL = f"http://127.0.0.1:{PORT}"
+
+# Transient test artifacts — full GUT logs, rendered Markdown reports, and
+# transient e2e screenshots — land under this gitignored directory (see the
+# project's .gitignore). Agents read these for detail and surface them to the
+# user, but they are never committed. Empty only if no project root was found.
+REPORTS_DIR = (
+    os.path.join(GODOT_PROJECT_PATH, ".godot-test-reports")
+    if GODOT_PROJECT_PATH else ""
+)
 
 # Persist the discovered binary so future startups skip the probe.
 if GODOT_BIN and os.path.exists(GODOT_BIN):
@@ -189,6 +202,7 @@ def get_config() -> dict:
         "godot_bin_exists": bool(GODOT_BIN) and os.path.exists(GODOT_BIN),
         "project_path": GODOT_PROJECT_PATH,
         "testing_server_port": PORT,
+        "reports_dir": REPORTS_DIR,
     }
 
 
@@ -307,12 +321,21 @@ def run_gut_tests(
     inner_class: str = "",
     unit_test_name: str = "",
     timeout_seconds: int = 120,
+    full_output: bool = False,
 ) -> dict:
-    """Run GUT tests headlessly and return the output.
+    """Run GUT tests headlessly and return a compact, structured summary.
 
     This is the primary way to execute unit and integration tests. The tool
     handles locating the Godot binary and building the correct command line —
     callers never need to know the binary path or construct Bash commands.
+
+    GUT is asked to emit a JUnit XML report, which this tool parses into pass/
+    fail/pending counts and (on failure) a list of {script, test, message}. The
+    full raw output is written to a log file and a rendered Markdown report is
+    written alongside it, both under the gitignored reports dir (see get_config
+    -> reports_dir). This keeps the response small: agents read `summary` /
+    `summary_text` / `failures` directly and never need to parse raw text, while
+    the user can open the saved report/log for full detail.
 
     Args:
         directory: GUT -gdir flag. Run all tests under this res:// directory
@@ -329,9 +352,21 @@ def run_gut_tests(
         unit_test_name: GUT -gunit_test_name flag. Run only this specific
             test method.
         timeout_seconds: Max seconds to wait for the test run (default 120).
+        full_output: When true, also include the complete raw GUT output inline
+            under "output". Off by default — the raw text is always saved to
+            log_path regardless, so reach for this only when you must inspect
+            text the parser did not surface.
 
-    Returns:
-        {"output": "...", "returncode": 0, "passed": true}
+    Returns (default):
+        {
+          "passed": bool,
+          "summary": {"scripts", "tests", "passing", "failing", "pending",
+                      "asserts", "orphans", "time"},
+          "summary_text": "174/175 passed, 1 pending, 0 failing (0.70s)",
+          "failures": [{"script", "test", "message"}, ...],  # empty when green
+          "report_path": "<reports>/gut/latest.md",
+          "log_path":    "<reports>/gut/latest.log"
+        }
     """
     if not GODOT_BIN or not os.path.exists(GODOT_BIN):
         raise RuntimeError(
@@ -348,6 +383,19 @@ def run_gut_tests(
             f"GUT not found at {gut_script}. Install GUT via the Godot "
             "Asset Library or from https://github.com/bitwes/Gut"
         )
+
+    # Prepare the reports dir and a fresh XML path. Removing any stale XML up
+    # front means a run that crashes before writing won't leave us parsing the
+    # previous run's results.
+    gut_reports_dir = os.path.join(REPORTS_DIR, "gut")
+    os.makedirs(gut_reports_dir, exist_ok=True)
+    xml_path = os.path.join(gut_reports_dir, "latest.xml")
+    log_path = os.path.join(gut_reports_dir, "latest.log")
+    report_path = os.path.join(gut_reports_dir, "latest.md")
+    try:
+        os.remove(xml_path)
+    except FileNotFoundError:
+        pass
 
     cmd = [GODOT_BIN, "--headless", "--path", GODOT_PROJECT_PATH,
            "-s", f"res://{gut_script}"]
@@ -367,6 +415,8 @@ def run_gut_tests(
         cmd.append(f"-gunit_test_name={unit_test_name}")
 
     cmd.append(f"-glog={log_level}")
+    # Emit a JUnit XML report we can parse into a structured summary.
+    cmd.append(f"-gjunit_xml_file={xml_path}")
     cmd.append("-gexit")
 
     try:
@@ -383,14 +433,58 @@ def run_gut_tests(
             "Try a narrower test selection or increase timeout_seconds."
         )
 
-    output = result.stdout + result.stderr
-    passed = result.returncode == 0
+    # GUT colourises its console output with ANSI escape codes. Those render as
+    # colour in a terminal but as literal "^[[33m" gibberish in an editor, so we
+    # strip them for every human-facing surface (the saved log and any inline
+    # output). The JUnit XML carries the structured data and has no such codes.
+    output = gut_report.strip_ansi(result.stdout + result.stderr)
 
-    return {
-        "output": output,
-        "returncode": result.returncode,
-        "passed": passed,
+    # Always retain the complete (cleaned) output for the user, independent of parsing.
+    try:
+        with open(log_path, "w") as handle:
+            handle.write(output)
+    except OSError:
+        log_path = ""  # non-fatal: we still return the parsed summary
+
+    # Parse: JUnit XML first (authoritative), stdout 'Totals' block as fallback.
+    summary = gut_report.summarize(
+        xml_path if os.path.exists(xml_path) else None, output
+    )
+
+    # Render a human-friendly Markdown report next to the log.
+    try:
+        with open(report_path, "w") as handle:
+            handle.write(gut_report.render_markdown(summary, "latest.log"))
+    except OSError:
+        report_path = ""
+
+    summary_dict = summary.to_dict()
+    failures = summary_dict.pop("failures")
+    summary_dict.pop("source", None)
+
+    response: dict = {
+        # A run passes only when GUT exited cleanly AND no test failed.
+        "passed": (result.returncode == 0) and not failures,
+        "summary": summary_dict,
+        "summary_text": summary.summary_text,
+        "failures": failures,
+        "report_path": report_path,
+        "log_path": log_path,
     }
+
+    # Safety net: GUT exited non-zero but we attributed no failing test (e.g. a
+    # script failed to compile, or the run crashed). Never hide that — surface
+    # the raw output and a note so the agent/user can see what happened.
+    if result.returncode != 0 and not failures:
+        response["note"] = (
+            "GUT exited non-zero but no per-test failure was parsed — likely a "
+            "compile error or crash. See the full output / log_path."
+        )
+        response["output"] = output
+    elif full_output:
+        response["output"] = output
+
+    return response
 
 
 # ---------------------------------------------------------------------------

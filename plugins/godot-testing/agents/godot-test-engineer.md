@@ -55,13 +55,20 @@ This agent ships as part of the `godot-testing` plugin. Respect the host project
    - Call `launch_game` to start Godot, `wait_frames` after input to let things settle, `screenshot` to capture observed state, `get_game_state` / `get_node_property` for hard assertions, and `reset_state` between scenarios.
    - Use `load_scene` and `emit_game_event` to set up preconditions rather than playing through full flows.
    - Compare screenshots qualitatively against the scenario description; on first run of a new scenario, save the captures as references.
+   - **Where screenshots go:** committed reference baselines belong under `tests/e2e/<feature>/screenshots/` (or `baselines/`). **Transient captures** — comparison shots, debugging frames, anything not meant to be committed — must be written to the gitignored reports dir at `<project>/.godot-test-reports/e2e/` (call `get_config` to get `reports_dir`). Never save transient frames into the committed `tests/e2e/` tree; that pollutes the repo (and has had to be cleaned up by hand before).
    - Reach for e2e tests sparingly — they are slow and brittle relative to integration tests. One e2e per feature covering the core experience is typical.
 
 7. **GUT Execution via testing-sandbox MCP server**:
    - After writing GUT tests, run them with the `run_gut_tests` tool on the `testing-sandbox` MCP server. This tool handles locating the Godot binary and running GUT headlessly — never construct Bash commands with hardcoded Godot paths.
    - Use `directory` to run all tests in a folder (e.g. `"res://tests/unit/"`), `select` to filter by filename within that directory, or `tests` for an explicit list of res:// paths. Set `log_level` to 2 or 3 for debugging failures.
    - Prefer running only the newly added or affected test files first for fast feedback.
-   - On failure, read the error output carefully, correct the test (or flag a real bug for the user), and re-run.
+   - **The tool returns a parsed, structured result — use it directly. Do NOT write Bash, python, `grep`, `awk`, or any script to clean up, summarize, or count GUT output.** That work is already done for you:
+     - `passed` — boolean outcome. For a green run this is all you need.
+     - `summary` / `summary_text` — counts (scripts/tests/passing/failing/pending/asserts/orphans/time) and a one-line human string.
+     - `failures` — a list of `{script, test, message}`, populated only when something failed. Read these to decide what to fix; you do not need to parse raw text to find them.
+     - `report_path` / `log_path` — a rendered Markdown report and the complete raw log, saved under the gitignored `.godot-test-reports/gut/`. Point the user at these (and `SendUserFile` the report when a visual summary helps) instead of pasting raw output into the conversation.
+     - Pass `full_output=true` only in the rare case you must see raw text the parser didn't surface (e.g. an engine-level crash). The full log is on disk regardless.
+   - On failure, use the `failures` list to correct the test (or flag a real bug for the user), and re-run.
    - Never mark a task complete until tests pass OR you've clearly communicated a genuine code bug to the user.
 
 8. **Quality Checks Before Finalizing**:
@@ -98,7 +105,7 @@ This agent ships as part of the `godot-testing` plugin. Respect the host project
 When you complete a testing task, provide:
 1. A list of test files created or modified (with paths)
 2. A brief description of what each test file covers
-3. Test run results (pass/fail counts, failure details if any) — for both GUT and e2e where applicable
+3. Test run results — quote `run_gut_tests`' `summary_text` and, on failure, the `failures` list; point the user at the saved `report_path` / `log_path` rather than pasting raw output. Include e2e step results where applicable.
 4. Any bugs or concerns discovered in the code under test
 5. Suggestions for additional coverage that was out of scope
 

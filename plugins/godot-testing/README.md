@@ -7,6 +7,11 @@ A Claude Code plugin that enables visual end-to-end testing for Godot 4 projects
 - **MCP server (`testing-sandbox`)** — exposes the running Godot game to Claude Code as a set of tools: capture viewport screenshots, inject input events, read scene-tree state, drive scenes from a clean slate. All routed through an in-process HTTP server bound to `127.0.0.1` in debug builds only — never touches the host desktop.
 - **`godot-test-engineer` agent** — writes test plans, GUT unit/integration tests, and Markdown e2e scenarios; runs them remotely.
 - **Three skills** — `test-unit`, `test-integration`, `test-e2e` — auto-trigger when the user asks for that flavor of test.
+- **Four shortcut commands** — type these to run tests immediately:
+  - `/godot-testing:run-unit [filter]` — run all GUT unit tests (optional filename filter).
+  - `/godot-testing:run-integration [filter]` — run all GUT integration tests.
+  - `/godot-testing:run-e2e [scope]` — run e2e visual scenarios via the sandbox.
+  - `/godot-testing:run-all` — GUT (unit + integration) then e2e, with a combined summary.
 
 ## Architecture
 
@@ -44,7 +49,7 @@ The launcher also reinstalls when `requirements.txt` changes (tracked by sha256)
 
 ## MCP tools
 
-15 tools live under `mcp__testing-sandbox__*`:
+18 tools live under `mcp__testing-sandbox__*`:
 
 | Group | Tools |
 |---|---|
@@ -52,8 +57,28 @@ The launcher also reinstalls when `requirements.txt` changes (tracked by sha256)
 | Observation | `screenshot`, `get_game_state`, `get_node_property` |
 | Input | `press_action`, `release_action`, `press_key`, `mouse_button_press`, `mouse_button_release`, `mouse_move` |
 | Setup | `emit_game_event`, `load_scene`, `wait_frames` |
+| GUT & config | `run_gut_tests`, `configure_godot`, `get_config` |
 
 See `docs/testing-sandbox.md` (in the host project) for the full protocol and scenario format.
+
+### GUT test results
+
+`run_gut_tests` runs GUT headlessly and returns a **parsed, structured** result so agents never have to scrape free-form text:
+
+```jsonc
+{
+  "passed": true,
+  "summary": { "scripts": 18, "tests": 175, "passing": 174,
+               "failing": 0, "pending": 1, "asserts": 384,
+               "orphans": 163, "time": 0.70 },
+  "summary_text": "174/175 passed, 1 pending, 0 failing (0.70s)",
+  "failures": [],                       // [{script, test, message}, ...] on failure
+  "report_path": "<project>/.godot-test-reports/gut/latest.md",
+  "log_path":    "<project>/.godot-test-reports/gut/latest.log"
+}
+```
+
+GUT is asked to emit a JUnit XML report, which `server/gut_report.py` parses (falling back to scraping stdout if the XML is unavailable). The complete raw output is always written to `log_path`, and a rendered Markdown report to `report_path` — both under the gitignored **`.godot-test-reports/`** dir (also used for transient e2e screenshots). Pass `full_output=true` to additionally inline the raw text. The reports dir path is reported by `get_config` as `reports_dir`.
 
 ## Configuration
 
