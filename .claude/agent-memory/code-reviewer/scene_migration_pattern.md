@@ -1,6 +1,6 @@
 ---
 name: scene-migration-pattern
-description: The _ensure_pages_built() pattern used in the notebook UI scene migration (Slices 1–2), its orphan trade-off, re-entrancy guards, and conventions for subsequent slices
+description: The _ensure_pages_built() pattern used in the notebook UI scene migration (Slices 1–5), its orphan trade-off, re-entrancy guards, and conventions for all slices
 metadata:
   type: project
 ---
@@ -39,7 +39,7 @@ The two pages are later `add_child`'d into real page Controls inside `populate_l
 
 ## PR 5 (Map tab) — confirmed conventions and new observations
 
-**Map tab is intentionally inset-free:** `map_tab.gd` calls `set_anchors_and_offsets_preset(PRESET_FULL_RECT)` but omits the 10-px offset block that `inventory_tab.gd` and `settings_tab.gd` apply. This is a deliberate preservation of the original map_tab.gd visual behaviour. The comment in the code explains it explicitly. Reviewers should not flag the omission as a defect.
+**Map tab now has 10-px insets (tidy/notebook-scene-consistency):** `map_tab.gd` was updated to apply the same `offset_left/top = 10, offset_right/bottom = -10` block that `inventory_tab.gd` and `settings_tab.gd` use. The original omission was deliberate (preserving legacy behaviour), but the tidy-up PR explicitly approved adding the inset for visual consistency. The old "inset-free" comment was removed. Reviewers should no longer flag the inset block as a behaviour change — it is the approved standard for all tab populate functions.
 
 **`size_flags_horizontal = 3` (EXPAND_FILL) set on all four Label nodes in `map_tab.tscn`:** Labels that might approach the column width carry `SIZE_EXPAND_FILL` per `ui/CLAUDE.md` rule 4. The two heading labels are short fixed strings and technically do not need it, but having it is not harmful (no autowrap, so no Godot warning). The note/phase-2 labels are the ones that actually benefit.
 
@@ -64,3 +64,15 @@ The two pages are later `add_child`'d into real page Controls inside `populate_l
 **project.godot main scene** was changed in the working tree (notebook.tscn instead of world.tscn) — this is a local dev convenience for testing, not a Slice 3 change. Must not be committed as part of this slice.
 
 **`_quest_log: QuestLog` has type hint** — unlike `_quest` and `_status` in quest_row.gd which lack type hints. The quest_row.gd private vars `var _quest: QuestData` and `var _status: int` both actually DO have type hints in the current code. All type hints present and correct in production files.
+
+## Slice 4 (Sessions tab) — confirmed conventions and new observations
+
+**D1 fix uses `free()` for stale StoryCards:** `populate_left()` calls `stale_child.free()` on CardsContainer children before rebuilding. This is consistent with `quests_tab.gd`'s `_refresh_right_page()` which also uses `free()` (not `queue_free()`) for the same rationale: leaf-node widgets with no deferred logic, and tests need them gone synchronously before inspecting the subtree.
+
+**D2 right page is purely static:** `populate_right()` reparents the RightPage VBoxContainer and applies PRESET_FULL_RECT + 10px insets, then stops — no `_refresh_right_page()`, no dynamic rebuild. The Placeholder Label lives exclusively in the .tscn. This is intentionally leaner than QuestsTab, which free-and-rebuilds on every selection.
+
+**`_last_played_label` is an `@onready` var but is never read after assignment in Phase 1.** The declaration is correct forward-provision — Phase 2 will use it to format the timestamp. Not dead code (cf. `_scroll_container` in Slice 2 memory note). Acceptable.
+
+**Missing .uid files for `test_sessions_tab_scene.gd` and `test_story_card_scene.gd`:** Consistent with the same pattern gap from Slice 3 — `test_sessions_tab.gd` has a `.uid` file, the two new scene-contract test files do not. Godot will generate them on first editor import. Cosmetic noise, not a blocker.
+
+**`LastPlayedLabel` lacks `size_flags_horizontal` / `autowrap_mode` in story_card.tscn:** The label text "Last played: N/A" is short and fixed, so autowrap is not needed and omitting `SIZE_EXPAND_FILL` is correct per ui/CLAUDE.md rule 4 ("do NOT apply to short fixed labels"). This is intentional, not an omission.

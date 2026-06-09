@@ -6,6 +6,7 @@
 script = ExtResource("1")
 
 [node name="LeftPage" type="VBoxContainer" parent="."]
+anchors_preset = 15
 
 [node name="AudioLabel" type="Label" parent="LeftPage"]
 focus_mode = 0
@@ -69,6 +70,7 @@ value = 100.0
 text = "Reset to Defaults"
 
 [node name="RightPage" type="VBoxContainer" parent="."]
+anchors_preset = 15
 
 [node name="DisplayLabel" type="Label" parent="RightPage"]
 focus_mode = 0

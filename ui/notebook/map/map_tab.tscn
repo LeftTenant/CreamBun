@@ -6,6 +6,7 @@
 script = ExtResource("1")
 
 [node name="LeftPage" type="VBoxContainer" parent="."]
+anchors_preset = 15
 
 [node name="WorldMapHeading" type="Label" parent="LeftPage"]
 focus_mode = 0
@@ -19,9 +20,11 @@ color = Color(0.2, 0.3, 0.2, 1)
 [node name="WorldMapNote" type="Label" parent="LeftPage"]
 focus_mode = 0
 size_flags_horizontal = 3
+autowrap_mode = 3
 text = "World map coming in Phase 2."
 
 [node name="RightPage" type="VBoxContainer" parent="."]
+anchors_preset = 15
 
 [node name="LocalAreaHeading" type="Label" parent="RightPage"]
 focus_mode = 0
@@ -35,4 +38,5 @@ color = Color(0.15, 0.25, 0.15, 1)
 [node name="LocalMapNote" type="Label" parent="RightPage"]
 focus_mode = 0
 size_flags_horizontal = 3
+autowrap_mode = 3
 text = "Local map coming in Phase 2."
