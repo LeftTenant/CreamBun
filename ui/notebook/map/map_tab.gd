@@ -77,10 +77,13 @@ func populate_left(parent: Control) -> void:
 
 	# Anchor the VBox to fill the parent page so children get a real width.
 	# Without this, a plain Control parent won't resize its children automatically.
-	# The map tab does not use 10 px insets — the original map_tab.gd did not
-	# apply them, and this migration preserves that visual behaviour unchanged.
+	# Negative right/bottom offsets apply a 10 px inset on all sides (rule 2, ui/CLAUDE.md).
 	# https://docs.godotengine.org/en/stable/classes/class_control.html#class-control-method-set-anchors-and-offsets-preset
 	_left_page.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_left_page.offset_left = 10
+	_left_page.offset_top = 10
+	_left_page.offset_right = -10
+	_left_page.offset_bottom = -10
 
 
 ## Populate the right page with a local-area map placeholder.
@@ -101,8 +104,7 @@ func populate_right(parent: Control) -> void:
 	_ensure_pages_built()
 
 	# Add the RightPage VBox into the notebook's right page Control.
-	# Same anchoring scheme as populate_left() — no insets, per the original
-	# map_tab.gd behaviour.
+	# Same anchoring + margin scheme as populate_left() for consistent insets.
 	# Guard against re-entry: if _right_page already has a parent (because
 	# populate_right() was called twice on the same MapTab instance), detach
 	# it first so add_child does not fail.
@@ -111,6 +113,10 @@ func populate_right(parent: Control) -> void:
 		_right_page.get_parent().remove_child(_right_page)
 	parent.add_child(_right_page)
 	_right_page.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_right_page.offset_left = 10
+	_right_page.offset_top = 10
+	_right_page.offset_right = -10
+	_right_page.offset_bottom = -10
 
 
 # ---------------------------------------------------------------------------
