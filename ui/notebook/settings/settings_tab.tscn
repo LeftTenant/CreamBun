@@ -3,10 +3,13 @@
 [ext_resource type="Script" path="res://ui/notebook/settings/settings_tab.gd" id="1"]
 
 [node name="SettingsTab" type="Control"]
+offset_right = 264.0
+offset_bottom = 180.0
 script = ExtResource("1")
 
 [node name="LeftPage" type="VBoxContainer" parent="."]
-anchors_preset = 15
+offset_right = 128.0
+offset_bottom = 180.0
 
 [node name="AudioLabel" type="Label" parent="LeftPage"]
 focus_mode = 0
@@ -70,7 +73,9 @@ value = 100.0
 text = "Reset to Defaults"
 
 [node name="RightPage" type="VBoxContainer" parent="."]
-anchors_preset = 15
+offset_left = 136.0
+offset_right = 264.0
+offset_bottom = 180.0
 
 [node name="DisplayLabel" type="Label" parent="RightPage"]
 focus_mode = 0
