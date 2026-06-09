@@ -8,22 +8,49 @@ extends VBoxContainer
 ##   3. A Label showing the last-played date (hardcoded "N/A" in Phase 1).
 ##   4. A Button labelled "Switch to this Story" (no-op in Phase 1).
 ##
+## The static layout (NameLabel, CoverRect, LastPlayedLabel, SwitchButton)
+## lives in story_card.tscn as saved editor nodes. This script handles only
+## data binding (setup()) and signal wiring. This mirrors the pattern
+## established by QuestRow in quest_row.gd / quest_row.tscn.
+##
 ## Call setup(slot) after adding this node to the tree to populate it with
 ## data from a StorySlot resource.
 ##
-## Phase 2 will wire the button to GameEvents.story_switch_requested.
+## Phase 2 will wire the SwitchButton to GameEvents.story_switch_requested.
 ## See: docs/features/notebook/design.md §5 (Sessions Tab)
 
+
+# ---------------------------------------------------------------------------
+# Private vars
+# ---------------------------------------------------------------------------
 
 # The slot this card represents. Set by setup().
 var _slot: StorySlot
 
-# Child node references — assigned in _ready() so setup() can update them
-# without needing to call get_node() every time.
-var _name_label: Label
-var _cover_rect: ColorRect
-var _last_played_label: Label
-var _switch_button: Button
+
+# ---------------------------------------------------------------------------
+# @onready vars
+# ---------------------------------------------------------------------------
+
+# The label that shows the story's display name. Declared in story_card.tscn.
+# setup() writes slot.display_name into this label after the node is in the tree.
+# https://docs.godotengine.org/en/stable/classes/class_label.html
+@onready var _name_label: Label = $NameLabel
+
+# The colour swatch giving the player a quick visual handle for recognising
+# their story. 16×16 px matches the low-res aesthetic; declared in story_card.tscn.
+# https://docs.godotengine.org/en/stable/classes/class_colorrect.html
+@onready var _cover_rect: ColorRect = $CoverRect
+
+# Intentionally NOT written by setup() in Phase 1 — the "Last played: N/A"
+# default text is baked into story_card.tscn as an editor property.
+# Phase 2 will write a formatted last-played timestamp (e.g. "Last played: 3 Apr 2026") here.
+@onready var _last_played_label: Label = $LastPlayedLabel
+
+# The switch-story button. No-op in Phase 1; Phase 2 wires it to
+# GameEvents.story_switch_requested. Declared in story_card.tscn.
+# https://docs.godotengine.org/en/stable/classes/class_button.html
+@onready var _switch_button: Button = $SwitchButton
 
 
 # ---------------------------------------------------------------------------
@@ -31,35 +58,11 @@ var _switch_button: Button
 # ---------------------------------------------------------------------------
 
 func _ready() -> void:
-	# Build the card's visual children here so the scene file stays minimal.
-	# Each child is created and added in display order (top to bottom).
-	# See: https://docs.godotengine.org/en/stable/classes/class_node.html#class-node-method-add-child
-
-	_name_label = Label.new()
-	_name_label.text = ""  # populated by setup()
-	add_child(_name_label)
-
-	# The colour swatch gives the player a quick visual handle for recognising
-	# their story. 16×16 px matches the low-res aesthetic of the 320×180 viewport.
-	_cover_rect = ColorRect.new()
-	_cover_rect.custom_minimum_size = Vector2(16.0, 16.0)
-	_cover_rect.color = Color.WHITE  # overridden by setup()
-	add_child(_cover_rect)
-
-	_last_played_label = Label.new()
-	# Phase 1: we do not yet read real timestamps from StorySlot.last_played,
-	# so the label is hardcoded. Phase 2 will format last_played into a readable
-	# date string (e.g. "Last played: 3 Apr 2026").
-	_last_played_label.text = "Last played: N/A"
-	add_child(_last_played_label)
-
-	_switch_button = Button.new()
-	_switch_button.text = "Switch to this Story"
-	# Connect the pressed signal so the button is not a dead widget. In Phase 1
-	# _on_switch_pressed only logs a warning; Phase 2 will emit the real signal.
+	# Wire the pressed signal so the button is not a dead widget.
+	# In Phase 1, _on_switch_pressed only logs a warning.
+	# Phase 2 will emit the real GameEvents.story_switch_requested signal here.
 	# https://docs.godotengine.org/en/stable/classes/class_signal.html#class-signal-method-connect
 	_switch_button.pressed.connect(_on_switch_pressed)
-	add_child(_switch_button)
 
 
 # ---------------------------------------------------------------------------
@@ -68,13 +71,15 @@ func _ready() -> void:
 
 ## Populate the card with data from slot.
 ## Must be called after the node is in the scene tree (so _ready() has run
-## and child labels/rects exist).
+## and @onready refs are guaranteed non-null before data is written).
 ## @param slot - the StorySlot resource this card represents.
 func setup(slot: StorySlot) -> void:
 	_slot = slot
 	_name_label.text = slot.display_name
 	_cover_rect.color = slot.cover_color
-	# last_played_label stays "N/A" in Phase 1 regardless of slot.last_played.
+	# _last_played_label stays "Last played: N/A" in Phase 1 regardless of
+	# slot.last_played — the Phase-1 copy is saved as an editor property
+	# in story_card.tscn rather than set here.
 
 
 # ---------------------------------------------------------------------------

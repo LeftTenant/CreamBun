@@ -2,5 +2,36 @@
 
 [ext_resource type="Script" path="res://ui/notebook/sessions/story_card.gd" id="1"]
 
+; EDITOR-PREVIEW NOTE
+; -------------------
+; The Sessions tab instantiates this scene via STORY_CARD_SCENE.instantiate()
+; and calls setup(slot) after add_child(), so the layout values below are
+; PREVIEW ONLY — they make the card legible in the editor and do not affect
+; the running game:
+;   * The card's size is determined at runtime by VBoxContainer layout within
+;     CardsContainer; no anchors or offsets are set here.
+;   * NameLabel's text is overwritten by setup() with slot.display_name.
+;   * CoverRect's color is overwritten by setup() with slot.cover_color.
+; custom_minimum_size is set on NameLabel both to silence Godot's
+; "Labels with autowrapping enabled must have a custom minimum size" warning
+; and to give the label a sensible preview width.
+
 [node name="StoryCard" type="VBoxContainer"]
 script = ExtResource("1")
+
+[node name="NameLabel" type="Label" parent="."]
+custom_minimum_size = Vector2(120, 0)
+size_flags_horizontal = 3
+autowrap_mode = 3
+text = "Default Story"
+
+[node name="CoverRect" type="ColorRect" parent="."]
+custom_minimum_size = Vector2(16, 16)
+color = Color(0.6, 0.4, 0.2, 1)
+
+[node name="LastPlayedLabel" type="Label" parent="."]
+text = "Last played: N/A"
+
+[node name="SwitchButton" type="Button" parent="."]
+clip_text = true
+text = "Switch to this Story"
