@@ -1,30 +1,25 @@
 ## test_sessions_tab.gd
-## Behavior contract tests for SessionsTab and StoryCard (Phase 1 / Slice 4).
+## Behavior contract tests for SessionsTab and StoryCard (Phase 1).
 ##
 ## Covers SessionsTab (ui/notebook/sessions/sessions_tab.gd) and
 ## StoryCard (ui/notebook/sessions/story_card.gd).
 ##
-## --- SLICE 4 EDIT NOTE ---
-## Tests 8 and 9 previously used StoryCard.new() to construct cards. They now
-## instantiate from story_card.tscn via add_child_autofree(load(...).instantiate()).
+## --- CARD CONSTRUCTION NOTE ---
+## Tests that exercise a StoryCard instantiate it from story_card.tscn via
+## add_child_autofree(load(...).instantiate()), not StoryCard.new(): story_card.gd
+## resolves named children (NameLabel, CoverRect, LastPlayedLabel, SwitchButton)
+## via @onready references that only exist when the node comes from the scene.
+## A bare StoryCard.new() would leave those refs null and setup() would null-crash.
 ##
-## WHY: After Slice 4, story_card.gd will use @onready references to named children
-## (NameLabel, CoverRect, LastPlayedLabel, SwitchButton) that only exist when the
-## node is instantiated from the scene. Bare StoryCard.new() would leave those
-## refs null and setup() would null-crash. Switching to scene instantiation here
-## means these tests PASS today (the scene still triggers _ready() which builds
-## the children), and they will continue to pass after Slice 4 removes that
-## _ready() build code in favour of @onready refs.
-##
-## Test 7 (is VBoxContainer) is the one exception: it never calls setup() or
+## The is-VBoxContainer type check is the one exception: it never calls setup() or
 ## accesses children, so bare .new() is safe and avoids the overhead of loading
 ## and instantiating the full scene just for a type check.
 ##
-## Tests 5 and 6 keep SessionsTab.new() because populate_left / populate_right
+## SessionsTab tests keep SessionsTab.new() because populate_left / populate_right
 ## load the card scene internally — bare tab construction still works.
 ##
-## Three new tests added in Slice 4:
-##   test_populate_left_called_twice_yields_one_card   — guards D1 duplicate-card bug
+## Selected behaviours guarded:
+##   test_populate_left_called_twice_yields_one_card   — guards the duplicate-card bug
 ##   test_story_card_setup_writes_display_name_to_label — guards NameLabel @onready binding
 ##   test_story_card_setup_sets_cover_rect_color        — guards CoverRect @onready binding
 ##
@@ -45,7 +40,7 @@ extends GutTest
 # ---------------------------------------------------------------------------
 
 # Use scene instantiation (not bare .new()) so @onready refs in story_card.gd
-# resolve correctly after Slice 4.  See SLICE 4 EDIT NOTE in the file header.
+# resolve correctly.  See CARD CONSTRUCTION NOTE in the file header.
 # Declared as PackedScene with preload() to mirror production sessions_tab.gd
 # and let the engine verify the path at parse time rather than at runtime.
 # https://docs.godotengine.org/en/stable/classes/class_packedscene.html
@@ -208,12 +203,12 @@ func test_story_card_is_a_vbox_container() -> void:
 func test_story_card_setup_does_not_crash() -> void:
 	# setup() is the main entry point for wiring a card to its data.
 	# This test confirms it runs without throwing an error for a well-formed slot.
-	# Card instantiated from scene so @onready refs resolve correctly (Slice 4).
+	# Card instantiated from scene so @onready refs resolve correctly.
 	var slot: StorySlot = _make_slot("test", "Test Story", Color.BLUE)
 	autofree(slot)
 
 	# Instantiate from scene so _ready() fires and @onready refs are valid before
-	# setup() is called. See SLICE 4 EDIT NOTE in the file header.
+	# setup() is called. See CARD CONSTRUCTION NOTE in the file header.
 	var card: StoryCard = _make_card()
 
 	# If this line raises an error, GUT records a test failure automatically.
@@ -230,7 +225,7 @@ func test_story_card_setup_stores_slot() -> void:
 	# setup() must save the slot so other methods (e.g. a future "play" button
 	# handler) can reference it. If _slot is null after setup(), the card is
 	# effectively disconnected from its data source.
-	# Card instantiated from scene so @onready refs resolve correctly (Slice 4).
+	# Card instantiated from scene so @onready refs resolve correctly.
 	var slot: StorySlot = _make_slot("slot_1", "My Story", Color.RED)
 	autofree(slot)
 
@@ -246,13 +241,13 @@ func test_story_card_setup_stores_slot() -> void:
 # ---------------------------------------------------------------------------
 
 func test_populate_left_called_twice_yields_one_card() -> void:
-	# D1 regression guard: the pre-migration populate_left() never clears
-	# _left_cards or removes stale children, so each call accumulates a duplicate
-	# card. The Slice 4 implementation must clear before rebuilding.
+	# Duplicate-card regression guard: populate_left() must clear _left_cards and
+	# remove stale children before rebuilding, otherwise each call accumulates a
+	# duplicate card.
 	#
 	# We search for CardsContainer inside the subtree that populate_left adds to
-	# parent — after the migration the tab reparents its LeftPage (which contains
-	# CardsContainer) rather than adding cards directly to parent.
+	# parent — the tab reparents its LeftPage (which contains CardsContainer)
+	# rather than adding cards directly to parent.
 	var tab: SessionsTab = add_child_autofree(SessionsTab.new())
 	var parent: Control = add_child_autofree(Control.new())
 
@@ -282,9 +277,8 @@ func test_populate_left_called_twice_yields_one_card() -> void:
 # ---------------------------------------------------------------------------
 
 func test_story_card_setup_writes_display_name_to_label() -> void:
-	# After the Slice 4 migration, setup() writes slot.display_name into the
-	# @onready NameLabel. A recursive Label search guards that the binding
-	# survives the @onready migration — a broken ref would leave the name label
+	# setup() writes slot.display_name into the @onready NameLabel. A recursive
+	# Label search guards that binding — a broken ref would leave the name label
 	# blank with no runtime error.
 	#
 	# We use _find_labels() rather than find_child("NameLabel") so the test also
@@ -307,10 +301,10 @@ func test_story_card_setup_writes_display_name_to_label() -> void:
 # ---------------------------------------------------------------------------
 
 func test_story_card_setup_sets_cover_rect_color() -> void:
-	# After the Slice 4 migration, setup() sets the CoverRect @onready ref's color
-	# to slot.cover_color. This guard ensures the colour-swatch binding survives
-	# the @onready migration — a broken ref would silently leave every swatch white
-	# (Color.WHITE default) regardless of the slot's configured colour.
+	# setup() sets the CoverRect @onready ref's color to slot.cover_color. This
+	# guard ensures the colour-swatch binding holds — a broken ref would silently
+	# leave every swatch white (Color.WHITE default) regardless of the slot's
+	# configured colour.
 	var expected_color: Color = Color(0.2, 0.8, 0.4)
 	var slot: StorySlot = _make_slot("color_test", "Color Test Story", expected_color)
 	autofree(slot)

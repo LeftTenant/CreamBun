@@ -24,7 +24,7 @@ extends NotebookTab
 ## Inventory via a setter before calling populate_left/right.
 ##
 ## Design doc: docs/features/notebook/design.md §3.1 (Inventory Tab)
-## Refactor:   docs/refactors/notebook-ui-scene-migration/design.md
+## Refactor:   docs/refactors/notebook-ui-scene-migration.md
 
 
 # ---------------------------------------------------------------------------

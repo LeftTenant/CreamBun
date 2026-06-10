@@ -18,7 +18,7 @@ extends HBoxContainer
 ##               not yet revealed to the player)
 ##
 ## Design doc: docs/features/notebook/design.md §3.3 (Quests Tab)
-## Refactor:   docs/refactors/notebook-ui-scene-migration/design.md
+## Refactor:   docs/refactors/notebook-ui-scene-migration.md
 
 
 # ---------------------------------------------------------------------------

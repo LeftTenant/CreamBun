@@ -1,5 +1,5 @@
 ## test_quests_tab.gd (integration)
-## Cross-system integration tests for QuestsTab after the Slice 3 scene migration.
+## Cross-system integration tests for QuestsTab and its scene-backed layout.
 ##
 ## WHAT THESE TESTS GUARD
 ## ----------------------
@@ -9,7 +9,7 @@
 ##   - Re-select rebuild: the right page is rebuilt, not duplicated
 ##   - Completed/active sectioning: rows in correct containers, divider visibility
 ##   - ViewButton minimum width preserved after setup() (regression guard for
-##     the B3 layout defect where ViewButton collapsed to zero width)
+##     the layout defect where ViewButton collapsed to zero width)
 ##
 ## These are integration tests (not unit tests) because they exercise:
 ##   - QuestsTab + QuestRow + QuestData + QuestLog wired together in-tree
@@ -142,8 +142,8 @@ func test_view_button_press_transitions_right_page_to_detail() -> void:
 
 	# Locate the ViewButton for the first (and only, in Phase 1) quest row.
 	var btn: Button = _find_view_button(left_parent)
+	assert_not_null(btn, "quest_row.tscn must provide a ViewButton under left_parent")
 	if btn == null:
-		pending("No ViewButton found under left_parent — test requires B3 implementation of quest_row.tscn")
 		return
 
 	# Act: press the button.
@@ -182,8 +182,8 @@ func test_reselect_does_not_duplicate_quest_detail_subtree() -> void:
 	tab.populate_right(right_parent)
 
 	var btn: Button = _find_view_button(left_parent)
+	assert_not_null(btn, "quest_row.tscn must provide a ViewButton under left_parent")
 	if btn == null:
-		pending("No ViewButton found under left_parent — test requires B3 implementation of quest_row.tscn")
 		return
 
 	# Press once — establishes the initial detail view.
@@ -197,10 +197,9 @@ func test_reselect_does_not_duplicate_quest_detail_subtree() -> void:
 	# children mean the refresh path appended rather than replaced.
 	#
 	# We count top-level children of right_parent as the proxy for "one detail
-	# subtree" rather than recursing for QuestDetail specifically, because the
-	# exact node name may change during the migration (B3 may or may not keep
-	# "QuestDetail" as the top-level reparented node name). Top-level count
-	# is a stable proxy: populate_right always starts with a clean slate.
+	# subtree" rather than recursing for the QuestDetail node specifically:
+	# populate_right always starts with a clean slate, so a top-level count of 1
+	# is a stable proxy regardless of the reparented node's name.
 	var top_level_count: int = right_parent.get_child_count()
 	assert_eq(top_level_count, 1,
 			"After pressing ViewButton twice, right_parent must have exactly 1 top-level child (no duplicate detail subtrees); got %d" % top_level_count)
@@ -217,38 +216,30 @@ func test_completed_rows_in_completed_section_and_separator_visibility() -> void
 	#     active and completed buckets are non-empty — a half-empty divider
 	#     orphaned above the list is a known UX bug this test guards against)
 	#
-	# This test verifies the new named-container logic (ActiveSection,
-	# CompletedSection, CompletedSeparator) against the existing bucket sort
-	# that previously used an anonymous VBoxContainer.
+	# This test verifies the named-container logic (ActiveSection,
+	# CompletedSection, CompletedSeparator) routes a COMPLETED quest correctly.
 	var tab: QuestsTab = add_child_autofree(QuestsTab.new())
 	var left_parent: Control = add_child_autofree(Control.new())
 
 	tab.populate_left(left_parent)
 
-	# Locate CompletedSection — after B3 it is a named node inside LeftPage.
-	# If the node does not exist yet (pre-B3), the test pends cleanly.
+	# CompletedSection is a named container inside LeftPage.
 	var completed_section: Node = left_parent.find_child("CompletedSection", true, false)
+	assert_not_null(completed_section,
+			"populate_left() must produce a named CompletedSection container")
 	if completed_section == null:
-		# Pre-B3: the section containers may not be named yet. Check the
-		# existing bucket-sort invariant a different way: at least one row
-		# is present (proves the quest was not silently hidden).
-		var any_labels: Array[Label] = _find_labels(left_parent,
-				func(lbl: Label) -> bool: return lbl.text != "")
-		assert_true(any_labels.size() >= 1,
-				"populate_left() must render at least one row (the_foraging_book is COMPLETED)")
-		gut.p("CompletedSection not found — running pre-B3 fallback assertion (label presence)")
 		return
 
-	# B3 path: CompletedSection must have at least one child (the foraging book row).
+	# CompletedSection must have at least one child (the foraging book row).
 	assert_true(completed_section.get_child_count() >= 1,
 			"CompletedSection must contain at least one child after populate_left() (the_foraging_book is COMPLETED)")
 
 	# Locate CompletedSeparator. In Phase 1 only COMPLETED quests exist, so the
 	# separator must be hidden (no ACTIVE bucket to separate from).
 	var separator: Node = left_parent.find_child("CompletedSeparator", true, false)
+	assert_not_null(separator,
+			"populate_left() must produce a named CompletedSeparator node")
 	if separator == null:
-		# Pre-B3: separator does not exist as a named node yet.
-		gut.p("CompletedSeparator not found — skipping separator visibility assertion (pre-B3)")
 		return
 
 	assert_false((separator as CanvasItem).visible,
@@ -260,7 +251,7 @@ func test_completed_rows_in_completed_section_and_separator_visibility() -> void
 # ---------------------------------------------------------------------------
 
 func test_view_button_keeps_usable_width_after_setup() -> void:
-	# REGRESSION GUARD for the B3 layout defect where ViewButton collapsed to
+	# REGRESSION GUARD for the layout defect where ViewButton collapsed to
 	# zero width because TitleLabel's SIZE_EXPAND_FILL claimed the full row
 	# and the button had no custom_minimum_size to resist it.
 	#

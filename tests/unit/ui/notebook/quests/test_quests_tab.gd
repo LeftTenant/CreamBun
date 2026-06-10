@@ -1,22 +1,17 @@
 ## test_quests_tab.gd
-## Behavior contract tests for QuestsTab and QuestRow (Phase 1 / Slice 3).
+## Behavior contract tests for QuestsTab and QuestRow (Phase 1).
 ##
 ## Covers QuestsTab (ui/notebook/quests/quests_tab.gd) and
 ## QuestRow (ui/notebook/quests/quest_row.gd).
 ##
-## --- SLICE 3 EDIT NOTE ---
-## Tests 2 and 3 previously used QuestRow.new() to construct rows. They now
-## instantiate from quest_row.tscn via add_child_autofree(preload(...).instantiate()).
+## --- ROW CONSTRUCTION NOTE ---
+## Tests that exercise a QuestRow instantiate it from quest_row.tscn via
+## add_child_autofree(preload(...).instantiate()), not QuestRow.new(): quest_row.gd
+## resolves named children (TitleLabel, ViewButton) via @onready references that
+## only exist when the node comes from the scene. A bare QuestRow.new() would
+## leave those refs null and every meaningful assertion would fail or crash.
 ##
-## WHY: After B3, quest_row.gd will use @onready references to named children
-## (TitleLabel, ViewButton) that only exist when the node is instantiated from
-## the scene. Bare QuestRow.new() would leave those refs null and every
-## meaningful assertion would fail or crash. Switching to scene instantiation
-## here means these tests PASS today (the scene still triggers _ready() which
-## builds the children), and they will continue to pass after B3 removes that
-## _ready() build code in favour of @onready refs.
-##
-## Two new tests added in Slice 3:
+## Selected behaviours guarded:
 ##   test_quest_row_setup_completed_dims_row  — guards modulate.a dimming
 ##   test_view_button_press_drives_selection  — guards observable selection outcome
 ##
@@ -37,7 +32,7 @@ extends GutTest
 # ---------------------------------------------------------------------------
 
 # Use scene instantiation (not bare .new()) so @onready refs in quest_row.gd
-# resolve correctly after B3.  See SLICE 3 EDIT NOTE in the file header.
+# resolve correctly.  See ROW CONSTRUCTION NOTE in the file header.
 const QUEST_ROW_SCENE: String = "res://ui/notebook/quests/quest_row.tscn"
 
 
@@ -94,7 +89,7 @@ func test_quests_tab_is_a_notebook_tab() -> void:
 func test_quest_row_shows_title() -> void:
 	# QuestRow is responsible for rendering one quest entry. The quest title
 	# must be visible as a Label so the player can scan the list at a glance.
-	# Row instantiated from scene so @onready refs resolve correctly (Slice 3).
+	# Row instantiated from scene so @onready refs resolve correctly.
 	var quest: QuestData = QuestData.new()
 	quest.id = &"test_quest"
 	quest.title = "Test Quest"
@@ -118,7 +113,7 @@ func test_quest_row_shows_title() -> void:
 func test_quest_row_setup_does_not_crash() -> void:
 	# COMPLETED quests are dimmed but must not throw errors. This guards against
 	# off-by-one modulate assignments or missing-node errors on the icon label.
-	# Row instantiated from scene so @onready refs resolve correctly (Slice 3).
+	# Row instantiated from scene so @onready refs resolve correctly.
 	var quest: QuestData = QuestData.new()
 	quest.id = &"finished_quest"
 	quest.title = "Finished Quest"
@@ -236,10 +231,9 @@ func test_view_button_press_drives_selection() -> void:
 	# helper to locate any Button named "ViewButton" anywhere in the subtree.
 	var view_button: Button = _find_view_button(left_parent)
 
+	assert_not_null(view_button,
+			"quest_row.tscn must declare a node named 'ViewButton' under left_parent")
 	if view_button == null:
-		# This can happen before B3 if the scene still builds buttons anonymously.
-		# Report pending so it is clear the test cannot yet verify the contract.
-		pending("No node named 'ViewButton' found under left_parent — check that quest_row.tscn declares ViewButton after B3")
 		return
 
 	# Act: press the ViewButton.

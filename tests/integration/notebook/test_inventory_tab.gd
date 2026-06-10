@@ -1,28 +1,17 @@
 ## test_inventory_tab.gd
-## TDD contract tests for the Phase 1 Inventory Tab.
+## Contract tests for the Phase 1 Inventory Tab.
 ##
 ## Covers:
 ##   - InventoryTab  (ui/notebook/inventory/inventory_tab.gd)
 ##   - EquipmentSlot (ui/notebook/inventory/equipment_slot.gd)
 ##   - InventoryRow  (ui/notebook/inventory/inventory_row.gd)
 ##
-## These tests define the expected API. They will FAIL until the implementation
-## files exist — that is by design. Run them after implementing each class to
-## confirm the contract is met.
-##
-## --- B2 EDIT NOTE ---
-## Tests 2–7 previously used EquipmentSlot.new() and InventoryRow.new() to
-## construct their subjects directly. They have been updated to instantiate from
-## the respective .tscn scenes instead.
-##
-## WHY: After B3, both scripts will use @onready references to named children
-## that only exist when the node is instantiated from the scene — bare .new() will
-## leave _slot_label, _icon_rect, _name_label etc. as null and every meaningful
-## assertion will fail or crash. Switching to scene instantiation now (in B2)
-## makes the failure list clean: these tests WILL PASS today (the scenes still
-## build children in _ready(), so instantiate() triggers _ready() just like .new()
-## would), and they will continue to pass after B3 replaces _ready() build code
-## with @onready refs.
+## --- SUBJECT CONSTRUCTION NOTE ---
+## Tests that exercise an EquipmentSlot or InventoryRow instantiate it from the
+## respective .tscn scene, not from bare .new(): both scripts resolve named
+## children (_slot_label, _icon_rect, _name_label etc.) via @onready references
+## that only exist when the node comes from the scene. A bare .new() would leave
+## those refs null and every meaningful assertion would fail or crash.
 ##
 ## Requires GUT: https://github.com/bitwes/Gut
 ## Install via Godot Asset Library (search "GUT - Godot Unit Testing").
@@ -41,8 +30,8 @@ extends GutTest
 # ---------------------------------------------------------------------------
 
 # Scene paths used by helper factories below. Using scenes (not bare .new())
-# so that @onready refs in the scripts resolve correctly after B3.
-# See the B2 EDIT NOTE in the file header for the full rationale.
+# so that @onready refs in the scripts resolve correctly.
+# See the SUBJECT CONSTRUCTION NOTE in the file header for the full rationale.
 const INVENTORY_TAB_SCENE: String = "res://ui/notebook/inventory/inventory_tab.tscn"
 const EQUIPMENT_SLOT_SCENE: String = "res://ui/notebook/inventory/equipment_slot.tscn"
 const INVENTORY_ROW_SCENE: String = "res://ui/notebook/inventory/inventory_row.tscn"

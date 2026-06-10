@@ -1,12 +1,12 @@
 ## test_quest_row_scene.gd
-## Scene-as-data contract tests for quest_row.tscn (Slice 3).
+## Scene-as-data contract tests for quest_row.tscn.
 ##
 ## WHAT THESE TESTS GUARD
 ## ----------------------
-## After the Slice 3 migration, quest_row.tscn declares TitleLabel and
-## ViewButton as saved editor nodes rather than building them in _ready().
-## These tests confirm those named nodes exist and have the correct types,
-## so @onready refs in quest_row.gd never silently produce null after B3.
+## quest_row.tscn declares TitleLabel and ViewButton as saved editor nodes
+## rather than building them in _ready(). These tests confirm those named nodes
+## exist and have the correct types, so @onready refs in quest_row.gd never
+## silently produce null.
 ##
 ## WHY SCENE-AS-DATA TESTS MATTER
 ## --------------------------------
@@ -15,9 +15,6 @@
 ## the PackedScene and walks the tree catches that at CI time rather than
 ## during manual QA — at which point the Quests tab would silently show rows
 ## that cannot be selected.
-##
-## These tests are EXPECTED TO FAIL until godot-coder builds the scene in B3.
-## That is by design — they define the contract the implementation must meet.
 ##
 ## Requires GUT: https://github.com/bitwes/Gut
 ## Install via Godot Asset Library (search "GUT - Godot Unit Testing").
@@ -87,10 +84,10 @@ func test_root_is_quest_row() -> void:
 # ---------------------------------------------------------------------------
 
 func test_scene_declares_title_label() -> void:
-	# TitleLabel is the Label that setup() fills with quest.title. After B3 the
-	# script references it via @onready rather than assigning it in _ready().
-	# A missing or mistyped node would silently leave every row's title blank —
-	# a regression invisible to unit tests that only inspect data structures.
+	# TitleLabel is the Label that setup() fills with quest.title. The script
+	# references it via @onready rather than assigning it in _ready(). A missing or
+	# mistyped node would silently leave every row's title blank — a regression
+	# invisible to unit tests that only inspect data structures.
 	var instance: Control = _make_scene_instance()
 
 	var node: Node = instance.find_child("TitleLabel", true, false)
@@ -108,8 +105,8 @@ func test_scene_declares_title_label() -> void:
 
 func test_scene_declares_view_button() -> void:
 	# ViewButton is the per-row select affordance that the player presses to
-	# open quest detail. After B3 it lives in the row scene rather than being
-	# built per-row inside _add_quest_row() in quests_tab.gd. A missing button
+	# open quest detail. It lives in the row scene rather than being built per-row
+	# inside _add_quest_row() in quests_tab.gd. A missing button
 	# would silently make every quest row un-selectable — a critical regression
 	# that would not produce any runtime error or logged warning.
 	var instance: Control = _make_scene_instance()

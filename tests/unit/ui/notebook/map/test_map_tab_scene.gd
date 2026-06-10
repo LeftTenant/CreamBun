@@ -1,10 +1,9 @@
 ## test_map_tab_scene.gd
-## Scene-as-data contract tests for the Map tab scene migration (PR 5).
+## Scene-as-data contract tests for the Map tab scene (map_tab.tscn).
 ##
 ## WHAT THESE TESTS GUARD
 ## ----------------------
-## After the migration, map_tab.tscn is no longer an empty Control — it
-## declares the full static layout as saved editor nodes:
+## map_tab.tscn declares the full static layout as saved editor nodes:
 ##
 ##   MapTab (Control)
 ##   ├── LeftPage (VBoxContainer)

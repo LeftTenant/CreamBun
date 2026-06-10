@@ -20,7 +20,7 @@ extends NotebookTab
 ## This is the same pattern established in InventoryTab (Slice 2).
 ##
 ## Design doc: docs/features/notebook/design.md §3.3 (Quests Tab)
-## Refactor:   docs/refactors/notebook-ui-scene-migration/design.md
+## Refactor:   docs/refactors/notebook-ui-scene-migration.md
 
 
 # ---------------------------------------------------------------------------

@@ -1,29 +1,18 @@
 ## test_inventory_tab_handlers.gd
-## Integration tests for InventoryTab signal handlers — migration safety net.
+## Integration tests for InventoryTab signal handlers.
 ##
 ## WHAT THESE TESTS GUARD
 ## ----------------------
-## After the migration (B3), inventory_tab.gd will instantiate EquipmentSlot and
-## InventoryRow nodes from their respective .tscn files (via preload(...).instantiate())
-## rather than with bare .new() calls. These tests confirm that the four critical
-## signal wires survive that change:
+## inventory_tab.gd instantiates EquipmentSlot and InventoryRow nodes from their
+## respective .tscn files (via preload(...).instantiate()). These tests confirm
+## the four critical signal wires hold through that scene-instantiation path:
 ##
 ##   1. slot_drop_received — wired in populate_left(); drives _on_slot_drop()
 ##   2. row.selected       — wired in _build_right_page(); drives _on_row_selected()
-##   3. WeightLabel update — _update_weight_label() resolves the named node after
-##                           the right-page build switches to scene-resolved refs
+##   3. WeightLabel update — _update_weight_label() resolves the named node from
+##                           the scene-built right page
 ##   4. _do_recycle() positive path — verifies the recyclable-item branch works
-##      after the row construction changes (complement to the existing negative test)
-##
-## WHY THESE FAIL BEFORE B3
-## ------------------------
-## Currently, populate_left() creates EquipmentSlot nodes with EquipmentSlot.new()
-## and wires slot_drop_received to _on_slot_drop. After B3 the same wire must be
-## established when the slot comes from a scene instantiation. Until B3 also makes
-## the slot's _drop_data() method callable in a test context (by giving the slot a
-## real scene tree via instantiate()), test 1 will fail at the drop-data invocation.
-## Tests 2–4 should pass today (the existing code supports them) but are included
-## here so B3 has a clear green baseline to preserve.
+##      (complement to the existing negative test)
 ##
 ## WHY THIS IS INTEGRATION (not unit)
 ## ------------------------------------
@@ -31,8 +20,8 @@
 ##   - InventoryTab → populate_left/right → EquipmentSlot / InventoryRow
 ##   - EquipmentSlot.slot_drop_received → _on_slot_drop → GameEvents.inventory_changed
 ##   - InventoryRow.selected → _on_row_selected → tab._selected_row
-## A pure unit test of the handler alone would miss signal-wiring bugs introduced
-## when the construction path changes from .new() to scene instantiation.
+## A pure unit test of the handler alone would miss signal-wiring bugs in the
+## scene-instantiation construction path.
 ##
 ## Requires GUT: https://github.com/bitwes/Gut
 ## Install via Godot Asset Library (search "GUT - Godot Unit Testing").
@@ -147,8 +136,8 @@ func test_slot_drop_received_emits_inventory_changed() -> void:
 	#
 	# The chain is established inside populate_left() by:
 	#   slot_node.slot_drop_received.connect(_on_slot_drop)
-	# After B3 the slot_node comes from preload(...).instantiate() rather than
-	# EquipmentSlot.new() — this test confirms the connection still exists.
+	# The slot_node comes from preload(...).instantiate() — this test confirms the
+	# connection is established for scene-instantiated slots.
 	#
 	# We invoke _drop_data() directly rather than simulating GUI drag-and-drop
 	# because the latter requires a running OS window and a real drag context.
@@ -207,8 +196,8 @@ func test_slot_drop_received_emits_inventory_changed() -> void:
 
 func test_row_selected_signal_sets_active_selection() -> void:
 	# _on_row_selected is connected to each row's selected signal inside
-	# _build_right_page(). After B3 the rows come from preload(...).instantiate()
-	# rather than InventoryRow.new() — this test confirms the connection still holds.
+	# _build_right_page(). The rows come from preload(...).instantiate() — this test
+	# confirms the connection holds for scene-instantiated rows.
 	#
 	# We emit selected directly (rather than simulating a mouse click) so the test
 	# does not depend on a real viewport focus or an OS window being present.
@@ -236,14 +225,11 @@ func test_row_selected_signal_sets_active_selection() -> void:
 	# We check _selection_rect.visible rather than calling set_selected again so
 	# we detect if the signal handler forgot to call it.
 	var selection_rect: Node = first_row.find_child("SelectionRect", true, false)
+	assert_not_null(selection_rect,
+			"InventoryRow must contain a named SelectionRect node")
 	if selection_rect != null:
 		assert_true((selection_rect as ColorRect).visible,
 				"SelectionRect must be visible after _on_row_selected fires")
-	else:
-		# Before B3 the SelectionRect is created in _ready() and IS present even
-		# with .new() — it won't be missing until after B3 removes the _ready()
-		# build code. Flag as pending so the test surface is clear.
-		gut.p("SelectionRect not found by name — scene not yet migrated (expected pre-B3)")
 
 
 # ---------------------------------------------------------------------------
@@ -252,10 +238,9 @@ func test_row_selected_signal_sets_active_selection() -> void:
 
 func test_do_throw_updates_weight_label() -> void:
 	# _update_weight_label() is called after every action that changes inventory.
-	# After B3 it will resolve WeightLabel via a named-node lookup on the scene
-	# rather than via the stored _weight_label var. This test confirms the label
-	# text changes after a throw, which means the lookup found the node and the
-	# text was updated.
+	# It resolves WeightLabel via a named-node lookup on the scene-built right
+	# page. This test confirms the label text changes after a throw, which means
+	# the lookup found the node and the text was updated.
 	#
 	# We capture the text before throwing and assert it differs afterwards. We do
 	# not assert a specific string because the exact format ("Weight: X / Y") is
@@ -275,18 +260,11 @@ func test_do_throw_updates_weight_label() -> void:
 		return
 
 	# Find the WeightLabel before the throw so we can assert it changes.
-	# After B3, _build_right_page() will produce a node named "WeightLabel" in
-	# the right page tree. For now it may be an anonymous Label — find by name first,
-	# fall back to the stored _weight_label ref for pre-B3 compatibility.
+	# _build_right_page() produces a node named "WeightLabel" in the right page tree.
 	var weight_label_node: Node = _right_parent.find_child("WeightLabel", true, false)
-	var weight_label: Label = null
-	if weight_label_node != null:
-		weight_label = weight_label_node as Label
-	elif _tab._weight_label != null:
-		weight_label = _tab._weight_label
-
-	assert_not_null(weight_label,
-			"A WeightLabel must be reachable (via named node or _tab._weight_label) after populate_right()")
+	assert_not_null(weight_label_node,
+			"A named WeightLabel node must exist after populate_right()")
+	var weight_label: Label = weight_label_node as Label
 	if weight_label == null:
 		return
 
