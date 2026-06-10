@@ -1,5 +1,5 @@
 ## test_equipment_slot_scene.gd
-## Scene-as-data contract tests for equipment_slot.tscn (Slice 2).
+## Scene-as-data contract tests for equipment_slot.tscn.
 ##
 ## WHAT THESE TESTS GUARD
 ## ----------------------
@@ -60,9 +60,9 @@ func test_scene_loads_without_error() -> void:
 
 func test_scene_declares_slot_label() -> void:
 	# SlotLabel shows the slot name ("Boots", "Gloves", etc.) when the slot is
-	# empty. _update_display() toggles its visibility. After the migration the
-	# script will reference it via @onready or a named-node lookup rather than
-	# building it in _ready() — if the name is wrong or the node is absent,
+	# empty. _update_display() toggles its visibility. The script references it via
+	# @onready or a named-node lookup rather than building it in _ready() — if the
+	# name is wrong or the node is absent,
 	# _update_display() will silently do nothing and the slot will always appear
 	# blank regardless of whether it is empty or filled.
 	var instance: Control = _make_scene_instance()
@@ -83,8 +83,8 @@ func test_scene_declares_slot_label() -> void:
 func test_scene_declares_icon_rect() -> void:
 	# IconRect shows the item icon when a slot is filled. _update_display() sets
 	# its texture and toggles its visibility. A missing or mistyped node means
-	# equipped items will never show their icon — a silent regression that only
-	# becomes apparent during visual QA long after the migration PR lands.
+	# equipped items will never show their icon — a silent regression that would
+	# only surface during visual QA.
 	var instance: Control = _make_scene_instance()
 
 	var node: Node = instance.find_child("IconRect", true, false)

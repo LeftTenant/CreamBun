@@ -1,10 +1,10 @@
 ## test_sessions_tab_scene.gd
-## Scene-as-data contract tests for sessions_tab.tscn (Slice 4).
+## Scene-as-data contract tests for sessions_tab.tscn.
 ##
 ## WHAT THESE TESTS GUARD
 ## ----------------------
-## After the Slice 4 migration, sessions_tab.tscn declares the full static layout
-## as saved editor nodes: LeftPage (Control) containing CardsContainer (VBoxContainer);
+## sessions_tab.tscn declares the full static layout as saved editor nodes:
+## LeftPage (Control) containing CardsContainer (VBoxContainer);
 ## RightPage (Control) containing Placeholder (Label) with "select a story" text.
 ## These tests load the .tscn and walk the instantiated tree to confirm every named
 ## node is present and typed correctly.
@@ -17,9 +17,6 @@
 ## A test that loads the PackedScene and walks the tree catches that breakage at
 ## CI time rather than during manual QA — at which point the Sessions tab would
 ## show a blank left page with no runtime error.
-##
-## These tests are EXPECTED TO FAIL until godot-coder builds the scene in Slice 4.
-## That is by design — they define the contract that the implementation must meet.
 ##
 ## Requires GUT: https://github.com/bitwes/Gut
 ## Install via Godot Asset Library (search "GUT - Godot Unit Testing").
@@ -121,8 +118,8 @@ func test_left_page_contains_cards_container() -> void:
 func test_right_page_contains_placeholder_label_with_select_text() -> void:
 	# D2: the right page is purely static — one fixed Placeholder Label showing
 	# "select a story" (case-insensitive match). This guards that the static copy
-	# is preserved as an editor property rather than dropped during the migration,
-	# and that no further right-page logic is required for Phase 1.
+	# is preserved as an editor property, and that no further right-page logic is
+	# required for Phase 1.
 	var instance: SessionsTab = _make_scene_instance()
 
 	var right: Node = instance.find_child("RightPage", true, false)

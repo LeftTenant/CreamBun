@@ -1,5 +1,5 @@
 ## test_inventory_tab_scene.gd
-## Scene-as-data contract tests for the Inventory tab scene migration (Slice 2).
+## Scene-as-data contract tests for the Inventory tab scene (inventory_tab.tscn).
 ##
 ## WHAT THESE TESTS GUARD
 ## ----------------------
@@ -245,9 +245,8 @@ func test_scene_declares_recycle_button() -> void:
 
 func test_scene_declares_weight_label() -> void:
 	# WeightLabel is the node that _update_weight_label() patches with the
-	# current carry weight text. Without this stable name the weight display
-	# will silently never update after the migration switches from the anonymous
-	# _weight_label var to a named-node lookup.
+	# current carry weight text. Without this stable name the named-node lookup
+	# would miss it and the weight display would silently never update.
 	var instance: Control = _make_scene_instance()
 
 	var node: Node = instance.find_child("WeightLabel", true, false)
@@ -265,9 +264,8 @@ func test_scene_declares_weight_label() -> void:
 
 func test_populate_left_with_null_parent_does_not_crash() -> void:
 	# NotebookTab's contract requires populate_left / populate_right to guard
-	# against null. The guard exists in the current code; this test confirms it
-	# survives the script rewrite during B3. A crash here would abort the
-	# notebook _show_tab flow if the controller ever passes a missing page.
+	# against null. This test confirms the guard holds. A crash here would abort
+	# the notebook _show_tab flow if the controller ever passes a missing page.
 	var instance: Control = _make_scene_instance()
 	var tab: InventoryTab = instance as InventoryTab
 	assert_not_null(tab,

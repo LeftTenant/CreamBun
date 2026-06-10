@@ -1,13 +1,12 @@
 ## test_story_card_scene.gd
-## Scene-as-data contract tests for story_card.tscn (Slice 4).
+## Scene-as-data contract tests for story_card.tscn.
 ##
 ## WHAT THESE TESTS GUARD
 ## ----------------------
-## After the Slice 4 migration, story_card.tscn declares the full card layout as
-## saved editor nodes: NameLabel (Label), CoverRect (ColorRect),
-## LastPlayedLabel (Label), and SwitchButton (Button) — previously built in
-## _ready(). These tests load the .tscn and walk the instantiated tree to confirm
-## every named node is present and typed correctly.
+## story_card.tscn declares the full card layout as saved editor nodes:
+## NameLabel (Label), CoverRect (ColorRect), LastPlayedLabel (Label), and
+## SwitchButton (Button). These tests load the .tscn and walk the instantiated
+## tree to confirm every named node is present and typed correctly.
 ##
 ## WHY SCENE-AS-DATA TESTS MATTER
 ## --------------------------------
@@ -17,9 +16,6 @@
 ## that loads the PackedScene and walks the tree catches that breakage at CI time
 ## rather than during manual QA — at which point the Sessions tab would silently
 ## show blank or broken cards with no runtime error.
-##
-## These tests are EXPECTED TO FAIL until godot-coder builds the scene in Slice 4.
-## That is by design — they define the contract that the implementation must meet.
 ##
 ## Requires GUT: https://github.com/bitwes/Gut
 ## Install via Godot Asset Library (search "GUT - Godot Unit Testing").
@@ -92,10 +88,10 @@ func test_root_is_story_card_and_vbox_container() -> void:
 # ---------------------------------------------------------------------------
 
 func test_scene_declares_name_label() -> void:
-	# NameLabel is the Label that setup() fills with slot.display_name. After the
-	# Slice 4 migration the script references it via @onready rather than building
-	# it in _ready(). A missing or mistyped node would silently leave every card's
-	# title blank — a regression invisible to tests that only inspect data structures.
+	# NameLabel is the Label that setup() fills with slot.display_name. The script
+	# references it via @onready rather than building it in _ready(). A missing or
+	# mistyped node would silently leave every card's title blank — a regression
+	# invisible to tests that only inspect data structures.
 	var instance: StoryCard = _make_scene_instance()
 
 	var node: Node = instance.find_child("NameLabel", true, false)
@@ -173,9 +169,8 @@ func test_scene_declares_switch_button() -> void:
 
 func test_cover_rect_has_16x16_minimum_size() -> void:
 	# The 16×16 custom_minimum_size matches the low-res aesthetic of the
-	# 320×180 viewport and was established in the pre-migration _ready() code.
-	# After the migration this value must survive as an editor-saved property.
-	# If it is lost, the swatch collapses to zero-height and becomes invisible.
+	# 320×180 viewport. This value must be an editor-saved property; if it is lost,
+	# the swatch collapses to zero-height and becomes invisible.
 	var instance: StoryCard = _make_scene_instance()
 
 	var node: Node = instance.find_child("CoverRect", true, false)
@@ -195,8 +190,8 @@ func test_cover_rect_has_16x16_minimum_size() -> void:
 func test_last_played_label_text_contains_na() -> void:
 	# The Phase-1 copy "Last played: N/A" must be saved as an editor property on
 	# LastPlayedLabel so the card shows it immediately when instantiated, before
-	# any code runs. If the text is empty after the migration, the last-played
-	# field silently disappears from every card.
+	# any code runs. If the text is empty, the last-played field silently
+	# disappears from every card.
 	#
 	# We check for "N/A" (case-sensitive) rather than the full string so that minor
 	# copy changes (e.g. "Last Played: N/A") do not break this structural test.

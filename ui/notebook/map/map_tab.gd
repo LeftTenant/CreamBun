@@ -13,13 +13,13 @@ extends NotebookTab
 ## with a fog-of-war overlay.
 ##
 ## Static layout (headings, placeholder rects, Phase 2 notes) lives in
-## map_tab.tscn — see PR 5 of docs/refactors/notebook-ui-scene-migration/design.md.
+## map_tab.tscn — see docs/refactors/notebook-ui-scene-migration.md.
 ## populate_left() / populate_right() instantiate that scene once, extract the
 ## LeftPage / RightPage subtrees, and reparent them into the Controls provided
 ## by notebook.gd. The same pattern is used in SettingsTab and InventoryTab.
 ##
 ## Design doc: docs/features/notebook/design.md §5.3 (Map tab)
-## Refactor:   docs/refactors/notebook-ui-scene-migration/design.md
+## Refactor:   docs/refactors/notebook-ui-scene-migration.md
 
 
 # ---------------------------------------------------------------------------

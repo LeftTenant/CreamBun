@@ -1,5 +1,5 @@
 ## test_quests_tab_scene.gd
-## Scene-as-data contract tests for quests_tab.tscn (Slice 3).
+## Scene-as-data contract tests for quests_tab.tscn.
 ##
 ## WHAT THESE TESTS GUARD
 ## ----------------------
@@ -16,9 +16,6 @@
 ## runtime with no editor warning if a node is accidentally renamed or deleted.
 ## A test that loads the PackedScene and walks the tree catches that breakage at
 ## CI time rather than during manual QA.
-##
-## These tests are EXPECTED TO FAIL until godot-coder builds the scene in B3.
-## That is by design — they define the contract that the implementation must meet.
 ##
 ## Requires GUT: https://github.com/bitwes/Gut
 ## Install via Godot Asset Library (search "GUT - Godot Unit Testing").
@@ -179,8 +176,8 @@ func test_scene_declares_right_page() -> void:
 func test_right_page_contains_quest_detail_vbox() -> void:
 	# QuestDetail is the VBoxContainer that holds TitleLabel, DescriptionLabel,
 	# and ObjectivesContainer. It must be a VBoxContainer so its children stack
-	# vertically. After the migration the script references it via @onready
-	# rather than building it in _refresh_right_page().
+	# vertically. The script references it via @onready rather than building it in
+	# _refresh_right_page().
 	var instance: Control = _make_scene_instance()
 
 	var right: Node = instance.find_child("RightPage", true, false)
@@ -205,7 +202,7 @@ func test_quest_detail_contains_title_description_objectives() -> void:
 	# TitleLabel and DescriptionLabel are the Labels that populate_right() fills
 	# with quest.title and quest.description. ObjectivesContainer is the VBox
 	# into which objective lines are added dynamically. All three must exist as
-	# named nodes so the script can reference them by @onready after B3.
+	# named nodes so the script can reference them by @onready.
 	var instance: Control = _make_scene_instance()
 
 	var detail: Node = instance.find_child("QuestDetail", true, false)

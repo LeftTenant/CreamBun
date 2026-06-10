@@ -14,7 +14,7 @@ extends NotebookTab
 ## binding, signal wiring, and initial-value logic only.
 ##
 ## Design doc: docs/features/notebook/design.md §3.2 (Settings)
-## Refactor:   docs/refactors/notebook-ui-scene-migration/design.md
+## Refactor:   docs/refactors/notebook-ui-scene-migration.md
 
 
 # ---------------------------------------------------------------------------

@@ -1,21 +1,13 @@
 ## test_settings_tab_handlers.gd
-## Integration tests for SettingsTab signal handlers — migration safety net.
+## Integration tests for SettingsTab signal handlers.
 ##
 ## WHAT THESE TESTS GUARD
 ## ----------------------
-## After the migration (B3), settings_tab.gd will resolve slider and option-button
-## references via get_node("MasterSlider") etc. on the newly fleshed-out
-## settings_tab.tscn, rather than by building anonymous nodes in code. These tests
-## confirm that the handler side-effects (AudioServer bus volume, DisplayServer
-## window size, _settings data model, widget state) survive that refactor.
-##
-## WHY THESE FAIL BEFORE B3
-## ------------------------
-## In the current (pre-migration) code, populate_left() creates anonymous nodes.
-## The tests below look up named nodes on the instantiated scene (MasterSlider etc.)
-## and will fail with a null reference because those names do not exist yet. That is
-## intentional — each failure pinpoints exactly which named-node contract B3 must
-## satisfy.
+## settings_tab.gd resolves slider and option-button references via
+## get_node("MasterSlider") etc. on the scene-built settings_tab.tscn. These tests
+## confirm the handler side-effects (AudioServer bus volume, DisplayServer window
+## size, _settings data model, widget state) behave correctly when driven through
+## those named nodes.
 ##
 ## WHY THIS IS AN INTEGRATION FILE (not unit)
 ## ------------------------------------------
@@ -23,7 +15,7 @@
 ## so the slider's value_changed signal propagates to the handler and
 ## AudioServer / DisplayServer calls can be verified. A pure unit test of
 ## _on_master_volume_changed() would call the private method directly and miss
-## signal-wiring bugs introduced during the migration.
+## signal-wiring bugs.
 ##
 ## Requires GUT: https://github.com/bitwes/Gut
 ## Install via Godot Asset Library (search "GUT - Godot Unit Testing").
@@ -95,8 +87,8 @@ func after_each() -> void:
 
 ## Find a named descendant of parent. Returns null if not found.
 ##
-## We use find_child on the parent (not _tab) because after the migration
-## populate_left() adds the scene subtree to parent, not to _tab directly.
+## We use find_child on the parent (not _tab) because populate_left() adds the
+## scene subtree to parent, not to _tab directly.
 ##
 ## @param parent    the Control populate_left / populate_right added children to
 ## @param node_name the stable node name to look up
@@ -285,8 +277,8 @@ func test_reset_left_restores_slider_defaults() -> void:
 	# avoid needing screen coordinates, matching the testing pattern in the
 	# unit tests above.
 	#
-	# After B3 the reset button may have a stable name; for now we locate it
-	# by walking Button descendants and choosing the one inside the left parent.
+	# Locate the reset button by walking Button descendants and choosing the one
+	# inside the left parent (skipping the OptionButton).
 	var reset_btn: Button = null
 	for child: Node in _left_parent.find_children("*", "Button", true, false):
 		if child is Button and not child is OptionButton:

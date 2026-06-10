@@ -53,3 +53,17 @@ The same rules above apply, but several of them are easier to apply as editor pr
 - Labels in narrow columns: `Autowrap → Word, Smart` and `Size Flags → Expand + Fill` (rule 4).
 - `HSlider` and `VSlider`: `Size Flags → Expand + Fill` (the default is `FILL`, not `EXPAND_FILL` — must be set explicitly; rule 4 note).
 - Inset offsets (rule 2) still get applied at runtime in `populate_left/right` for now; see issue #10.
+
+## Static layout lives in scenes, not code
+
+The notebook tabs were originally empty `Control` nodes with ~1,000 lines of GDScript building every label, slider, and button at runtime. A beginner opening a tab in the editor saw a blank node and could not change anything without reading code. The notebook-ui-scene-migration refactor moved all of it into `.tscn` files; follow the same pattern for any new tab, menu, row, or composed Control. Background: `docs/refactors/notebook-ui-scene-migration.md`.
+
+**1. Author static structure in the `.tscn`, not in `_ready()` / `populate_*`.** Anything that is the same every time the view is shown — containers, headers, sliders, buttons, scroll containers — belongs in the scene as real, visible nodes set up in the editor. Reserve scripts for *data binding* (filling labels/values from a model), *signal wiring*, and *instantiating repeated rows*. If you find yourself writing `Label.new(); add_child(label)` for static chrome, build it in the editor instead.
+
+**2. Repeated rows and cards are their own scenes.** Instantiate them with `preload("res://…/row.tscn").instantiate()`, never `RowClass.new()`. The row script resolves its children with `@onready var _title: Label = $TitleLabel` rather than constructing them — `.new()` skips the scene so those refs would be null.
+
+**3. Give every script-referenced node a stable name.** Scripts find scene nodes by name (`$MasterSlider`, `find_child("WeightLabel")`). A rename or deletion fails *silently* — the lookup returns null with no editor warning — so guard the contract with a **scene-as-data test** that loads the `PackedScene`, walks the tree, and asserts each named node exists and is the right type (see `tests/unit/ui/notebook/**/test_*_scene.gd`). These catch breakage at CI instead of during manual QA.
+
+**4. Notebook tab specifics.** `notebook.gd` builds each tab with `TabClass.new()`, so a tab scene's **root node and its root-level layout are editor-preview only** — never mounted in-game. Only the named `LeftPage` / `RightPage` subtrees are used: `populate_left/right(parent)` instantiate the tab scene, reparent the relevant page subtree into `parent`, and apply `PRESET_FULL_RECT` (rule 1). Resolve named-node refs **inside `populate_*`**, not as `@onready` on the tab, because the tree shape is rebuilt per call. For which editor properties are safe to set on a tab `.tscn` without affecting runtime, see the editor-preview policy in agent memory.
+
+**The litmus test:** a teammate should be able to open the `.tscn` and understand the UI without reading GDScript, and adding a widget should be "drag the node in, name it, add a few script lines" — not "read hundreds of lines of build code to find the pattern."

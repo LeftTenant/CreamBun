@@ -1,20 +1,11 @@
 ## test_settings_tab_scene.gd
-## Scene-as-data contract tests for the Settings tab scene migration (Slice 1).
+## Scene-as-data contract tests for the Settings tab scene (settings_tab.tscn).
 ##
 ## WHAT THESE TESTS GUARD
 ## ----------------------
-## After the migration (B3), settings_tab.tscn is no longer an empty Control —
-## it declares the full static layout as saved editor nodes. These tests load the
-## .tscn and walk the resulting tree to assert that the named nodes the script
-## depends on are present and of the correct type.
-##
-## WHY THESE FAIL BEFORE B3
-## ------------------------
-## settings_tab.tscn currently contains only a bare Control node with no children.
-## Every test that instantiates the scene and looks for a named child (MasterSlider,
-## etc.) will fail until B3 builds the layout in the editor. That is intentional:
-## these tests exist to tell B3 exactly what the scene must contain. They become
-## the "definition of done" for the scene build.
+## settings_tab.tscn declares the full static layout as saved editor nodes. These
+## tests load the .tscn and walk the resulting tree to assert that the named nodes
+## the script depends on are present and of the correct type.
 ##
 ## WHY SCENE-AS-DATA TESTS MATTER
 ## --------------------------------
@@ -198,9 +189,8 @@ func test_scene_declares_audio_and_display_section_headers() -> void:
 
 func test_populate_left_with_null_parent_does_not_crash() -> void:
 	# The NotebookTab contract documents that populate_left / populate_right
-	# must guard against null. After the migration the guard must survive even
-	# though the script body changes significantly. Crashing here would abort
-	# the notebook _show_tab flow if the controller ever passes a missing page.
+	# must guard against null. Crashing here would abort the notebook _show_tab
+	# flow if the controller ever passes a missing page.
 	var instance: Control = _make_scene_instance()
 	var tab: SettingsTab = instance as SettingsTab
 	assert_not_null(tab,

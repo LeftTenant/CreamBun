@@ -1,5 +1,5 @@
 ## test_inventory_row_scene.gd
-## Scene-as-data contract tests for inventory_row.tscn (Slice 2).
+## Scene-as-data contract tests for inventory_row.tscn.
 ##
 ## WHAT THESE TESTS GUARD
 ## ----------------------
@@ -60,8 +60,8 @@ func test_scene_loads_without_error() -> void:
 
 func test_scene_declares_selection_rect() -> void:
 	# SelectionRect is the warm-cream highlight that set_selected(true) makes
-	# visible. After the migration the script references it via @onready rather
-	# than assigning it in _ready(). A missing or mistyped node means clicking a
+	# visible. The script references it via @onready rather than assigning it in
+	# _ready(). A missing or mistyped node means clicking a
 	# row produces no visual feedback — a silent regression invisible to unit tests
 	# that only check data changes.
 	var instance: Control = _make_scene_instance()

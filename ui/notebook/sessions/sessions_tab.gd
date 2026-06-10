@@ -16,7 +16,7 @@ extends NotebookTab
 ## QuestsTab / InventoryTab (Slices 3 and 2).
 ##
 ## Design doc: docs/features/notebook/design.md §5 (Sessions Tab)
-## Refactor:   docs/refactors/notebook-ui-scene-migration/design.md
+## Refactor:   docs/refactors/notebook-ui-scene-migration.md
 
 
 # ---------------------------------------------------------------------------
