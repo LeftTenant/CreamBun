@@ -3,8 +3,8 @@
 [ext_resource type="PackedScene" uid="uid://beaja7keolaqd" path="res://player/player.tscn" id="1_player"]
 [ext_resource type="Texture2D" uid="uid://dcnjsu22waidp" path="res://resources/tilesets/ground_placeholder.png" id="2_tcf2h"]
 [ext_resource type="PackedScene" path="res://ui/notebook/notebook.tscn" id="3_notebook"]
-[ext_resource type="Texture2D" uid="uid://bn1nf18pnkgih" path="res://art/terrain/grass.png" id="4_mmdvd"]
-[ext_resource type="Texture2D" uid="uid://s1d34sv7vf5l" path="res://art/terrain/flower grass.png" id="5_fn3g3"]
+[ext_resource type="Texture2D" uid="uid://clch2yj51jack" path="res://resources/sprites/terrain/grass.png" id="4_mmdvd"]
+[ext_resource type="Texture2D" uid="uid://xqvf201uswvm" path="res://resources/sprites/terrain/flower grass.png" id="5_fn3g3"]
 
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_4717r"]
 resource_name = "ground"
