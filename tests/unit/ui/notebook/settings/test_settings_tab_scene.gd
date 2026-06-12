@@ -15,6 +15,14 @@
 ## loads the PackedScene and walks the instantiated tree catches that breakage at
 ## CI time rather than at runtime during QA.
 ##
+## --- SLICE 5 DATA SOURCE NOTE ---
+## _make_scene_instance() adds the instantiated SettingsTab to the tree, which
+## runs _ready(). Since Slice 5, _ready() reads SaveManager.settings instead of
+## constructing a fresh GameSettings — before_each() gives SaveManager.settings
+## a known-default instance so node-lookup/populate tests in this file are not
+## affected by whatever a prior suite left behind, and after_each() clears it
+## again so this file doesn't leak state into later suites.
+##
 ## Requires GUT: https://github.com/bitwes/Gut
 ## Install via Godot Asset Library (search "GUT - Godot Unit Testing").
 ##
@@ -35,6 +43,19 @@ extends GutTest
 # update if the file moves and ensures all tests in this file reference the
 # same path.
 const SCENE_PATH: String = "res://ui/notebook/settings/settings_tab.tscn"
+
+
+# ---------------------------------------------------------------------------
+# Setup / Teardown
+# ---------------------------------------------------------------------------
+
+func before_each() -> void:
+	# Fresh defaults before every test — see Slice 5 note above.
+	SaveManager.settings = GameSettings.new()
+
+
+func after_each() -> void:
+	SaveManager.settings = null
 
 
 # ---------------------------------------------------------------------------

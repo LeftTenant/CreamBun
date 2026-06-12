@@ -17,6 +17,16 @@
 ## rather than during manual QA — at which point the Sessions tab would silently
 ## show blank or broken cards with no runtime error.
 ##
+## --- SLICE 6 NOTE ---
+## Slice 6 changes StoryCard._on_switch_pressed() to emit
+## GameEvents.story_switch_requested instead of calling push_warning() — a
+## behavioral change covered by
+## tests/unit/ui/notebook/sessions/test_sessions_tab.gd
+## (test_story_card_switch_pressed_emits_story_switch_requested). The
+## NameLabel/CoverRect/LastPlayedLabel/SwitchButton node contract below is
+## unaffected by that change and remains a pure structural (scene-as-data)
+## check — these tests pass unmodified as a regression guard.
+##
 ## Requires GUT: https://github.com/bitwes/Gut
 ## Install via Godot Asset Library (search "GUT - Godot Unit Testing").
 ##

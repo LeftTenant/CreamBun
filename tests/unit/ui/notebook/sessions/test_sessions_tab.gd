@@ -22,6 +22,20 @@
 ##   test_populate_left_called_twice_yields_one_card   — guards the duplicate-card bug
 ##   test_story_card_setup_writes_display_name_to_label — guards NameLabel @onready binding
 ##   test_story_card_setup_sets_cover_rect_color        — guards CoverRect @onready binding
+##   test_sessions_tab_default_slot_id_is_default       — guards the Slice 6 slot id contract
+##   test_story_card_switch_pressed_emits_story_switch_requested — guards the Slice 6
+##       switch action (replaces the old push_warning() no-op)
+##   test_sessions_tab_save_action_calls_save_slot_with_default_id — guards the Slice 6
+##       Sessions-tab "Save" action
+##
+## --- SLICE 6 NOTES ---
+## _default_slot.slot_id must be "default" — the same id SaveManager._slot_path(),
+## load_slot(), and save_slot() expect (single default slot, design §6.1 Phase 1).
+## StoryCard._on_switch_pressed() must emit GameEvents.story_switch_requested with
+## _slot.slot_id instead of calling push_warning(). The Sessions-tab "Save" action
+## (whatever control triggers it) must invoke SaveManager.save_slot() with the
+## default slot id — verified here by calling the tab's save handler directly and
+## checking that a slot file is written, then cleaning it up.
 ##
 ## Requires GUT: https://github.com/bitwes/Gut
 ## Install via Godot Asset Library (search "GUT - Godot Unit Testing").
@@ -146,6 +160,22 @@ func test_sessions_tab_default_slot_has_display_name() -> void:
 
 	assert_ne(tab._default_slot.display_name, "",
 			"_default_slot.display_name must not be empty")
+
+
+# ---------------------------------------------------------------------------
+# Test 4b — _default_slot.slot_id is "default" (Slice 6)
+# ---------------------------------------------------------------------------
+
+func test_sessions_tab_default_slot_id_is_default() -> void:
+	# Slice 6: _default_slot.slot_id must match the id SaveManager._slot_path(),
+	# load_slot(), and save_slot() expect for the single Phase-1 default slot
+	# (design §6.1 — no user://slots/index.tres multi-slot index yet). If this
+	# id drifts from "default", the Sessions tab's save/switch actions would
+	# read or write the wrong file (or a file that SaveManager never looks at).
+	var tab: SessionsTab = add_child_autofree(SessionsTab.new())
+
+	assert_eq(tab._default_slot.slot_id, "default",
+			"_default_slot.slot_id must be 'default' to match SaveManager._slot_path('default')")
 
 
 # ---------------------------------------------------------------------------
@@ -321,3 +351,90 @@ func test_story_card_setup_sets_cover_rect_color() -> void:
 	var rect: ColorRect = node as ColorRect
 	assert_eq(rect.color, expected_color,
 			"CoverRect.color must equal slot.cover_color after setup()")
+
+
+# ---------------------------------------------------------------------------
+# Test 13 — StoryCard._on_switch_pressed() emits story_switch_requested (Slice 6)
+# ---------------------------------------------------------------------------
+
+func test_story_card_switch_pressed_emits_story_switch_requested() -> void:
+	# Slice 6: pressing "Switch to this Story" must emit
+	# GameEvents.story_switch_requested with the card's _slot.slot_id, replacing
+	# the Phase-1 push_warning() no-op. Listeners (the Sessions tab or notebook)
+	# react to this signal by calling SaveManager.load_slot()/new_game().
+	#
+	# watch_signals(GameEvents) must be called BEFORE the act (pressing the
+	# button) so GUT can record the emission.
+	# https://github.com/bitwes/Gut/wiki/Signals
+	var slot: StorySlot = _make_slot("default", "Default Story", Color(0.6, 0.4, 0.2))
+	autofree(slot)
+
+	var card: StoryCard = _make_card()
+	card.setup(slot)
+
+	watch_signals(GameEvents)
+
+	# Press the SwitchButton via its pressed signal — _on_switch_pressed() is
+	# connected to it in story_card.gd's _ready().
+	var node: Node = card.find_child("SwitchButton", true, false)
+	assert_not_null(node,
+			"SwitchButton must exist in the card subtree (requires story_card.tscn to declare it)")
+	if node == null:
+		return
+
+	(node as Button).pressed.emit()
+
+	assert_signal_emitted_with_parameters(GameEvents, "story_switch_requested", [slot.slot_id])
+
+
+# ---------------------------------------------------------------------------
+# Test 14 — Sessions-tab "Save" action calls SaveManager.save_slot("default") (Slice 6)
+# ---------------------------------------------------------------------------
+
+func test_sessions_tab_save_action_calls_save_slot_with_default_id() -> void:
+	# Slice 6: a Sessions-tab "Save" action (whatever control triggers it —
+	# direct SaveManager.save_slot() call or an emitted signal a handler maps
+	# to save_slot()) must write a .tres file at
+	# SaveManager._slot_path(_default_slot.slot_id) == _slot_path("default").
+	#
+	# This unit test calls the tab's save handler directly (_on_save_pressed())
+	# rather than going through the scene's button — the scene-instantiated
+	# button wiring is covered by the integration test
+	# (tests/integration/notebook/test_sessions_tab.gd).
+	#
+	# HERMETIC FILE I/O: back up any real user://slots/slot_default.tres before
+	# the save and restore it afterwards so this test never clobbers a real
+	# player's default save.
+	var slot_path: String = SaveManager._slot_path("default")
+	var had_existing_file: bool = FileAccess.file_exists(slot_path)
+	var existing_bytes: PackedByteArray = PackedByteArray()
+	if had_existing_file:
+		existing_bytes = FileAccess.get_file_as_bytes(slot_path)
+
+	# PlayerData needs a seeded resource so save_slot() has something meaningful
+	# to serialize. PlayerData._load_resource() is reset in foundation tests'
+	# before_each() patterns; here we seed directly since this is a standalone
+	# unit test of the tab's handler.
+	var data: PlayerDataResource = PlayerDataResource.new()
+	data.reset_to_new_game()
+	PlayerData._load_resource(data)
+
+	var tab: SessionsTab = add_child_autofree(SessionsTab.new())
+
+	# Remove any stale file from a previous failed run so the assertion below is
+	# unambiguous about this call having written it.
+	if FileAccess.file_exists(slot_path):
+		DirAccess.remove_absolute(slot_path)
+
+	tab._on_save_pressed()
+
+	assert_true(FileAccess.file_exists(slot_path),
+			"the Sessions-tab Save action must call SaveManager.save_slot() with the default slot id, writing a file at '%s'" % slot_path)
+
+	# Cleanup: restore the pre-existing file (or remove the one we wrote).
+	if had_existing_file:
+		var f: FileAccess = FileAccess.open(slot_path, FileAccess.WRITE)
+		f.store_buffer(existing_bytes)
+		f.close()
+	elif FileAccess.file_exists(slot_path):
+		DirAccess.remove_absolute(slot_path)

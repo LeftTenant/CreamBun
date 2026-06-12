@@ -45,3 +45,11 @@ signal quest_completed(id: StringName)
 signal story_created(slot: Variant)
 signal story_loaded(slot: Variant)
 signal story_switch_requested(slot_id: String)
+
+# Currency
+signal gold_changed(new_total: int)
+
+# Game data lifecycle
+# Emitted by PlayerData._load_resource() after new_game()/load_slot() so all
+# listeners (HUD, open notebook tab) rebind to the fresh resource in one place.
+signal player_data_loaded()

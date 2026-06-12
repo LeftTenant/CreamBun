@@ -6,7 +6,8 @@ extends VBoxContainer
 ##   1. A Label showing the story's display name.
 ##   2. A ColorRect showing the story's cover colour (16×16 px swatch).
 ##   3. A Label showing the last-played date (hardcoded "N/A" in Phase 1).
-##   4. A Button labelled "Switch to this Story" (no-op in Phase 1).
+##   4. A Button labelled "Switch to this Story" — emits
+##      GameEvents.story_switch_requested(slot_id) when pressed (Slice 6).
 ##
 ## The static layout (NameLabel, CoverRect, LastPlayedLabel, SwitchButton)
 ## lives in story_card.tscn as saved editor nodes. This script handles only
@@ -16,8 +17,8 @@ extends VBoxContainer
 ## Call setup(slot) after adding this node to the tree to populate it with
 ## data from a StorySlot resource.
 ##
-## Phase 2 will wire the SwitchButton to GameEvents.story_switch_requested.
 ## See: docs/features/notebook/design.md §5 (Sessions Tab)
+## See: docs/features/game-data/design.md §6, §10 (save/load wiring)
 
 
 # ---------------------------------------------------------------------------
@@ -47,8 +48,8 @@ var _slot: StorySlot
 # Phase 2 will write a formatted last-played timestamp (e.g. "Last played: 3 Apr 2026") here.
 @onready var _last_played_label: Label = $LastPlayedLabel
 
-# The switch-story button. No-op in Phase 1; Phase 2 wires it to
-# GameEvents.story_switch_requested. Declared in story_card.tscn.
+# The switch-story button. Pressing it emits GameEvents.story_switch_requested
+# with this card's slot id (Slice 6). Declared in story_card.tscn.
 # https://docs.godotengine.org/en/stable/classes/class_button.html
 @onready var _switch_button: Button = $SwitchButton
 
@@ -59,8 +60,6 @@ var _slot: StorySlot
 
 func _ready() -> void:
 	# Wire the pressed signal so the button is not a dead widget.
-	# In Phase 1, _on_switch_pressed only logs a warning.
-	# Phase 2 will emit the real GameEvents.story_switch_requested signal here.
 	# https://docs.godotengine.org/en/stable/classes/class_signal.html#class-signal-method-connect
 	_switch_button.pressed.connect(_on_switch_pressed)
 
@@ -87,10 +86,9 @@ func setup(slot: StorySlot) -> void:
 # ---------------------------------------------------------------------------
 
 ## Called when the player presses "Switch to this Story".
-## Phase 1: logs a warning so developers know the button is connected but
-## not yet implemented. Phase 2: emits GameEvents.story_switch_requested.
+## Emits GameEvents.story_switch_requested with this card's slot id so a
+## listener (the Sessions tab) can call SaveManager.load_slot()/new_game()
+## and rebind the rest of the UI via player_data_loaded/story_loaded.
+## https://docs.godotengine.org/en/stable/classes/class_signal.html#class-signal-method-emit
 func _on_switch_pressed() -> void:
-	# push_warning() appears in the Godot editor Output panel without crashing
-	# the game. It signals that this path is intentionally unfinished.
-	# https://docs.godotengine.org/en/stable/classes/class_@globalscope.html#class-globalscope-method-push-warning
-	push_warning("StoryCard: Switch to this Story pressed — not yet implemented (Phase 2).")
+	GameEvents.story_switch_requested.emit(_slot.slot_id)

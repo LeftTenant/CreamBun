@@ -10,12 +10,26 @@
 ##   - Completed/active sectioning: rows in correct containers, divider visibility
 ##   - ViewButton minimum width preserved after setup() (regression guard for
 ##     the layout defect where ViewButton collapsed to zero width)
+##   - QuestsTab reads quest progress from PlayerData.quest_log (Slice 4) —
+##     two independently-instantiated tabs reading the same PlayerData.quest_log
+##     render identical progress, and detail view objectives match the seeded
+##     completed_objectives indices
 ##
 ## These are integration tests (not unit tests) because they exercise:
 ##   - QuestsTab + QuestRow + QuestData + QuestLog wired together in-tree
 ##   - Named node navigation (find_child on @onready targets after populate())
 ##   - The free-and-rebuild refresh path guarded by _refresh_right_page()
 ##   - Layout measurement after a process frame (custom_minimum_size.x check)
+##   - The PlayerData autoload as the single shared source of truth for
+##     quest progress across multiple QuestsTab instances
+##
+## --- PLAYERDATA SEEDING NOTE (Slice 4) ---
+## before_each() seeds PlayerData with a PlayerDataResource that has had
+## reset_to_new_game() applied (NOT a bare PlayerDataResource.new()), because
+## only reset_to_new_game() runs _seed_starter_content() — the single source
+## of truth for the foraging-book quest's COMPLETED seed data. This mirrors a
+## fresh "New Story" launch, matching what QuestsTab sees in-game.
+## See docs/features/game-data/design.md §9.2, §11 Step 2.
 ##
 ## Requires GUT: https://github.com/bitwes/Gut
 ## Install via Godot Asset Library (search "GUT - Godot Unit Testing").
@@ -34,6 +48,20 @@ extends GutTest
 # ---------------------------------------------------------------------------
 
 const QUEST_ROW_SCENE: String = "res://ui/notebook/quests/quest_row.tscn"
+
+
+# ---------------------------------------------------------------------------
+# Setup
+# ---------------------------------------------------------------------------
+
+func before_each() -> void:
+	# Seed PlayerData the way a fresh "New Story" does: reset_to_new_game()
+	# runs _seed_starter_content(), which seeds the_foraging_book quest as
+	# COMPLETED with completed_objectives [0, 1, 2]. QuestsTab._ready() no
+	# longer seeds anything itself — it reads PlayerData.quest_log directly.
+	var data: PlayerDataResource = PlayerDataResource.new()
+	data.reset_to_new_game()
+	PlayerData._load_resource(data)
 
 
 # ---------------------------------------------------------------------------
@@ -96,8 +124,10 @@ func test_populate_left_and_right_round_trip() -> void:
 	# does not crash and each produces at least one child in its parent.
 	# This is the baseline integration check before testing interaction.
 	#
-	# Tab added to tree (add_child_autofree) so _ready() runs and @onready
-	# refs — including _quest_log and _quests — are resolved before populate.
+	# Tab added to tree (add_child_autofree) so _ready() runs and _quests
+	# (loaded from the_foraging_book.tres) is resolved before populate. Quest
+	# progress now comes from PlayerData.quest_log (seeded in before_each()),
+	# not a self-owned _quest_log.
 	var tab: QuestsTab = add_child_autofree(QuestsTab.new())
 	var left_parent: Control = add_child_autofree(Control.new())
 	var right_parent: Control = add_child_autofree(Control.new())
@@ -301,3 +331,115 @@ func test_view_button_keeps_usable_width_after_setup() -> void:
 	# for any future intentional resize while still catching a collapse to zero.
 	assert_true(view_button.custom_minimum_size.x >= MIN_BUTTON_WIDTH,
 			"ViewButton.custom_minimum_size.x must be >= %.0f px after setup() so the button stays visible; got %.1f" % [MIN_BUTTON_WIDTH, view_button.custom_minimum_size.x])
+
+
+# ---------------------------------------------------------------------------
+# Test 6 — Detail view shows all three foraging-book objectives as [x]
+# ---------------------------------------------------------------------------
+
+func test_view_button_press_shows_all_objectives_completed() -> void:
+	# PlayerData.quest_log.states[&"the_foraging_book"]["completed_objectives"]
+	# is seeded as [0, 1, 2] by _seed_starter_content() — all three of
+	# the_foraging_book.tres's objectives are done. Pressing the row's
+	# ViewButton must render the title, description, and all three objective
+	# lines prefixed with "[x] " (none left as "[ ] ").
+	var tab: QuestsTab = add_child_autofree(QuestsTab.new())
+	var left_parent: Control = add_child_autofree(Control.new())
+	var right_parent: Control = add_child_autofree(Control.new())
+
+	tab.populate_left(left_parent)
+	tab.populate_right(right_parent)
+
+	var btn: Button = _find_view_button(left_parent)
+	assert_not_null(btn, "quest_row.tscn must provide a ViewButton under left_parent")
+	if btn == null:
+		return
+
+	# Act: select the_foraging_book by pressing its row's ViewButton.
+	btn.pressed.emit()
+
+	# Title — confirms the right page rendered detail for the_foraging_book.
+	var title_labels: Array[Label] = _find_labels(right_parent,
+			func(lbl: Label) -> bool: return lbl.text == "The Foraging Book")
+	assert_true(title_labels.size() >= 1,
+			"Detail view must show a Label with the_foraging_book's title 'The Foraging Book'")
+
+	# Description — confirms QuestData.description is rendered too.
+	var desc_labels: Array[Label] = _find_labels(right_parent,
+			func(lbl: Label) -> bool: return lbl.text == "Doug the bookshop keeper gave you a guide to foraging ingredients for brewing. This was the beginning of your adventure in Brewhamton.")
+	assert_true(desc_labels.size() >= 1,
+			"Detail view must show a Label with the_foraging_book's description")
+
+	# Objectives — all three of the_foraging_book.tres's objectives, each
+	# prefixed "[x] " because completed_objectives == [0, 1, 2] in the seed.
+	var expected_objectives: Array[String] = [
+		"Meet Doug at the bookshop",
+		"Receive the foraging guide",
+		"Read the introduction",
+	]
+	for objective_text: String in expected_objectives:
+		var checked_labels: Array[Label] = _find_labels(right_parent,
+				func(lbl: Label) -> bool: return lbl.text == "[x] " + objective_text)
+		assert_true(checked_labels.size() >= 1,
+				"Detail view must show '[x] %s' (completed_objectives seeds all three objectives as done)" % objective_text)
+
+	# Negative check: no "[ ] " (incomplete) objective lines should be present —
+	# all three are seeded as completed.
+	var unchecked_labels: Array[Label] = _find_labels(right_parent,
+			func(lbl: Label) -> bool: return lbl.text.begins_with("[ ] "))
+	assert_eq(unchecked_labels.size(), 0,
+			"Detail view must not show any '[ ] ' (incomplete) objective lines for the_foraging_book")
+
+
+# ---------------------------------------------------------------------------
+# Test 7 — Two QuestsTabs reading the same PlayerData.quest_log agree
+# ---------------------------------------------------------------------------
+
+func test_two_quests_tabs_reading_same_player_data_render_identical_progress() -> void:
+	# This is the scenario the PlayerData migration is meant to enable: two
+	# independently-instantiated QuestsTabs both read PlayerData.quest_log as
+	# their single shared source of truth, so they must render identical
+	# quest progress — both place the_foraging_book under CompletedSection
+	# with the separator hidden.
+	var tab_a: QuestsTab = add_child_autofree(QuestsTab.new())
+	var tab_b: QuestsTab = add_child_autofree(QuestsTab.new())
+
+	var left_parent_a: Control = add_child_autofree(Control.new())
+	var left_parent_b: Control = add_child_autofree(Control.new())
+
+	tab_a.populate_left(left_parent_a)
+	tab_b.populate_left(left_parent_b)
+
+	# Both tabs must place the_foraging_book row under CompletedSection.
+	var completed_a: Node = left_parent_a.find_child("CompletedSection", true, false)
+	var completed_b: Node = left_parent_b.find_child("CompletedSection", true, false)
+	assert_not_null(completed_a, "tab_a must produce a named CompletedSection container")
+	assert_not_null(completed_b, "tab_b must produce a named CompletedSection container")
+	if completed_a == null or completed_b == null:
+		return
+
+	assert_eq(completed_a.get_child_count(), completed_b.get_child_count(),
+			"Both tabs must place the same number of rows in CompletedSection (single shared PlayerData.quest_log)")
+	assert_true(completed_a.get_child_count() >= 1,
+			"CompletedSection must contain the_foraging_book row (seeded COMPLETED)")
+
+	# Both tabs must agree on _get_status() for the_foraging_book directly —
+	# this is the read path both populate_left() calls go through.
+	assert_eq(tab_a._get_status(&"the_foraging_book"), tab_b._get_status(&"the_foraging_book"),
+			"Both QuestsTab instances must report the same status for the_foraging_book")
+	assert_eq(tab_a._get_status(&"the_foraging_book"), QuestLog.Status.COMPLETED,
+			"the_foraging_book should be COMPLETED via the shared PlayerData.quest_log")
+
+	# CompletedSeparator must be hidden on both — no ACTIVE bucket exists in
+	# either tab's view of the (shared) quest log.
+	var separator_a: Node = left_parent_a.find_child("CompletedSeparator", true, false)
+	var separator_b: Node = left_parent_b.find_child("CompletedSeparator", true, false)
+	assert_not_null(separator_a, "tab_a must produce a named CompletedSeparator node")
+	assert_not_null(separator_b, "tab_b must produce a named CompletedSeparator node")
+	if separator_a == null or separator_b == null:
+		return
+
+	assert_false((separator_a as CanvasItem).visible,
+			"tab_a's CompletedSeparator must be hidden (no ACTIVE quests in shared quest_log)")
+	assert_false((separator_b as CanvasItem).visible,
+			"tab_b's CompletedSeparator must be hidden (no ACTIVE quests in shared quest_log)")

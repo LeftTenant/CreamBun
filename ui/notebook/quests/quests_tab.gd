@@ -6,8 +6,12 @@ extends NotebookTab
 ## it and populates the right page with the title, description, and an
 ## objective checklist derived from QuestLog progress data.
 ##
-## The foraging book intro quest is pre-seeded as COMPLETED in _ready() so
-## every new player has a non-empty quest log from the first notebook open.
+## Quest progress is read from PlayerData.quest_log (see autoloads/player_data.gd).
+## The foraging book intro quest is pre-seeded as COMPLETED by
+## PlayerDataResource._seed_starter_content() — every new player has a
+## non-empty quest log from the first notebook open, with exactly one
+## seeding location (the design's single source of truth, see
+## docs/features/game-data/design.md §9.2).
 ##
 ## Quest definitions live in .tres files (one per quest) and are loaded at
 ## runtime. Phase 1 contains exactly one quest. Phase 2 will load all quests
@@ -43,10 +47,6 @@ const QUEST_ROW_SCENE: PackedScene = preload("res://ui/notebook/quests/quest_row
 # Private vars
 # ---------------------------------------------------------------------------
 
-# The player's quest progress. Built in _ready() and pre-populated with the
-# intro quest so the list is never empty on first open.
-var _quest_log: QuestLog
-
 # All quest definitions loaded at startup. Phase 1: one entry.
 # Phase 2 will replace the hardcoded array with a directory scan.
 var _quests: Array[QuestData] = []
@@ -72,23 +72,6 @@ var _left_page: VBoxContainer = null
 # ---------------------------------------------------------------------------
 
 func _ready() -> void:
-	# Create a fresh log so this tab owns its own mutable state rather than
-	# sharing a singleton. Phase 2 will replace this with a SaveManager load.
-	_quest_log = QuestLog.new()
-
-	# Seed the foraging book as COMPLETED — it is the intro quest that every
-	# player receives from Doug before they start foraging. Marking it complete
-	# at startup gives the player a sense of history and shows how the COMPLETED
-	# visual treatment (dim + checkmark) looks in practice.
-	#
-	# The dictionary value mirrors the format SaveManager will use for persistence
-	# so we do not need a schema migration when saving is wired up in Phase 2.
-	# completed_objectives lists the indices of each objective in QuestData.objectives.
-	_quest_log.states[&"the_foraging_book"] = {
-		"status": QuestLog.Status.COMPLETED,
-		"completed_objectives": [0, 1, 2],
-	}
-
 	# Load quest definitions. The resource is loaded once at startup and held
 	# for the session lifetime — .tres files are cached by Godot's ResourceLoader
 	# so subsequent loads return the same object without re-parsing the file.
@@ -291,11 +274,15 @@ func _add_quest_row(quest: QuestData, status: int, section: VBoxContainer) -> vo
 ## Quests absent from the log are treated as HIDDEN so the UI does not show
 ## quests the player has not yet encountered.
 ##
+## Reads from PlayerData.quest_log — the single source of truth for quest
+## progress (see docs/features/game-data/design.md §7.1: reads go straight
+## through the autoload).
+##
 ## @param quest_id - the StringName id from QuestData.id
 ## @return a QuestLog.Status int
 func _get_status(quest_id: StringName) -> int:
-	if _quest_log.states.has(quest_id):
-		return _quest_log.states[quest_id]["status"] as int
+	if PlayerData.quest_log.states.has(quest_id):
+		return PlayerData.quest_log.states[quest_id]["status"] as int
 	return QuestLog.Status.HIDDEN
 
 
@@ -382,10 +369,11 @@ func _refresh_right_page() -> void:
 	# Objectives checklist — each entry shows [x] if completed or [ ] if not.
 	# Phase 1 derives completion from the completed_objectives index list stored
 	# in the log entry. We do not need the status int here — only the indices.
+	# Read from PlayerData.quest_log — see _get_status() for the same pattern.
 	var completed_indices: Array = []
 
-	if _quest_log.states.has(_selected_quest.id):
-		var entry: Dictionary = _quest_log.states[_selected_quest.id] as Dictionary
+	if PlayerData.quest_log.states.has(_selected_quest.id):
+		var entry: Dictionary = PlayerData.quest_log.states[_selected_quest.id] as Dictionary
 		if entry.has("completed_objectives"):
 			completed_indices = entry["completed_objectives"] as Array
 

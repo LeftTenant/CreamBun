@@ -24,6 +24,16 @@
 ## The Notebook CanvasLayer sets process_mode = ALWAYS so it keeps ticking while
 ## paused — GUT's own process_mode also needs to be ALWAYS, which the GUT addon
 ## configures automatically when it is installed correctly.
+##
+## --- SLICE 5 CLOSE HOOK NOTE ---
+## notebook.gd's close() now calls SaveManager.save_settings() in addition to
+## its existing GameEvents.notebook_closed.emit() (design §11 Step 4, approved
+## option (a) — a single shared close hook in notebook.gd's close()). Every
+## test in this file that calls close() — including after_each()'s safety net —
+## therefore writes user://settings.tres. before_each()/after_each() back up
+## and restore any pre-existing settings.tres so this suite never clobbers a
+## real player's settings file, and before_each() also gives SaveManager.settings
+## a fresh default GameSettings so the writes are deterministic.
 
 class_name TestNotebookShell
 extends GutTest
@@ -38,6 +48,11 @@ extends GutTest
 ## errors before it can clean up.
 var _notebook: Notebook
 
+## Backup of any pre-existing user://settings.tres bytes, restored in
+## after_each() — see "SLICE 5 CLOSE HOOK NOTE" above.
+var _settings_backup: PackedByteArray = PackedByteArray()
+var _had_settings_file: bool = false
+
 
 func before_each() -> void:
 	# Restore known-good state before every test. GameState starts at PLAYING
@@ -45,6 +60,16 @@ func before_each() -> void:
 	GameState.change_state(GameState.State.PLAYING)
 	get_tree().paused = false
 	_notebook = null
+
+	# Back up any real user://settings.tres before close()'s save_settings()
+	# side effect can overwrite it.
+	_had_settings_file = FileAccess.file_exists(SaveManager.SETTINGS_PATH)
+	if _had_settings_file:
+		_settings_backup = FileAccess.get_file_as_bytes(SaveManager.SETTINGS_PATH)
+
+	# Give SaveManager a fresh, default GameSettings so every test's close()
+	# writes a deterministic, known payload.
+	SaveManager.settings = GameSettings.new()
 
 
 func after_each() -> void:
@@ -57,6 +82,17 @@ func after_each() -> void:
 	get_tree().paused = false
 	# Reset game state so the next test starts from a clean baseline.
 	GameState.change_state(GameState.State.PLAYING)
+
+	# Restore (or remove) user://settings.tres to whatever existed before this
+	# test ran, then reset SaveManager.settings so later suites don't see a
+	# stale instance from this file.
+	if _had_settings_file:
+		var f: FileAccess = FileAccess.open(SaveManager.SETTINGS_PATH, FileAccess.WRITE)
+		f.store_buffer(_settings_backup)
+		f.close()
+	elif FileAccess.file_exists(SaveManager.SETTINGS_PATH):
+		DirAccess.remove_absolute(SaveManager.SETTINGS_PATH)
+	SaveManager.settings = null
 
 
 # ---------------------------------------------------------------------------
@@ -468,3 +504,166 @@ func test_notebook_input_shift_tab_cycles_backward_with_wrap() -> void:
 
 	assert_eq(nb._current_tab, Notebook.NotebookTab.SESSIONS,
 			"Shift+Tab from INVENTORY must wrap backward to SESSIONS")
+
+
+# ---------------------------------------------------------------------------
+# Test 24 — close(): writes the current SaveManager.settings to settings.tres
+# ---------------------------------------------------------------------------
+
+func test_notebook_close_writes_settings_to_disk() -> void:
+	# design §11 Step 4: closing the notebook persists per-device settings via
+	# SaveManager.save_settings(). before_each() already gave SaveManager.settings
+	# a fresh default GameSettings; remove any pre-existing settings.tres here
+	# (restored in after_each()) so a non-existent file becoming present after
+	# close() is directly attributable to this slice's close hook.
+	if FileAccess.file_exists(SaveManager.SETTINGS_PATH):
+		DirAccess.remove_absolute(SaveManager.SETTINGS_PATH)
+	assert_false(FileAccess.file_exists(SaveManager.SETTINGS_PATH),
+			"precondition: settings.tres should not exist before close()")
+
+	var nb: Notebook = _make_notebook()
+	nb.open()
+	nb.close()
+
+	assert_true(FileAccess.file_exists(SaveManager.SETTINGS_PATH),
+			"close() must write user://settings.tres via SaveManager.save_settings()")
+
+
+# ---------------------------------------------------------------------------
+# Test 25 — close() -> load_settings(): round-trips a changed setting
+# ---------------------------------------------------------------------------
+
+func test_notebook_close_then_load_settings_round_trips_changed_value() -> void:
+	# Arrange: change a setting on the shared SaveManager.settings instance —
+	# simulating a player moving the Master Volume slider via SettingsTab,
+	# whose _settings IS SaveManager.settings (Slice 5).
+	SaveManager.settings.master_volume = 0.3
+	SaveManager.settings.window_scale = 4
+
+	var nb: Notebook = _make_notebook()
+	nb.open(Notebook.NotebookTab.SETTINGS)
+	nb.close()
+
+	# Act: load into a FRESH SaveManager.settings instance so this is a genuine
+	# round trip through disk, not a read of the same object we just wrote.
+	SaveManager.settings = null
+	SaveManager.load_settings()
+
+	assert_not_null(SaveManager.settings,
+			"load_settings() should populate SaveManager.settings after notebook close persisted it")
+	assert_eq(SaveManager.settings.master_volume, 0.3,
+			"master_volume (0.3) must survive a notebook close + load_settings() round trip")
+	assert_eq(SaveManager.settings.window_scale, 4,
+			"window_scale (4) must survive a notebook close + load_settings() round trip")
+
+
+# ---------------------------------------------------------------------------
+# Test 26 — reopen to Settings after close shows persisted (non-default) values
+# ---------------------------------------------------------------------------
+
+func test_reopen_to_settings_after_close_shows_persisted_values() -> void:
+	# Open to Settings, change a value (simulating a slider edit on the shared
+	# SaveManager.settings), close (persists via save_settings()), then reopen
+	# to Settings again. The second populate_left() pass must show the
+	# persisted value, not reset to GameSettings defaults — proving
+	# SettingsTab keeps reading the shared SaveManager.settings instance across
+	# a close + reopen cycle within the same session.
+	var nb: Notebook = _make_notebook()
+	nb.open(Notebook.NotebookTab.SETTINGS)
+
+	# Simulate a slider edit: SettingsTab._settings IS SaveManager.settings
+	# (Slice 5), so mutating the shared instance is equivalent to moving the
+	# slider for the purposes of this test.
+	SaveManager.settings.master_volume = 0.45
+
+	nb.close()
+	nb.open(Notebook.NotebookTab.SETTINGS)
+
+	var settings_tab: SettingsTab = nb._tab_instances[Notebook.NotebookTab.SETTINGS] as SettingsTab
+	assert_not_null(settings_tab,
+			"precondition: a SettingsTab instance must exist after opening to SETTINGS")
+	assert_almost_eq(settings_tab._master_slider.value, 45.0, 0.001,
+			"reopening to Settings after close must show the persisted master_volume (0.45 -> slider 45.0), not the GameSettings default (100.0)")
+
+	nb.close()
+
+
+# ---------------------------------------------------------------------------
+# Test 27 — settings-only edit + close does not change PlayerData.to_resource()
+# ---------------------------------------------------------------------------
+
+func test_settings_edit_and_close_does_not_change_player_data() -> void:
+	# design §5 / §11 Step 4: GameSettings stays OUT of PlayerData — settings
+	# are per-device, PlayerData is per-save. Seed PlayerData the way a fresh
+	# "New Story" does (mirrors test_quests_tab.gd / test_inventory_tab*.gd
+	# conventions for Slice 3/4), capture distinguishing values, then perform a
+	# settings-only edit + notebook close and confirm PlayerData is untouched.
+	var data: PlayerDataResource = PlayerDataResource.new()
+	data.reset_to_new_game()
+	PlayerData._load_resource(data)
+	PlayerData.gold = 250
+
+	var resource_before: PlayerDataResource = PlayerData.to_resource()
+	var gold_before: int = PlayerData.gold
+	var stack_count_before: int = PlayerData.inventory.stacks.size()
+	var quest_states_before: Dictionary = PlayerData.quest_log.states.duplicate(true)
+
+	var nb: Notebook = _make_notebook()
+	nb.open(Notebook.NotebookTab.SETTINGS)
+	SaveManager.settings.master_volume = 0.1
+	SaveManager.settings.window_scale = 1
+	nb.close()
+
+	assert_same(PlayerData.to_resource(), resource_before,
+			"a settings-only edit + notebook close must not swap PlayerData._resource")
+	assert_eq(PlayerData.gold, gold_before,
+			"a settings-only edit + notebook close must not change PlayerData.gold")
+	assert_eq(PlayerData.inventory.stacks.size(), stack_count_before,
+			"a settings-only edit + notebook close must not change PlayerData.inventory stack count")
+	assert_eq(PlayerData.quest_log.states, quest_states_before,
+			"a settings-only edit + notebook close must not change PlayerData.quest_log.states")
+
+
+# ---------------------------------------------------------------------------
+# Test 28 — close() persists settings regardless of which tab was last active
+# ---------------------------------------------------------------------------
+
+func test_notebook_close_persists_settings_regardless_of_active_tab() -> void:
+	# The close hook (design §11 Step 4, approved option (a)) lives in
+	# notebook.gd's close() itself — a single shared call, not a per-tab
+	# listener. Closing while a DIFFERENT tab (INVENTORY) is active must still
+	# persist SaveManager.settings, proving the hook does not depend on
+	# SettingsTab being the active tab when close() runs.
+	SaveManager.settings.sfx_volume = 0.2
+
+	var nb: Notebook = _make_notebook()
+	# Open to SETTINGS first so _settings is sourced from SaveManager.settings
+	# and the edit above is "live" on the shared instance, then switch away.
+	nb.open(Notebook.NotebookTab.SETTINGS)
+	nb._switch_tab(Notebook.NotebookTab.INVENTORY)
+	nb.close()
+
+	SaveManager.settings = null
+	SaveManager.load_settings()
+
+	assert_eq(SaveManager.settings.sfx_volume, 0.2,
+			"closing while INVENTORY (not SETTINGS) is active must still persist sfx_volume (0.2) via the shared close hook")
+
+
+# ---------------------------------------------------------------------------
+# Test 29 — close(): notebook_closed still emits exactly once with the new hook
+# ---------------------------------------------------------------------------
+
+func test_notebook_close_emits_notebook_closed_exactly_once_with_save_hook() -> void:
+	# Regression guard: adding the save_settings() call to close() must not
+	# cause notebook_closed to be emitted more than once (e.g. via an
+	# accidental extra signal connection added alongside the new hook).
+	var nb: Notebook = _make_notebook()
+	nb.open()
+
+	watch_signals(GameEvents)
+
+	nb.close()
+
+	assert_signal_emit_count(GameEvents, "notebook_closed", 1,
+			"close() must emit GameEvents.notebook_closed exactly once even with the new save_settings() hook")

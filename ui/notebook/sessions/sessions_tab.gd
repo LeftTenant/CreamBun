@@ -2,20 +2,26 @@ class_name SessionsTab
 extends NotebookTab
 ## The Sessions tab of the in-game notebook.
 ##
-## Phase 1 shows a single "Default Story" card on the left page and a static
-## placeholder message on the right page. The card is non-interactive beyond
-## logging a warning when the switch button is pressed.
+## Phase 1 shows a single "Default Story" card on the left page, a "Save"
+## button below it, and a static placeholder message on the right page.
+##
+## The card's "Switch to this Story" button emits
+## GameEvents.story_switch_requested(slot_id); this tab listens for that
+## signal and drives the actual load (see _on_story_switch_requested()).
+## The "Save" button calls SaveManager.save_slot() directly (see
+## _on_save_pressed()).
 ##
 ## In later phases this tab will list all saved story slots and let the player
 ## rename, delete, or switch between them.
 ##
-## The static layout (LeftPage subtree with CardsContainer; RightPage subtree
-## with Placeholder) lives in sessions_tab.tscn. populate_left() /
-## populate_right() instantiate that scene once, extract and reparent the page
-## subtrees, then bind data. This is the same pattern established in
-## QuestsTab / InventoryTab (Slices 3 and 2).
+## The static layout (LeftPage subtree with CardsContainer + SaveButton;
+## RightPage subtree with Placeholder) lives in sessions_tab.tscn.
+## populate_left() / populate_right() instantiate that scene once, extract and
+## reparent the page subtrees, then bind data. This is the same pattern
+## established in QuestsTab / InventoryTab (Slices 3 and 2).
 ##
 ## Design doc: docs/features/notebook/design.md §5 (Sessions Tab)
+## Design doc: docs/features/game-data/design.md §6, §10 (save/load wiring)
 ## Refactor:   docs/refactors/notebook-ui-scene-migration.md
 
 
@@ -68,10 +74,20 @@ func _ready() -> void:
 	# Build the default slot here rather than as a class constant so that
 	# StorySlot properties (which come from a Resource) are available.
 	# The warm-brown colour (0.6, 0.4, 0.2) evokes a well-worn journal cover.
+	# slot_id "default" matches SaveManager._slot_path()/load_slot()/save_slot()'s
+	# single Phase-1 slot id (design §6.1 — no slot index yet).
 	_default_slot = StorySlot.new()
 	_default_slot.slot_id = "default"
 	_default_slot.display_name = "Default Story"
 	_default_slot.cover_color = Color(0.6, 0.4, 0.2)
+
+	# Listen for "Switch to this Story" requests from any StoryCard (emitted by
+	# story_card.gd's _on_switch_pressed()). Guard with is_connected() so this
+	# tab's _ready() running more than once (e.g. repeated test instantiation)
+	# does not register duplicate handlers.
+	# https://docs.godotengine.org/en/stable/classes/class_signal.html#class-signal-method-connect
+	if not GameEvents.story_switch_requested.is_connected(_on_story_switch_requested):
+		GameEvents.story_switch_requested.connect(_on_story_switch_requested)
 
 
 # ---------------------------------------------------------------------------
@@ -145,6 +161,18 @@ func populate_left(parent: Control) -> void:
 	card.setup(_default_slot)
 	_left_cards.append(card)
 
+	# Resolve the SaveButton from the LeftPage subtree and wire its press to
+	# the save handler. Using get_node() here (not @onready) for the same
+	# per-call-tree-shape reason as CardsContainer above. Guard with
+	# is_connected() so repeated populate_left() calls do not register
+	# duplicate handlers (same pattern as InventoryTab's footer buttons).
+	# https://docs.godotengine.org/en/stable/classes/class_button.html
+	var save_button: Button = _left_page.get_node("SaveButton") as Button
+	if save_button == null:
+		push_warning("SessionsTab.populate_left: 'SaveButton' node not found in sessions_tab.tscn — check node name matches")
+	elif not save_button.pressed.is_connected(_on_save_pressed):
+		save_button.pressed.connect(_on_save_pressed)
+
 
 ## Populate the right page with the static Placeholder Label.
 ##
@@ -179,6 +207,37 @@ func populate_right(parent: Control) -> void:
 # ---------------------------------------------------------------------------
 # Private methods
 # ---------------------------------------------------------------------------
+
+## Called when the player presses the "Save" button.
+## Writes the current PlayerData state to the default slot file via
+## SaveManager.save_slot() (design §6.2, §10). Saving stays explicit in
+## Phase 1 — no autosave-on-every-change.
+## https://docs.godotengine.org/en/stable/classes/class_resourcesaver.html
+func _on_save_pressed() -> void:
+	SaveManager.save_slot(_default_slot.slot_id)
+
+
+## Called when any StoryCard emits GameEvents.story_switch_requested (Slice 6).
+##
+## Attempts SaveManager.load_slot(slot_id); if no save file exists yet (first
+## run), falls back to SaveManager.new_game() so PlayerData is never left in a
+## stale or untouched state. Either path swaps PlayerData._resource and emits
+## GameEvents.player_data_loaded (see SaveManager/PlayerData). On a successful
+## load_slot(), this handler additionally emits GameEvents.story_loaded so any
+## other UI (e.g. an open Inventory/Quests tab) can rebind alongside
+## player_data_loaded (design §8).
+##
+## @param slot_id - the StorySlot.slot_id of the card whose switch was pressed.
+func _on_story_switch_requested(slot_id: String) -> void:
+	var loaded: bool = SaveManager.load_slot(slot_id)
+	if loaded:
+		GameEvents.story_loaded.emit(_default_slot)
+	else:
+		# First run (or a deleted/corrupt save) — start a fresh game rather
+		# than leaving PlayerData untouched or crashing (design §10's
+		# load_slot()-fails fallback).
+		SaveManager.new_game()
+
 
 ## Instantiate TAB_SCENE once per SessionsTab lifetime, extract both page
 ## VBoxContainers, and discard the scene shell. Called at the start of each

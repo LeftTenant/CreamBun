@@ -12,6 +12,8 @@
 ;     populate_left()/populate_right() (PRESET_FULL_RECT + 10px insets).
 ;   * CardsContainer children (StoryCard instances) are added dynamically by
 ;     populate_left(); the container is empty in editor preview.
+;   * SaveButton (Slice 6) triggers SessionsTab._on_save_pressed(), wired in
+;     populate_left() -> SaveManager.save_slot("default").
 ;   * RightPage's Placeholder text is the entire right-page story for Phase 1;
 ;     no dynamic content is added (D2: right page is purely static).
 ; custom_minimum_size is set on the Placeholder Label both to silence Godot's
@@ -33,6 +35,11 @@ size_flags_vertical = 3
 
 [node name="CardsContainer" type="VBoxContainer" parent="LeftPage"]
 size_flags_horizontal = 3
+
+[node name="SaveButton" type="Button" parent="LeftPage"]
+size_flags_horizontal = 3
+text = "Save"
+tooltip_text = "Save the current story to the default slot"
 
 [node name="RightPage" type="VBoxContainer" parent="."]
 offset_left = 250.0
