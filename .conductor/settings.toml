@@ -1,0 +1,48 @@
+#:schema https://conductor.build/schemas/settings.repo.schema.json
+
+# Conductor shared configuration for CreamBun (Godot 4.6, Mobile renderer).
+#
+# CreamBun has no package manager or build CLI — all iteration happens in the
+# Godot editor, and tests run through the bundled godot-testing MCP plugin (GUT).
+# Docs: https://www.conductor.build/docs/reference/settings
+#       https://www.conductor.build/docs/reference/scripts
+
+# Files to copy into every new workspace. These are gitignored, machine-local
+# dev dependencies that a fresh git worktree would otherwise be missing:
+#   - addons/gut/**                              the GUT test framework, installed
+#                                                once in the root per README setup
+#   - plugins/godot-testing/server/.config.json  the per-machine Godot binary path
+#                                                the testing-sandbox MCP server reads
+# The plugin's Python venv is intentionally NOT copied — venvs hard-code absolute
+# paths, and plugins/godot-testing/server/launch.sh recreates it on first run.
+# (If `**` recursion ever misses files, switch to a root `.worktreeinclude` with
+# the gitignore-style line `addons/gut/`, which recurses unambiguously.)
+# Docs: https://www.conductor.build/docs/reference/files-to-copy
+file_include_globs = "addons/gut/**\nplugins/godot-testing/server/.config.json\n"
+
+[scripts]
+# setup — runs once when a workspace is created. Two safe, non-interactive steps:
+#   1. Fast-forward the root checkout so new workspaces branch from the latest
+#      remote commit (|| true keeps setup green when it can't fast-forward).
+#   2. Warm Godot's import cache headlessly so the first editor open and first
+#      test run don't have to reimport every asset, and so the just-copied GUT
+#      addon is registered. Guarded by `test -x` + `|| true` so workspace
+#      creation never fails if Godot isn't at the standard /Applications path.
+setup = "git -C \"$CONDUCTOR_ROOT_PATH\" fetch --prune origin && git -C \"$CONDUCTOR_ROOT_PATH\" pull --ff-only || true; test -x /Applications/Godot.app/Contents/MacOS/Godot && /Applications/Godot.app/Contents/MacOS/Godot --headless --path . --import >/dev/null 2>&1 || true"
+
+# run — the Run button launches the game (main scene res://world/world.tscn).
+# CreamBun is a desktop game, not a server, so it takes no port; CONDUCTOR_PORT
+# is intentionally unused. Teammates who install Godot somewhere other than
+# /Applications can override this line in .conductor/settings.local.toml.
+run = "/Applications/Godot.app/Contents/MacOS/Godot --path ."
+
+# Each workspace launches an independent Godot process with no shared fixed port
+# or database, so multiple workspaces can safely run at the same time.
+run_mode = "concurrent"
+
+# archive — runs before a workspace is archived. CreamBun keeps all generated
+# state inside the worktree (.godot/ import cache, .godot-test-reports/, the MCP
+# server venv), which Conductor removes together with the worktree. There is no
+# external resource to tear down, so this is a deliberate no-op placeholder for
+# any future external state (e.g. a named local DB or app-support directory).
+archive = "true"
