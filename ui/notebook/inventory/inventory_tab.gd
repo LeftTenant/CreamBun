@@ -18,11 +18,15 @@ extends NotebookTab
 ## the LeftPage / RightPage subtrees, and reparent them into the Controls
 ## provided by notebook.gd. The same pattern is established in SettingsTab.
 ##
-## _inventory and _item_registry are populated in _ready() with sample data
-## for Phase 1 so the tab is never visually empty during development.
-## In a later phase the notebook controller will inject the real player
-## Inventory via a setter before calling populate_left/right.
+## DATA SOURCE (Slice 3): the bag rendered here IS PlayerData.inventory — the
+## single source of truth for the current save. This tab no longer constructs
+## or owns its own Inventory. _item_registry remains a TEMPORARY local lookup
+## (StringName -> ItemData) until the real ItemDatabase helper exists (design
+## §13); it is rebuilt from PlayerData.inventory.stacks each time the right
+## page is built so current_weight() can resolve item weights without a
+## global item database.
 ##
+## Design doc: docs/features/game-data/design.md §7.4, §13
 ## Design doc: docs/features/notebook/design.md §3.1 (Inventory Tab)
 ## Refactor:   docs/refactors/notebook-ui-scene-migration.md
 
@@ -59,14 +63,10 @@ const SLOT_NODE_NAMES: Dictionary = {
 # Private vars
 # ---------------------------------------------------------------------------
 
-# The bag the player is currently carrying. Created fresh in _ready() with
-# sample items so the tab is useful on first open without save data.
-var _inventory: Inventory = null
-
-# Maps StringName (item id) → ItemData. Built alongside _inventory so
-# Inventory.current_weight() can resolve ids to weights without a global
-# item database autoload. Pattern mirrors QuestsTab's approach of owning
-# its own data for Phase 1.
+# TEMPORARY local lookup: maps StringName (item id) → ItemData, rebuilt from
+# PlayerData.inventory.stacks each time the right page is built. Stands in for
+# the future ItemDatabase helper (design §13) so Inventory.current_weight()
+# can resolve ids to weights without a global item database autoload.
 var _item_registry: Dictionary = {}
 
 # The row the player most recently clicked. Null means nothing is selected.
@@ -111,32 +111,15 @@ var _right_page: VBoxContainer = null
 # ---------------------------------------------------------------------------
 
 func _ready() -> void:
-	# Create a fresh inventory owned by this tab. Phase 2 will replace this
-	# with the real player inventory injected by the notebook controller.
-	_inventory = Inventory.new()
-
-	# --- Sample leaf item ---
-	# A stackable ingredient so the player can see a count badge and experience
-	# the full weight calculation immediately.
-	var leaf: ItemData = ItemData.new()
-	leaf.id = &"sample_leaf"
-	leaf.display_name = "Forest Leaf"
-	leaf.weight = 0.5
-	leaf.stackable = true
-	leaf.max_stack = 99
-	_inventory.add(leaf, 3)
-	_item_registry[leaf.id] = leaf
-
-	# --- Sample boots item ---
-	# A non-stackable equippable so both equipment-slot drag and the Equip
-	# button are testable without needing real .tres item files in Phase 1.
-	var boots: ItemData = ItemData.new()
-	boots.id = &"sample_boots"
-	boots.display_name = "Old Boots"
-	boots.weight = 0.8
-	boots.equip_slot = ItemData.EquipSlot.BOOTS
-	_inventory.add(boots, 1)
-	_item_registry[boots.id] = boots
+	# Listen for cross-system inventory changes (foraging, market, etc.) so an
+	# open tab stays in sync with PlayerData.inventory (design §7.4). Guarded
+	# with is_connected() because _ready() can run more than once for a node
+	# re-added to the tree — without the guard a second connection would cause
+	# _on_inventory_changed (and therefore _refresh_both_pages()) to run twice
+	# per emitted signal.
+	# https://docs.godotengine.org/en/stable/classes/class_signal.html#class-signal-method-is-connected
+	if not GameEvents.inventory_changed.is_connected(_on_inventory_changed):
+		GameEvents.inventory_changed.connect(_on_inventory_changed)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -224,7 +207,7 @@ func populate_left(parent: Control) -> void:
 
 		# Pass the currently equipped item (null when empty) so the slot shows
 		# either the slot-name label or the item icon straight away.
-		slot_node.setup(slot_enum, _inventory.equipped.get(slot_enum, null))
+		slot_node.setup(slot_enum, PlayerData.inventory.equipped.get(slot_enum, null))
 
 		# When a drop lands on this slot, _on_slot_drop() calls Inventory.equip()
 		# and refreshes both pages. Guard against duplicate connections: if
@@ -311,7 +294,7 @@ func _do_equip() -> void:
 		# Only items with a designated slot can be equipped.
 		if item.equip_slot == ItemData.EquipSlot.NONE:
 			return
-		_inventory.equip(item)
+		PlayerData.inventory.equip(item)
 		GameEvents.item_equipped.emit(item, item.equip_slot)
 		GameEvents.inventory_changed.emit()
 		_selected_row = null
@@ -319,7 +302,7 @@ func _do_equip() -> void:
 
 	elif _selected_slot != null:
 		# Equipment slot selected → unequip whatever is in it.
-		var old_item: ItemData = _inventory.unequip(_selected_slot._slot)
+		var old_item: ItemData = PlayerData.inventory.unequip(_selected_slot._slot)
 		if old_item != null:
 			GameEvents.item_unequipped.emit(old_item, _selected_slot._slot)
 			GameEvents.inventory_changed.emit()
@@ -349,7 +332,7 @@ func _do_throw() -> void:
 	# Remember which item was selected before the rebuild destroys all row nodes.
 	var prev_item_id: StringName = stack.item_id
 
-	_inventory.remove(item, 1)
+	PlayerData.inventory.remove(item, 1)
 	GameEvents.item_dropped.emit(item, 1)
 	GameEvents.inventory_changed.emit()
 
@@ -378,12 +361,12 @@ func _do_recycle() -> void:
 		return
 
 	# Remove the consumed item first, then add each yield stack.
-	_inventory.remove(item, 1)
+	PlayerData.inventory.remove(item, 1)
 	for yield_stack: ItemStack in item.recycle_yield:
 		# yield_stack.item may be null if the recycle_yield array was built from
 		# .tres without runtime hydration — skip those safely.
 		if yield_stack.item != null:
-			_inventory.add(yield_stack.item, yield_stack.count)
+			PlayerData.inventory.add(yield_stack.item, yield_stack.count)
 
 	GameEvents.item_recycled.emit(item, item.recycle_yield)
 	GameEvents.inventory_changed.emit()
@@ -409,7 +392,7 @@ func _on_slot_drop(stack: ItemStack, slot: int) -> void:
 	if item == null:
 		return
 
-	_inventory.equip(item)
+	PlayerData.inventory.equip(item)
 	GameEvents.item_equipped.emit(item, item.equip_slot)
 	GameEvents.inventory_changed.emit()
 	_selected_row = null
@@ -427,6 +410,20 @@ func _on_row_selected(row: InventoryRow) -> void:
 	_selected_row = row
 	_selected_row.set_selected(true)
 	_selected_slot = null
+
+
+## Called whenever GameEvents.inventory_changed fires, including from systems
+## that have nothing to do with this tab (foraging, market, equip/throw on
+## another tab instance). Per design §7.4, only rebuild while this tab is the
+## one currently shown — refreshing a hidden tab would waste work rebuilding
+## node trees nobody can see, and _build_right_page() frees the existing rows,
+## which could orphan a row mid-interaction on another tab.
+##
+## A hidden tab simply shows stale content until it is next populated; since
+## populate_right() always rebuilds from PlayerData.inventory, no data is lost.
+func _on_inventory_changed() -> void:
+	if visible:
+		_refresh_both_pages()
 
 
 # ---------------------------------------------------------------------------
@@ -478,6 +475,23 @@ func _ensure_pages_built() -> void:
 	instance.queue_free()
 
 
+## TEMPORARY (design §13): rebuild _item_registry from PlayerData.inventory.stacks.
+## Stands in for the future ItemDatabase helper — until that exists, the only
+## ItemData references this tab can resolve are the runtime refs Inventory.add()
+## already attached to each stack (ItemStack.item).
+##
+## A stack whose item_id is unknown to this tab and whose runtime `item` ref is
+## null (e.g. a stack loaded from save before rehydrate() exists, or an id this
+## tab has simply never seen) is skipped — current_weight() and the row-building
+## loop in _build_right_page() already treat a missing registry entry as "skip
+## this stack gracefully", so no special-casing is needed beyond not inserting it.
+func _rebuild_item_registry() -> void:
+	_item_registry.clear()
+	for stack: ItemStack in PlayerData.inventory.stacks:
+		if stack.item != null:
+			_item_registry[stack.item_id] = stack.item
+
+
 ## Clear the RowsContainer and rebuild it with one InventoryRow per stack.
 ## Called by populate_right() on first open and by _refresh_both_pages() on
 ## any inventory change.
@@ -488,6 +502,12 @@ func _build_right_page() -> void:
 	if _rows_container == null:
 		return
 
+	# Rebuild the temporary local registry from the bag's current stacks so
+	# weight calculations and lookups stay correct even when another system
+	# (foraging, market, ...) added items directly to PlayerData.inventory
+	# since the last build. See _rebuild_item_registry() for details.
+	_rebuild_item_registry()
+
 	# Remove all previously built row children before rebuilding.
 	# free() (not queue_free()) is intentional here: the rows are leaf nodes
 	# with no children to defer and we want them gone before we add new ones.
@@ -496,7 +516,7 @@ func _build_right_page() -> void:
 
 	# Add one row per stack. Stacks are ordered by insertion — the order the
 	# player picked items up. Phase 2 may add sorting controls.
-	for stack in _inventory.stacks:
+	for stack in PlayerData.inventory.stacks:
 		# Look up the ItemData. Prefer the registry (which always has the full
 		# object); fall back to the runtime ref on the stack for items added
 		# directly without going through _item_registry.
@@ -530,7 +550,7 @@ func _build_right_page() -> void:
 func _refresh_both_pages() -> void:
 	# Update each slot's equipped item without rebuilding from scratch.
 	for slot_node: EquipmentSlot in _equipment_slots:
-		slot_node.setup(slot_node._slot, _inventory.equipped.get(slot_node._slot, null))
+		slot_node.setup(slot_node._slot, PlayerData.inventory.equipped.get(slot_node._slot, null))
 
 	# Rebuild the row list — item list and weight header.
 	_build_right_page()
@@ -570,8 +590,8 @@ func _update_weight_label() -> void:
 	if _weight_label == null:
 		return
 
-	var current: float = _inventory.current_weight(_item_registry)
-	var cap: float = _inventory.capacity()
+	var current: float = PlayerData.inventory.current_weight(_item_registry)
+	var cap: float = PlayerData.inventory.capacity()
 
 	# When capacity is 0.0 there is no backpack equipped — show "∞" so the
 	# player knows they are currently carrying without a weight limit.

@@ -17,6 +17,18 @@
 ## _on_master_volume_changed() would call the private method directly and miss
 ## signal-wiring bugs.
 ##
+## --- SLICE 5 DATA SOURCE NOTE ---
+## SettingsTab._settings now IS SaveManager.settings (the same object, not a
+## copy — design §11 Step 4). before_each() gives SaveManager.settings a fresh
+## default GameSettings before each test, and after_each() clears it back to
+## null, so:
+##   a) the populated tab in this file always starts from documented defaults
+##      regardless of what an earlier test in this file (or another suite) left
+##      SaveManager.settings holding, and
+##   b) reset assertions that check SaveManager.settings directly (in addition
+##      to _tab._settings) prove the reset writes through to the shared
+##      instance, not just an in-memory copy held by the tab.
+##
 ## Requires GUT: https://github.com/bitwes/Gut
 ## Install via Godot Asset Library (search "GUT - Godot Unit Testing").
 ##
@@ -54,6 +66,12 @@ var _right_parent: Control
 
 
 func before_each() -> void:
+	# Slice 5: SettingsTab._settings now sources from SaveManager.settings (the
+	# same object, not a copy). Reset it to documented defaults BEFORE
+	# instantiating the tab so populate_left/right render the defaults this
+	# file's tests expect, regardless of what an earlier test left behind.
+	SaveManager.settings = GameSettings.new()
+
 	# Instantiate the scene (rather than SettingsTab.new()) so @onready and
 	# named-node lookups inside the script work exactly as they will in-game.
 	var packed: PackedScene = load(SCENE_PATH) as PackedScene
@@ -77,8 +95,9 @@ func before_each() -> void:
 
 
 func after_each() -> void:
-	# Autofree handles node cleanup; nothing extra needed here.
-	pass
+	# Autofree handles node cleanup. Clear SaveManager.settings so this file
+	# does not leak a stale instance into later suites.
+	SaveManager.settings = null
 
 
 # ---------------------------------------------------------------------------
@@ -314,6 +333,18 @@ func test_reset_left_restores_slider_defaults() -> void:
 	assert_almost_eq(_tab._settings.text_speed, 1.0, 0.001,
 			"_settings.text_speed must be 1.0 after left reset")
 
+	# Slice 5: _tab._settings IS SaveManager.settings (same object, not a copy),
+	# so the reset must be visible on the shared instance too — proving the
+	# reset writes through to the per-device settings, not an in-memory copy.
+	assert_almost_eq(SaveManager.settings.master_volume, 1.0, 0.001,
+			"SaveManager.settings.master_volume must be 1.0 after left reset")
+	assert_almost_eq(SaveManager.settings.music_volume, 1.0, 0.001,
+			"SaveManager.settings.music_volume must be 1.0 after left reset")
+	assert_almost_eq(SaveManager.settings.sfx_volume, 1.0, 0.001,
+			"SaveManager.settings.sfx_volume must be 1.0 after left reset")
+	assert_almost_eq(SaveManager.settings.text_speed, 1.0, 0.001,
+			"SaveManager.settings.text_speed must be 1.0 after left reset")
+
 
 # ---------------------------------------------------------------------------
 # Test 6 — Right reset button selects index 1 without emitting item_selected
@@ -368,3 +399,8 @@ func test_reset_right_selects_default_scale_without_signal() -> void:
 	# screenshot assertions in the e2e scenario would be wrong.
 	assert_signal_not_emitted(opt_btn, "item_selected",
 			"item_selected must not be emitted when the reset button programmatically sets the selection")
+
+	# Slice 5: _tab._settings IS SaveManager.settings (same object, not a copy),
+	# so the reset must be visible on the shared instance too.
+	assert_eq(SaveManager.settings.window_scale, 2,
+			"SaveManager.settings.window_scale must be 2 (default) after right reset")

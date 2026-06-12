@@ -119,10 +119,20 @@ func open(initial_tab: int = NotebookTab.INVENTORY) -> void:
 
 
 ## Closes the notebook, unpauses the world, and restores the prior game state.
+##
+## This is the single shared close-persistence hook for the notebook (design
+## §11 Step 4): SaveManager.save_settings() writes the shared, per-device
+## SaveManager.settings instance (mutated in place by SettingsTab — see
+## settings_tab.gd) to user://settings.tres, regardless of which tab was last
+## active. Any future close-time persistence (e.g. saving the active story
+## slot) should extend this same method rather than adding a second
+## notebook_closed listener, so there is one defined order of operations on
+## close.
 func close() -> void:
 	hide()
 	get_tree().paused = false
 	GameState.change_state(_previous_state)
+	SaveManager.save_settings()
 	GameEvents.notebook_closed.emit()
 
 

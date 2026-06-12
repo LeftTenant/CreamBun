@@ -19,6 +19,7 @@ config/features=PackedStringArray("4.6", "Mobile")
 GameEvents="*res://autoloads/game_events.gd"
 GameState="*res://autoloads/game_state.gd"
 SaveManager="*res://autoloads/save_manager.gd"
+PlayerData="*res://autoloads/player_data.gd"
 TestingServer="*res://plugins/godot-testing/godot/testing_server.gd"
 
 [display]

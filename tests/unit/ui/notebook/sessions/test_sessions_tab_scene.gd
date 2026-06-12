@@ -18,6 +18,13 @@
 ## CI time rather than during manual QA — at which point the Sessions tab would
 ## show a blank left page with no runtime error.
 ##
+## --- SLICE 6 ADDITION ---
+## sessions_tab.tscn must also declare a "SaveButton" Button node (under
+## LeftPage, alongside CardsContainer) — the Sessions-tab "Save" action that
+## SessionsTab._on_save_pressed() wires to SaveManager.save_slot("default")
+## (design §10). The existing LeftPage/CardsContainer/RightPage/Placeholder
+## contract is otherwise unchanged by this slice.
+##
 ## Requires GUT: https://github.com/bitwes/Gut
 ## Install via Godot Asset Library (search "GUT - Godot Unit Testing").
 ##
@@ -109,6 +116,34 @@ func test_left_page_contains_cards_container() -> void:
 		return
 	assert_true(container is VBoxContainer,
 			"'CardsContainer' must be a VBoxContainer, got %s" % container.get_class())
+
+
+# ---------------------------------------------------------------------------
+# Test 3b — LeftPage contains a SaveButton Button (Slice 6)
+# ---------------------------------------------------------------------------
+
+func test_left_page_contains_save_button() -> void:
+	# Slice 6: the Sessions-tab "Save" action (design §10) is a SaveButton
+	# declared as a saved editor node under LeftPage, alongside CardsContainer.
+	# SessionsTab.populate_left() wires SaveButton.pressed to
+	# _on_save_pressed(), which calls SaveManager.save_slot("default").
+	# A missing or mistyped node would silently remove the only visible save
+	# affordance from the Sessions tab.
+	var instance: SessionsTab = _make_scene_instance()
+
+	var left: Node = instance.find_child("LeftPage", true, false)
+	assert_not_null(left,
+			"sessions_tab.tscn must declare a node named 'LeftPage'")
+	if left == null:
+		return
+
+	var save_button: Node = left.find_child("SaveButton", true, false)
+	assert_not_null(save_button,
+			"LeftPage must contain a node named 'SaveButton'")
+	if save_button == null:
+		return
+	assert_true(save_button is Button,
+			"'SaveButton' must be a Button, got %s" % save_button.get_class())
 
 
 # ---------------------------------------------------------------------------

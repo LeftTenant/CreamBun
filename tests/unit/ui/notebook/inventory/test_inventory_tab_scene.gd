@@ -15,6 +15,15 @@
 ## that loads the PackedScene and walks the instantiated tree catches that breakage
 ## at CI time rather than during manual QA.
 ##
+## --- SLICE 3 DATA SOURCE NOTE ---
+## InventoryTab no longer builds sample data in _ready() — populate_right()
+## reads PlayerData.inventory directly (design §7.4, §13). These tests are
+## about scene STRUCTURE (named nodes, types), not bag contents, so
+## before_each() gives PlayerData a plain PlayerDataResource.new() (empty
+## inventory, no reset_to_new_game() seeding). This confirms populate_left/
+## populate_right/null-parent handling all still work against an empty
+## PlayerData-backed inventory, independent of any starter-bag content.
+##
 ## Requires GUT: https://github.com/bitwes/Gut
 ## Install via Godot Asset Library (search "GUT - Godot Unit Testing").
 ##
@@ -45,6 +54,19 @@ const SLOT_NAMES: Array[String] = [
 	"Slot_GOGGLES",
 	"Slot_NECKLACE",
 ]
+
+
+# ---------------------------------------------------------------------------
+# Setup
+# ---------------------------------------------------------------------------
+
+## Give PlayerData a plain, empty resource before every test. These tests
+## assert on scene STRUCTURE, not bag contents — an empty inventory keeps
+## that distinction clear and isolates this file from any starter-bag seeding
+## performed elsewhere. Per CLAUDE.md's dependency-injection guidance for
+## autoload tests.
+func before_each() -> void:
+	PlayerData._load_resource(PlayerDataResource.new())
 
 
 # ---------------------------------------------------------------------------
@@ -292,3 +314,185 @@ func test_populate_right_with_null_parent_does_not_crash() -> void:
 		return
 	tab.populate_right(null)
 	assert_true(true, "populate_right(null) completed without error")
+
+
+# ---------------------------------------------------------------------------
+# Test 13 — populate_right() against an empty PlayerData.inventory renders
+#           zero rows and a zero-weight header (no crash, no stale sample data)
+# ---------------------------------------------------------------------------
+
+func test_populate_right_with_empty_player_data_inventory_renders_no_rows() -> void:
+	# before_each() seeds PlayerData with a plain PlayerDataResource.new() —
+	# an empty Inventory (no stacks, nothing equipped). Since InventoryTab no
+	# longer constructs sample_leaf/sample_boots in _ready(), populate_right()
+	# must render zero InventoryRow children and a "Weight: 0.0 / ..." header,
+	# not the old hardcoded sample data.
+	var instance: Control = _make_scene_instance()
+	var tab: InventoryTab = instance as InventoryTab
+	assert_not_null(tab, "inventory_tab.tscn root must be castable to InventoryTab")
+	if tab == null:
+		return
+
+	var parent: Control = add_child_autofree(Control.new())
+	tab.populate_right(parent)
+
+	var rows_container: Node = parent.find_child("RowsContainer", true, false)
+	assert_not_null(rows_container, "RowsContainer must exist after populate_right()")
+	if rows_container != null:
+		assert_eq(rows_container.get_children().size(), 0,
+				"populate_right() with an empty PlayerData.inventory must render zero InventoryRow children")
+
+	var weight_label: Node = parent.find_child("WeightLabel", true, false)
+	assert_not_null(weight_label, "WeightLabel must exist after populate_right()")
+	if weight_label != null:
+		assert_eq((weight_label as Label).text, "Weight: 0.0 / ∞",
+				"an empty inventory with no backpack equipped must show 'Weight: 0.0 / ∞'")
+
+
+# ---------------------------------------------------------------------------
+# Test 14 — InventoryTab has no _inventory field after migration
+# ---------------------------------------------------------------------------
+
+func test_inventory_tab_has_no_inventory_field() -> void:
+	# design §7.4 / §13 (Slice 3): InventoryTab stops owning data. The
+	# self-owned `_inventory: Inventory` field must be removed entirely —
+	# populate_right() reads PlayerData.inventory directly instead. Checking
+	# get_property_list() (rather than `tab._inventory` directly, which would
+	# fail to compile if the field is removed — exactly the point) confirms
+	# no script-level property named "_inventory" remains on the instance.
+	var instance: Control = _make_scene_instance()
+	var tab: InventoryTab = instance as InventoryTab
+	assert_not_null(tab, "inventory_tab.tscn root must be castable to InventoryTab")
+	if tab == null:
+		return
+
+	var property_names: Array[String] = []
+	for prop: Dictionary in tab.get_property_list():
+		property_names.append(prop.get("name", ""))
+
+	assert_false(property_names.has("_inventory"),
+			"InventoryTab must not declare a self-owned '_inventory' field after the Slice 3 migration")
+
+
+# ---------------------------------------------------------------------------
+# Test 15 — current_weight()/lookup resolves the seeded starter bag to a
+#           non-zero weight via the temporary local registry
+# ---------------------------------------------------------------------------
+
+func test_starter_bag_resolves_to_non_zero_weight_via_local_registry() -> void:
+	# design §13: a temporary local item registry (seeded from the stacks
+	# present in PlayerData.inventory) stands in for the future ItemDatabase
+	# helper. After populate_right() with a freshly-seeded starter bag
+	# (3x sample_leaf @ 0.5kg + 1x sample_boots @ 0.8kg = 2.3kg, see
+	# _seed_starter_content()), the rendered weight header must reflect that
+	# non-zero total — proving the registry resolved both item ids to weights.
+	var data: PlayerDataResource = PlayerDataResource.new()
+	data.reset_to_new_game()
+	PlayerData._load_resource(data)
+
+	var instance: Control = _make_scene_instance()
+	var tab: InventoryTab = instance as InventoryTab
+	assert_not_null(tab, "inventory_tab.tscn root must be castable to InventoryTab")
+	if tab == null:
+		return
+
+	var parent: Control = add_child_autofree(Control.new())
+	tab.populate_right(parent)
+
+	var weight_label: Node = parent.find_child("WeightLabel", true, false)
+	assert_not_null(weight_label, "WeightLabel must exist after populate_right()")
+	if weight_label != null:
+		assert_eq((weight_label as Label).text, "Weight: 2.3 / ∞",
+				"the starter bag (3x sample_leaf @ 0.5kg + 1x sample_boots @ 0.8kg) must total 2.3kg")
+
+
+# ---------------------------------------------------------------------------
+# Test 16 — an unknown item_id in PlayerData.inventory.stacks is skipped
+#           gracefully (no crash, no row, weight unaffected)
+# ---------------------------------------------------------------------------
+
+func test_unknown_item_id_in_stacks_is_skipped_gracefully() -> void:
+	# design §13: the temporary local registry may not have an entry for an
+	# item added to PlayerData.inventory by another system before the
+	# registry catches up (e.g. a future foraging system adding a brand-new
+	# ItemData id this tab has never seen). _build_right_page() must skip such
+	# a stack — no row, no crash — exactly as it already does when
+	# _item_registry.get(...) returns null (see the `if item == null: continue`
+	# guard in _build_right_page()).
+	#
+	# We construct an ItemStack with an item_id the registry cannot know about
+	# and a null runtime `item` ref (simulating an unhydrated stack loaded from
+	# save — see ItemStack's doc comment on the non-exported `item` field).
+	var mystery_stack: ItemStack = ItemStack.new()
+	mystery_stack.item_id = &"totally_unknown_item"
+	mystery_stack.count = 1
+	mystery_stack.item = null
+	PlayerData.inventory.stacks.append(mystery_stack)
+
+	var instance: Control = _make_scene_instance()
+	var tab: InventoryTab = instance as InventoryTab
+	assert_not_null(tab, "inventory_tab.tscn root must be castable to InventoryTab")
+	if tab == null:
+		return
+
+	var parent: Control = add_child_autofree(Control.new())
+	# If this raises an error GUT records a failure automatically — the core
+	# assertion of this test is "no crash".
+	tab.populate_right(parent)
+
+	var rows_container: Node = parent.find_child("RowsContainer", true, false)
+	assert_not_null(rows_container, "RowsContainer must exist after populate_right()")
+	if rows_container != null:
+		for child: Node in rows_container.get_children():
+			var row: InventoryRow = child as InventoryRow
+			if row != null and row._stack != null:
+				assert_ne(row._stack.item_id, &"totally_unknown_item",
+						"a stack with an unrecognized item_id must not produce a rendered InventoryRow")
+
+	var weight_label: Node = parent.find_child("WeightLabel", true, false)
+	assert_not_null(weight_label, "WeightLabel must exist after populate_right()")
+	if weight_label != null:
+		assert_eq((weight_label as Label).text, "Weight: 0.0 / ∞",
+				"an unresolvable stack must contribute 0 weight to the header")
+
+
+# ---------------------------------------------------------------------------
+# Test 17 — _ready() connects _on_inventory_changed to
+#           GameEvents.inventory_changed exactly once
+# ---------------------------------------------------------------------------
+
+func test_ready_connects_inventory_changed_exactly_once() -> void:
+	# design §7.4: InventoryTab connects to GameEvents.inventory_changed in
+	# _ready() so an open tab refreshes live. _ready() can run more than once
+	# for a node re-added to the tree (e.g. a future notebook flow that
+	# detaches and reattaches tabs) — the connection must be guarded with
+	# is_connected() so re-running _ready() does not register a duplicate
+	# connection. A duplicate connection would cause _on_inventory_changed (and
+	# therefore _refresh_both_pages()) to run twice per emitted signal.
+	var packed: PackedScene = load(SCENE_PATH) as PackedScene
+	var instance: Control = packed.instantiate() as Control
+	var tab: InventoryTab = instance as InventoryTab
+	assert_not_null(tab, "inventory_tab.tscn root must be castable to InventoryTab")
+	if tab == null:
+		autofree(instance)
+		return
+
+	add_child_autofree(tab)
+
+	# _ready() already ran once via add_child(). Call it again directly to
+	# simulate the re-entry scenario the guard protects against.
+	tab._ready()
+
+	# Count how many of GameEvents.inventory_changed's connections target this
+	# tab's handler. get_connections() returns an Array of Dictionaries with
+	# "signal", "callable", and "flags" keys.
+	# https://docs.godotengine.org/en/stable/classes/class_signal.html#class-signal-method-get-connections
+	var connections: Array = GameEvents.inventory_changed.get_connections()
+	var matching: int = 0
+	for connection: Dictionary in connections:
+		var callable: Callable = connection.get("callable")
+		if callable.get_object() == tab:
+			matching += 1
+
+	assert_eq(matching, 1,
+			"GameEvents.inventory_changed must have exactly one connection to this tab's handler, even after _ready() runs twice")

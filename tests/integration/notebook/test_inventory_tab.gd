@@ -1,5 +1,5 @@
 ## test_inventory_tab.gd
-## Contract tests for the Phase 1 Inventory Tab.
+## Contract tests for the Slice 3 Inventory Tab.
 ##
 ## Covers:
 ##   - InventoryTab  (ui/notebook/inventory/inventory_tab.gd)
@@ -12,6 +12,17 @@
 ## children (_slot_label, _icon_rect, _name_label etc.) via @onready references
 ## that only exist when the node comes from the scene. A bare .new() would leave
 ## those refs null and every meaningful assertion would fail or crash.
+##
+## --- SLICE 3 DATA SOURCE NOTE ---
+## InventoryTab no longer constructs its own Inventory/sample items in _ready().
+## It reads PlayerData.inventory directly (design §7.4, §13). Tests give the
+## PlayerData autoload a clean, seeded resource in before_each() via
+## PlayerData._load_resource(<resource>) where <resource>.reset_to_new_game()
+## has been applied — this seeds the same starter bag (3x sample_leaf,
+## 1x sample_boots) that PlayerDataResource._seed_starter_content() defines
+## (resources/data/player_data_resource.gd), so the tab renders the same
+## "starter bag" content the old _ready() sample-data block used to construct
+## locally.
 ##
 ## Requires GUT: https://github.com/bitwes/Gut
 ## Install via Godot Asset Library (search "GUT - Godot Unit Testing").
@@ -35,6 +46,20 @@ extends GutTest
 const INVENTORY_TAB_SCENE: String = "res://ui/notebook/inventory/inventory_tab.tscn"
 const EQUIPMENT_SLOT_SCENE: String = "res://ui/notebook/inventory/equipment_slot.tscn"
 const INVENTORY_ROW_SCENE: String = "res://ui/notebook/inventory/inventory_row.tscn"
+
+
+# ---------------------------------------------------------------------------
+# Setup
+# ---------------------------------------------------------------------------
+
+## Give PlayerData a freshly-seeded resource before every test so the tab
+## reads the same starter bag (3x sample_leaf, 1x sample_boots) the old
+## _ready() sample-data block used to construct locally. Per CLAUDE.md's
+## dependency-injection guidance for autoload tests.
+func before_each() -> void:
+	var data: PlayerDataResource = PlayerDataResource.new()
+	data.reset_to_new_game()
+	PlayerData._load_resource(data)
 
 
 # ---------------------------------------------------------------------------
@@ -326,8 +351,9 @@ func test_inventory_tab_do_equip_emits_inventory_changed() -> void:
 	tab.populate_left(left_parent)
 	tab.populate_right(right_parent)
 
-	# Find the boots row among the rendered rows. The tab pre-populates with
-	# a "sample_boots" item (equip_slot == BOOTS) in _ready().
+	# Find the boots row among the rendered rows. PlayerData.inventory carries
+	# the seeded starter "sample_boots" item (equip_slot == BOOTS) after
+	# before_each()'s reset_to_new_game().
 	var all_rows: Array[Node] = _find_by_class(right_parent, "InventoryRow")
 	var boots_row: InventoryRow = null
 	for node in all_rows:
@@ -364,7 +390,8 @@ func test_inventory_tab_do_throw_emits_item_dropped() -> void:
 	var parent: Control = add_child_autofree(Control.new())
 	tab.populate_right(parent)
 
-	# Select the leaf row — the tab always has a "sample_leaf" stack in _ready().
+	# Select the leaf row — PlayerData.inventory always has a "sample_leaf"
+	# stack after before_each()'s reset_to_new_game().
 	var all_rows: Array[Node] = _find_by_class(parent, "InventoryRow")
 	var leaf_row: InventoryRow = null
 	for node in all_rows:
@@ -413,3 +440,98 @@ func test_inventory_tab_do_recycle_does_nothing_when_not_recyclable() -> void:
 
 	assert_signal_not_emitted(GameEvents, "item_recycled",
 			"_do_recycle() must NOT emit item_recycled when the item is not recyclable")
+
+
+# ---------------------------------------------------------------------------
+# Test 13 — populate_right() renders PlayerData.inventory, not a tab-owned bag
+# ---------------------------------------------------------------------------
+
+func test_populate_right_renders_player_data_inventory_directly() -> void:
+	# Core Slice 3 contract (design §7.4, §13): the bag rendered by
+	# populate_right() IS PlayerData.inventory — not a copy constructed in
+	# _ready(). Mutate PlayerData.inventory directly (bypassing the tab
+	# entirely) and confirm the rendered rows reflect that mutation.
+	var packed: PackedScene = load(INVENTORY_TAB_SCENE) as PackedScene
+	var tab: InventoryTab = add_child_autofree(packed.instantiate() as InventoryTab)
+	var parent: Control = add_child_autofree(Control.new())
+
+	# Add a brand-new item directly to PlayerData.inventory, bypassing the tab.
+	var herb: ItemData = ItemData.new()
+	herb.id = &"slice3_herb"
+	herb.display_name = "Slice 3 Herb"
+	herb.weight = 0.1
+	herb.stackable = true
+	herb.max_stack = 99
+	autofree(herb)
+	PlayerData.inventory.add(herb, 5)
+
+	tab.populate_right(parent)
+
+	var rows: Array[Node] = _find_by_class(parent, "InventoryRow")
+	var herb_row: InventoryRow = null
+	for node in rows:
+		var row: InventoryRow = node as InventoryRow
+		if row._stack != null and row._stack.item_id == &"slice3_herb":
+			herb_row = row
+			break
+
+	assert_not_null(herb_row,
+			"populate_right() must render a row for an item added directly to PlayerData.inventory")
+	if herb_row != null:
+		assert_eq(herb_row._stack.count, 5,
+				"the rendered row's stack count must match PlayerData.inventory's stack count")
+
+
+# ---------------------------------------------------------------------------
+# Test 14 — A fresh reset_to_new_game() resource renders the starter bag and
+#           equipment silhouette on both pages
+# ---------------------------------------------------------------------------
+
+func test_fresh_player_data_renders_starter_bag_and_equipment_silhouette() -> void:
+	# A fresh PlayerDataResource seeded via reset_to_new_game() (3x sample_leaf
+	# + 1x sample_boots, see _seed_starter_content()) must render as the
+	# starter bag on the right page and the equipment silhouette on the left
+	# page when the tab populates both. before_each() already performed the
+	# reset_to_new_game() seeding; this test asserts the rendered output.
+	var packed: PackedScene = load(INVENTORY_TAB_SCENE) as PackedScene
+	var tab: InventoryTab = add_child_autofree(packed.instantiate() as InventoryTab)
+	var left_parent: Control = add_child_autofree(Control.new())
+	var right_parent: Control = add_child_autofree(Control.new())
+
+	tab.populate_left(left_parent)
+	tab.populate_right(right_parent)
+
+	# Left page: 6 equipment slots regardless of what's equipped.
+	var slots: Array[Node] = _find_by_class(left_parent, "EquipmentSlot")
+	assert_eq(slots.size(), 6,
+			"populate_left() must render all 6 equipment slots for a fresh starter game")
+
+	# Right page: exactly 2 rows (sample_leaf x3, sample_boots x1).
+	var rows: Array[Node] = _find_by_class(right_parent, "InventoryRow")
+	var leaf_row: InventoryRow = null
+	var boots_row: InventoryRow = null
+	for node in rows:
+		var row: InventoryRow = node as InventoryRow
+		if row._stack == null:
+			continue
+		if row._stack.item_id == &"sample_leaf":
+			leaf_row = row
+		elif row._stack.item_id == &"sample_boots":
+			boots_row = row
+
+	assert_not_null(leaf_row, "the starter bag must render a sample_leaf row")
+	assert_not_null(boots_row, "the starter bag must render a sample_boots row")
+	if leaf_row != null:
+		assert_eq(leaf_row._stack.count, 3, "the starter sample_leaf row must show count 3")
+	if boots_row != null:
+		assert_eq(boots_row._stack.count, 1, "the starter sample_boots row must show count 1")
+
+	# Weight header must reflect the seeded bag's non-zero weight
+	# (3 x 0.5 + 1 x 0.8 = 2.3 kg per _seed_starter_content()).
+	var weight_labels: Array[Label] = _find_labels(right_parent,
+			func(lbl: Label) -> bool: return lbl.text.begins_with("Weight:"))
+	assert_true(weight_labels.size() >= 1,
+			"populate_right() must render a Weight: label for the starter bag")
+	if weight_labels.size() >= 1:
+		assert_ne(weight_labels[0].text, "Weight: 0.0 / ∞",
+				"the starter bag's weight header must reflect a non-zero total weight")

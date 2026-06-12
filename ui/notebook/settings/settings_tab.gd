@@ -3,9 +3,12 @@ extends NotebookTab
 ## The Settings tab of the in-game notebook.
 ##
 ## Phase 1 exposes audio volume sliders (left page) and a window scale
-## option button (right page). Settings are held in a fresh GameSettings
-## resource each session; Phase 2 will load persisted settings from disk
-## via SaveManager before populating the UI.
+## option button (right page). Settings are sourced from SaveManager.settings —
+## the shared, per-device GameSettings instance loaded by SaveManager.load_settings()
+## at launch (design §11 Step 4) — rather than a fresh GameSettings per session.
+## Slider and option-button edits mutate that shared instance directly (by
+## reference, no duplicate()), so SaveManager.save_settings() on notebook close
+## persists exactly what the player sees.
 ##
 ## The two populate methods instantiate settings_tab.tscn, extract the
 ## LeftPage or RightPage VBoxContainer from that scene, and reparent it
@@ -13,6 +16,7 @@ extends NotebookTab
 ## sliders, buttons) lives in the .tscn; GDScript is left with data
 ## binding, signal wiring, and initial-value logic only.
 ##
+## Design doc: docs/features/game-data/design.md §11 Step 4 (per-device settings)
 ## Design doc: docs/features/notebook/design.md §3.2 (Settings)
 ## Refactor:   docs/refactors/notebook-ui-scene-migration.md
 
@@ -36,8 +40,10 @@ const WINDOW_SCALE_OPTIONS: Array[int] = [1, 2, 3, 4]
 # Private vars — set during populate calls
 # ---------------------------------------------------------------------------
 
-# Fresh defaults every session. Phase 2 will replace this with
-# SaveManager.load_settings() so values persist across launches.
+# The shared, per-device settings instance — SaveManager.settings, by
+# reference (not a duplicate). Assigned in _ready(). SaveManager.load_settings()
+# (run at launch, see save_manager.gd._ready()) guarantees this is non-null and
+# populated before any notebook tab can open.
 var _settings: GameSettings
 
 # Slider refs kept so the reset buttons can programmatically restore defaults
@@ -64,9 +70,13 @@ var _right_page: VBoxContainer
 # ---------------------------------------------------------------------------
 
 func _ready() -> void:
-	# Always start from defaults in Phase 1. This gives a predictable baseline
-	# and avoids showing stale values if the node is instantiated multiple times.
-	_settings = GameSettings.new()
+	# Source _settings from the shared SaveManager.settings instance (by
+	# reference, not GameSettings.new()) so slider/option edits mutate the
+	# same per-device settings object that SaveManager.save_settings() writes
+	# to user://settings.tres on notebook close. SaveManager.load_settings()
+	# runs at launch (see save_manager.gd._ready()), so SaveManager.settings is
+	# already populated by the time this tab is created.
+	_settings = SaveManager.settings
 
 
 # ---------------------------------------------------------------------------

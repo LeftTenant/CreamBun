@@ -41,6 +41,15 @@
 ## Notebook.open() pauses the scene tree. GUT runs inside that tree, so every
 ## test that opens the notebook MUST close it before the test ends.
 ## after_each() force-closes and force-unpauses as a safety net.
+##
+## --- SLICE 5 DATA SOURCE NOTE ---
+## Opening the notebook to the Settings tab instantiates SettingsTab via
+## notebook.gd's _create_tab(), which now reads SaveManager.settings (the
+## shared per-device settings, design §11 Step 4) instead of constructing a
+## fresh GameSettings. before_each() resets SaveManager.settings to a default
+## GameSettings so these layout/anchoring assertions are independent of the
+## settings data source and unaffected by whatever a prior suite left behind.
+## Layout/anchoring assertions themselves are unchanged by this slice.
 
 class_name TestSettingsTabLayout
 extends GutTest
@@ -68,12 +77,30 @@ const POSITION_TOLERANCE: float = 0.5
 # before its own close() call.
 var _notebook: Notebook
 
+# Backup of any pre-existing user://settings.tres bytes. Every test in this
+# file calls nb.close() at least once (directly or via after_each()'s safety
+# net), and close() now triggers SaveManager.save_settings() (Slice 5,
+# design §11 Step 4). Without backup/restore, running this suite would
+# overwrite a real player's settings.tres with the file's test defaults.
+var _settings_backup: PackedByteArray = PackedByteArray()
+var _had_settings_file: bool = false
+
 
 func before_each() -> void:
 	# Match test_notebook_shell.gd's known-good baseline.
 	GameState.change_state(GameState.State.PLAYING)
 	get_tree().paused = false
 	_notebook = null
+
+	# Back up any real user://settings.tres before this test's close() calls
+	# can overwrite it.
+	_had_settings_file = FileAccess.file_exists(SaveManager.SETTINGS_PATH)
+	if _had_settings_file:
+		_settings_backup = FileAccess.get_file_as_bytes(SaveManager.SETTINGS_PATH)
+
+	# Slice 5: give SettingsTab a fresh default GameSettings to read via
+	# SaveManager.settings before each test — see Slice 5 note above.
+	SaveManager.settings = GameSettings.new()
 
 
 func after_each() -> void:
@@ -83,6 +110,16 @@ func after_each() -> void:
 		_notebook.close()
 	get_tree().paused = false
 	GameState.change_state(GameState.State.PLAYING)
+	SaveManager.settings = null
+
+	# Restore (or remove) user://settings.tres to whatever existed before this
+	# test ran — see the backup comment above.
+	if _had_settings_file:
+		var f: FileAccess = FileAccess.open(SaveManager.SETTINGS_PATH, FileAccess.WRITE)
+		f.store_buffer(_settings_backup)
+		f.close()
+	elif FileAccess.file_exists(SaveManager.SETTINGS_PATH):
+		DirAccess.remove_absolute(SaveManager.SETTINGS_PATH)
 
 
 # ---------------------------------------------------------------------------

@@ -17,6 +17,15 @@
 ## A test that loads the PackedScene and walks the tree catches that breakage at
 ## CI time rather than during manual QA.
 ##
+## --- PLAYERDATA SEEDING NOTE (Slice 4) ---
+## _make_scene_instance() adds the scene's root QuestsTab to the tree, so
+## _ready() runs. QuestsTab._ready() no longer self-seeds a _quest_log — it
+## reads PlayerData.quest_log. before_each() seeds PlayerData with a
+## PlayerDataResource that has had reset_to_new_game() applied (NOT a bare
+## PlayerDataResource.new()), confirming _ready() runs cleanly against the
+## PlayerData-backed read path without crashing.
+## See docs/features/game-data/design.md §9.2, §11 Step 2.
+##
 ## Requires GUT: https://github.com/bitwes/Gut
 ## Install via Godot Asset Library (search "GUT - Godot Unit Testing").
 ##
@@ -36,6 +45,21 @@ extends GutTest
 # Canonical path for the scene under test. A constant makes it easy to update
 # if the file moves and ensures every test in this file references the same path.
 const SCENE_PATH: String = "res://ui/notebook/quests/quests_tab.tscn"
+
+
+# ---------------------------------------------------------------------------
+# Setup
+# ---------------------------------------------------------------------------
+
+func before_each() -> void:
+	# Seed PlayerData the way a fresh "New Story" does: reset_to_new_game()
+	# runs _seed_starter_content(), which seeds the_foraging_book quest as
+	# COMPLETED with completed_objectives [0, 1, 2]. _make_scene_instance()
+	# below adds a QuestsTab to the tree, so _ready() runs and must read this
+	# seeded PlayerData.quest_log without crashing.
+	var data: PlayerDataResource = PlayerDataResource.new()
+	data.reset_to_new_game()
+	PlayerData._load_resource(data)
 
 
 # ---------------------------------------------------------------------------

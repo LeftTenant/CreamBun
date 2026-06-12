@@ -11,6 +11,15 @@
 ## only exist when the node comes from the scene. A bare QuestRow.new() would
 ## leave those refs null and every meaningful assertion would fail or crash.
 ##
+## --- PLAYERDATA SEEDING NOTE (Slice 4) ---
+## QuestsTab no longer owns a _quest_log — it reads PlayerData.quest_log.
+## before_each() seeds PlayerData with a PlayerDataResource that has had
+## reset_to_new_game() applied (NOT a bare PlayerDataResource.new()), because
+## only reset_to_new_game() runs _seed_starter_content() — the single source
+## of truth for the foraging-book quest's COMPLETED seed data. This mirrors a
+## fresh "New Story" launch, matching what QuestsTab sees in-game.
+## See docs/features/game-data/design.md §9.2, §11 Step 2.
+##
 ## Selected behaviours guarded:
 ##   test_quest_row_setup_completed_dims_row  — guards modulate.a dimming
 ##   test_view_button_press_drives_selection  — guards observable selection outcome
@@ -34,6 +43,20 @@ extends GutTest
 # Use scene instantiation (not bare .new()) so @onready refs in quest_row.gd
 # resolve correctly.  See ROW CONSTRUCTION NOTE in the file header.
 const QUEST_ROW_SCENE: String = "res://ui/notebook/quests/quest_row.tscn"
+
+
+# ---------------------------------------------------------------------------
+# Setup
+# ---------------------------------------------------------------------------
+
+func before_each() -> void:
+	# Seed PlayerData the way a fresh "New Story" does: reset_to_new_game()
+	# runs _seed_starter_content(), which seeds the_foraging_book quest as
+	# COMPLETED with completed_objectives [0, 1, 2]. QuestsTab._ready() no
+	# longer seeds anything itself — it reads PlayerData.quest_log directly.
+	var data: PlayerDataResource = PlayerDataResource.new()
+	data.reset_to_new_game()
+	PlayerData._load_resource(data)
 
 
 # ---------------------------------------------------------------------------
@@ -165,22 +188,28 @@ func test_quests_tab_populate_right_shows_placeholder_when_no_selection() -> voi
 
 
 # ---------------------------------------------------------------------------
-# Test 6 — _ready() pre-populates the quest log with the foraging book
+# Test 6 — PlayerData.quest_log pre-populates with the foraging book
 # ---------------------------------------------------------------------------
 
 func test_quest_log_pre_populates_with_foraging_book() -> void:
 	# The foraging book is the intro quest every player starts with completed.
-	# _ready() must insert it into _quest_log.states so the Quests tab shows
-	# it as COMPLETED on first open — without the player having to do anything.
+	# Slice 4: the seed lives in PlayerDataResource._seed_starter_content()
+	# (applied via reset_to_new_game() in before_each()), not in QuestsTab —
+	# QuestsTab simply renders PlayerData.quest_log. _quest_log no longer
+	# exists on QuestsTab; this test asserts against PlayerData.quest_log directly.
 	var tab: QuestsTab = add_child_autofree(QuestsTab.new())
 
-	assert_true(tab._quest_log.states.has(&"the_foraging_book"),
-			"_quest_log must contain the_foraging_book after _ready() runs")
+	assert_true(PlayerData.quest_log.states.has(&"the_foraging_book"),
+			"PlayerData.quest_log must contain the_foraging_book after reset_to_new_game()")
 
 	assert_eq(
-			tab._quest_log.states[&"the_foraging_book"]["status"],
+			PlayerData.quest_log.states[&"the_foraging_book"]["status"],
 			QuestLog.Status.COMPLETED,
-			"the_foraging_book must have COMPLETED status in _quest_log")
+			"the_foraging_book must have COMPLETED status in PlayerData.quest_log")
+
+	# tab is unused beyond confirming QuestsTab still constructs and runs
+	# _ready() without crashing now that _quest_log has been deleted.
+	assert_not_null(tab, "QuestsTab must still construct without a _quest_log field")
 
 
 # ---------------------------------------------------------------------------
@@ -261,3 +290,91 @@ func _find_view_button(root: Node) -> Button:
 		if found != null:
 			return found
 	return null
+
+
+# ---------------------------------------------------------------------------
+# Test 9 — _get_status() reads PlayerData.quest_log
+# ---------------------------------------------------------------------------
+
+func test_get_status_returns_completed_for_seeded_foraging_book() -> void:
+	# _get_status(&"the_foraging_book") must return QuestLog.Status.COMPLETED
+	# when reading from PlayerData.quest_log seeded via reset_to_new_game()
+	# (before_each()). This is the core read-path this slice introduces.
+	var tab: QuestsTab = add_child_autofree(QuestsTab.new())
+
+	assert_eq(tab._get_status(&"the_foraging_book"), QuestLog.Status.COMPLETED,
+			"_get_status(&\"the_foraging_book\") should return COMPLETED when reading PlayerData.quest_log")
+
+
+func test_get_status_returns_hidden_for_unknown_quest_id() -> void:
+	# Quests absent from PlayerData.quest_log.states are treated as HIDDEN —
+	# the UI should not show quests the player has not yet encountered.
+	var tab: QuestsTab = add_child_autofree(QuestsTab.new())
+
+	assert_eq(tab._get_status(&"some_quest_not_in_the_log"), QuestLog.Status.HIDDEN,
+			"_get_status() should return HIDDEN for a quest id not present in PlayerData.quest_log.states")
+
+
+# ---------------------------------------------------------------------------
+# Test 10 — _seed_starter_content()'s entry shape matches the tab's readers
+# ---------------------------------------------------------------------------
+
+func test_seeded_foraging_book_entry_shape_matches_quests_tab_readers() -> void:
+	# This is the explicit cross-check that PlayerDataResource._seed_starter_content()
+	# produces exactly the dict shape QuestsTab reads, now that seeding lives in
+	# one place (PlayerDataResource) instead of being hand-duplicated in
+	# QuestsTab._ready(). Two readers depend on this shape:
+	#   - _get_status() reads entry["status"] (int, a QuestLog.Status value)
+	#   - _refresh_right_page() reads entry["completed_objectives"] (Array of
+	#     objective indices) for the detail-view checklist
+	# If _seed_starter_content() ever changes key names or value types without
+	# updating both readers, this test fails before a UI-level test would.
+	add_child_autofree(QuestsTab.new())
+
+	var states: Dictionary = PlayerData.quest_log.states
+	assert_true(states.has(&"the_foraging_book"),
+			"PlayerData.quest_log.states must contain the_foraging_book after reset_to_new_game()")
+	if not states.has(&"the_foraging_book"):
+		return
+
+	var entry: Dictionary = states[&"the_foraging_book"] as Dictionary
+
+	# --- Shape required by _get_status() ---
+	assert_true(entry.has("status"),
+			"seeded entry must have a 'status' key — _get_status() reads entry[\"status\"]")
+	assert_eq(entry.get("status"), QuestLog.Status.COMPLETED,
+			"seeded entry['status'] must equal QuestLog.Status.COMPLETED")
+
+	# --- Shape required by _refresh_right_page()'s objectives checklist ---
+	assert_true(entry.has("completed_objectives"),
+			"seeded entry must have a 'completed_objectives' key — _refresh_right_page() reads entry[\"completed_objectives\"]")
+	var completed_objectives: Variant = entry.get("completed_objectives")
+	assert_true(completed_objectives is Array,
+			"seeded entry['completed_objectives'] must be an Array so _refresh_right_page() can call .has(i) on it")
+	assert_eq(completed_objectives, [0, 1, 2],
+			"seeded entry['completed_objectives'] must be [0, 1, 2] — matches all three the_foraging_book.tres objectives")
+
+
+# ---------------------------------------------------------------------------
+# Test 11 — Quest definitions still load from the_foraging_book.tres
+# ---------------------------------------------------------------------------
+
+func test_quests_array_loads_foraging_book_definition_from_tres() -> void:
+	# Quest *definitions* (QuestData) are static content loaded via load() in
+	# _ready() and are unaffected by the quest_log source change — only quest
+	# *progress* moved to PlayerData. _quests must still contain the_foraging_book
+	# definition loaded from the_foraging_book.tres, with its title/objectives intact.
+	var tab: QuestsTab = add_child_autofree(QuestsTab.new())
+
+	assert_eq(tab._quests.size(), 1,
+			"_quests should contain exactly one QuestData in Phase 1 (the_foraging_book)")
+	if tab._quests.is_empty():
+		return
+
+	var quest: QuestData = tab._quests[0]
+	assert_eq(quest.id, &"the_foraging_book",
+			"_quests[0].id should be &\"the_foraging_book\", loaded from the_foraging_book.tres")
+	assert_eq(quest.title, "The Foraging Book",
+			"_quests[0].title should match the_foraging_book.tres")
+	assert_eq(quest.objectives.size(), 3,
+			"_quests[0].objectives should have 3 entries, matching the_foraging_book.tres")
