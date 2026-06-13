@@ -160,6 +160,33 @@ func _stack_count(inventory: Inventory, item_id: StringName) -> int:
 	return total
 
 
+## Find the EquipmentSlot node for a given EquipSlot enum value among the
+## slots populate_left() added to _left_parent.
+func _find_slot(slot_enum: ItemData.EquipSlot) -> EquipmentSlot:
+	var slots: Array[Node] = _find_all_by_class(_left_parent, "EquipmentSlot")
+	for node: Node in slots:
+		var es: EquipmentSlot = node as EquipmentSlot
+		if es._slot == slot_enum:
+			return es
+	return null
+
+
+## Resolve the EquipButton from the populated right page.
+func _equip_button() -> Button:
+	return _right_parent.find_child("EquipButton", true, false) as Button
+
+
+## Simulate a left-click on `control` by calling _gui_input directly with a
+## synthetic InputEventMouseButton. Mirrors the approach used for InventoryRow
+## elsewhere in this file — avoids depending on a real OS window or viewport
+## focus for click-driven signals.
+func _click(control: Control) -> void:
+	var mb: InputEventMouseButton = InputEventMouseButton.new()
+	mb.button_index = MOUSE_BUTTON_LEFT
+	mb.pressed = true
+	control._gui_input(mb)
+
+
 # ---------------------------------------------------------------------------
 # Test 1 — slot_drop_received from an EquipmentSlot reaches _on_slot_drop
 #           and emits GameEvents.inventory_changed
@@ -665,3 +692,202 @@ func test_two_tab_instances_observe_same_bag() -> void:
 			"_tab must render the trinket added to the shared PlayerData.inventory")
 	assert_not_null(_find_row(second_right_parent, &"shared_trinket"),
 			"second_tab must render the same trinket added to the shared PlayerData.inventory")
+
+
+# ---------------------------------------------------------------------------
+# Test 12 — Selecting a filled equipment slot relabels EquipButton to
+#           "Unequip (E)" (issue #7)
+# ---------------------------------------------------------------------------
+
+func test_selecting_filled_slot_relabels_equip_button() -> void:
+	# Per issue #7, selecting a FILLED equipment slot must relabel the
+	# right-page Equip button to "Unequip (E)" so the player knows pressing
+	# E (or clicking it) will return the item to the bag.
+	#
+	# Equip the starter boots first so the BOOTS slot is filled, then click it.
+	var boots_row: InventoryRow = _find_row(_right_parent, &"sample_boots")
+	assert_not_null(boots_row, "A sample_boots InventoryRow must exist after populate_right()")
+	if boots_row == null:
+		return
+	_tab._selected_row = boots_row
+	_tab._do_equip()
+
+	var boots_slot: EquipmentSlot = _find_slot(ItemData.EquipSlot.BOOTS)
+	assert_not_null(boots_slot, "A BOOTS EquipmentSlot must exist after populate_left()")
+	if boots_slot == null:
+		return
+
+	var equip_button: Button = _equip_button()
+	assert_not_null(equip_button, "A named EquipButton node must exist after populate_right()")
+	if equip_button == null:
+		return
+
+	# Sanity check: the button must still read "Equip" before any slot is selected.
+	assert_eq(equip_button.text, "Equip",
+			"EquipButton must read 'Equip' before any equipment slot is selected")
+
+	# Click the now-filled BOOTS slot to select it.
+	_click(boots_slot)
+
+	assert_eq(_tab._selected_slot, boots_slot,
+			"clicking a FILLED equipment slot must set _tab._selected_slot")
+	assert_eq(equip_button.text, "Unequip (E)",
+			"EquipButton must read 'Unequip (E)' once a filled equipment slot is selected")
+
+
+# ---------------------------------------------------------------------------
+# Test 13 — Invoking the equip-action with a slot selected unequips the item,
+#           returns it to the bag, emits item_unequipped + inventory_changed,
+#           and the heading remains present afterward (issue #7)
+# ---------------------------------------------------------------------------
+
+func test_do_equip_with_slot_selected_unequips_item() -> void:
+	# Equip the starter boots, select the now-filled BOOTS slot, then invoke
+	# the equip-action (which becomes "Unequip" while a slot is selected).
+	var boots_row: InventoryRow = _find_row(_right_parent, &"sample_boots")
+	assert_not_null(boots_row, "A sample_boots InventoryRow must exist after populate_right()")
+	if boots_row == null:
+		return
+	_tab._selected_row = boots_row
+	_tab._do_equip()
+
+	assert_true(PlayerData.inventory.equipped.has(ItemData.EquipSlot.BOOTS),
+			"the starter boots must be equipped before this test's unequip step")
+
+	var boots_slot: EquipmentSlot = _find_slot(ItemData.EquipSlot.BOOTS)
+	assert_not_null(boots_slot, "A BOOTS EquipmentSlot must exist after populate_left()")
+	if boots_slot == null:
+		return
+
+	# Select the filled slot via a real click so the selection wiring
+	# (EquipmentSlot.selected -> InventoryTab handler) is exercised end to end.
+	_click(boots_slot)
+	assert_eq(_tab._selected_slot, boots_slot,
+			"clicking a FILLED equipment slot must set _tab._selected_slot")
+
+	var before_count: int = _stack_count(PlayerData.inventory, &"sample_boots")
+
+	watch_signals(GameEvents)
+	_tab._do_equip()
+
+	# Inventory.unequip() must have run: BOOTS is no longer in `equipped`,
+	# and the boots are back in `stacks`.
+	assert_false(PlayerData.inventory.equipped.has(ItemData.EquipSlot.BOOTS),
+			"_do_equip() with a slot selected must call Inventory.unequip(), clearing equipped[BOOTS]")
+	var after_count: int = _stack_count(PlayerData.inventory, &"sample_boots")
+	assert_eq(after_count, before_count + 1,
+			"the unequipped boots must be returned to PlayerData.inventory.stacks")
+
+	assert_signal_emitted(GameEvents, "item_unequipped",
+			"_do_equip() with a slot selected must emit GameEvents.item_unequipped")
+	assert_signal_emitted(GameEvents, "inventory_changed",
+			"_do_equip() with a slot selected must emit GameEvents.inventory_changed")
+
+	# The slot's heading must still be present (and visible) now that the slot
+	# is empty again — this is the core issue #7 regression check.
+	var refreshed_slot: EquipmentSlot = _find_slot(ItemData.EquipSlot.BOOTS)
+	assert_not_null(refreshed_slot, "the BOOTS EquipmentSlot must still exist after _refresh_both_pages()")
+	if refreshed_slot == null:
+		return
+	var heading: Label = refreshed_slot.find_child("SlotLabel", true, false) as Label
+	assert_not_null(heading, "equipment_slot.tscn must declare 'SlotLabel'")
+	if heading != null:
+		assert_true(heading.visible,
+				"the BOOTS slot heading must remain visible after unequipping")
+		assert_eq(heading.text, "Boots",
+				"the BOOTS slot heading text must read 'Boots' once the slot is empty again")
+
+
+# ---------------------------------------------------------------------------
+# Test 14 — Invoking the equip-action via the notebook_equip hotkey (E) with a
+#           slot selected performs the same unequip (issue #7)
+# ---------------------------------------------------------------------------
+
+func test_notebook_equip_hotkey_with_slot_selected_unequips_item() -> void:
+	# The E key (notebook_equip action) must trigger the same _do_equip()
+	# unequip branch as clicking the button, per the action-verb table in
+	# docs/features/notebook/design.md §5.2.
+	var boots_row: InventoryRow = _find_row(_right_parent, &"sample_boots")
+	assert_not_null(boots_row, "A sample_boots InventoryRow must exist after populate_right()")
+	if boots_row == null:
+		return
+	_tab._selected_row = boots_row
+	_tab._do_equip()
+
+	var boots_slot: EquipmentSlot = _find_slot(ItemData.EquipSlot.BOOTS)
+	assert_not_null(boots_slot, "A BOOTS EquipmentSlot must exist after populate_left()")
+	if boots_slot == null:
+		return
+
+	_click(boots_slot)
+	assert_eq(_tab._selected_slot, boots_slot,
+			"clicking a FILLED equipment slot must set _tab._selected_slot")
+
+	# _unhandled_input() only runs the hotkey branches while the tab is visible.
+	_tab.visible = true
+
+	watch_signals(GameEvents)
+
+	# Simulate the E key press via the notebook_equip action, the same way
+	# _unhandled_input() checks it.
+	var event: InputEventAction = InputEventAction.new()
+	event.action = "notebook_equip"
+	event.pressed = true
+	_tab._unhandled_input(event)
+
+	assert_false(PlayerData.inventory.equipped.has(ItemData.EquipSlot.BOOTS),
+			"the notebook_equip hotkey with a slot selected must call Inventory.unequip()")
+	assert_signal_emitted(GameEvents, "item_unequipped",
+			"the notebook_equip hotkey with a slot selected must emit GameEvents.item_unequipped")
+	assert_signal_emitted(GameEvents, "inventory_changed",
+			"the notebook_equip hotkey with a slot selected must emit GameEvents.inventory_changed")
+
+
+# ---------------------------------------------------------------------------
+# Test 15 — Selecting a bag row clears the active slot selection and restores
+#           the "Equip" label (issue #7)
+# ---------------------------------------------------------------------------
+
+func test_selecting_bag_row_clears_slot_selection_and_restores_equip_label() -> void:
+	# Per the "exactly one of _selected_row or _selected_slot is non-null"
+	# contract documented on _on_row_selected(), selecting a bag row while an
+	# equipment slot is selected must clear _selected_slot and restore the
+	# EquipButton label to "Equip".
+	var boots_row: InventoryRow = _find_row(_right_parent, &"sample_boots")
+	assert_not_null(boots_row, "A sample_boots InventoryRow must exist after populate_right()")
+	if boots_row == null:
+		return
+	_tab._selected_row = boots_row
+	_tab._do_equip()
+
+	var boots_slot: EquipmentSlot = _find_slot(ItemData.EquipSlot.BOOTS)
+	assert_not_null(boots_slot, "A BOOTS EquipmentSlot must exist after populate_left()")
+	if boots_slot == null:
+		return
+
+	_click(boots_slot)
+	assert_eq(_tab._selected_slot, boots_slot,
+			"clicking a FILLED equipment slot must set _tab._selected_slot")
+
+	var equip_button: Button = _equip_button()
+	assert_not_null(equip_button, "A named EquipButton node must exist after populate_right()")
+	if equip_button != null:
+		assert_eq(equip_button.text, "Unequip (E)",
+				"EquipButton must read 'Unequip (E)' once the BOOTS slot is selected")
+
+	# Now select the sample_leaf bag row.
+	var leaf_row: InventoryRow = _find_row(_right_parent, &"sample_leaf")
+	assert_not_null(leaf_row, "A sample_leaf InventoryRow must exist after populate_right()")
+	if leaf_row == null:
+		return
+
+	leaf_row.selected.emit(leaf_row)
+
+	assert_null(_tab._selected_slot,
+			"selecting a bag row must clear _tab._selected_slot")
+	assert_eq(_tab._selected_row, leaf_row,
+			"selecting a bag row must set _tab._selected_row to the clicked row")
+
+	if equip_button != null:
+		assert_eq(equip_button.text, "Equip",
+				"EquipButton must be restored to 'Equip' once a bag row is selected instead of a slot")

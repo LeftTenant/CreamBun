@@ -5,25 +5,49 @@
 [node name="EquipmentSlot" type="Control"]
 script = ExtResource("1")
 size_flags_horizontal = 3
-custom_minimum_size = Vector2(0, 28)
+custom_minimum_size = Vector2(0, 36)
 
-[node name="SlotLabel" type="Label" parent="."]
+[node name="SelectionRect" type="ColorRect" parent="."]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-focus_mode = 0
-size_flags_horizontal = 3
-size_flags_vertical = 3
-vertical_alignment = 1
+color = Color(1, 0.9, 0.6, 0.35)
+mouse_filter = 2
+visible = false
 
-[node name="IconRect" type="TextureRect" parent="."]
+[node name="HBox" type="HBoxContainer" parent="."]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-focus_mode = 0
 size_flags_horizontal = 3
 size_flags_vertical = 3
-stretch_mode = 3
+
+[node name="IconFrame" type="PanelContainer" parent="HBox"]
+layout_mode = 2
+size_flags_vertical = 4
+custom_minimum_size = Vector2(32, 32)
+
+[node name="IconRect" type="TextureRect" parent="HBox/IconFrame"]
+layout_mode = 2
+focus_mode = 0
+stretch_mode = 5
+visible = false
+
+[node name="TextVBox" type="VBoxContainer" parent="HBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="SlotLabel" type="Label" parent="HBox/TextVBox"]
+layout_mode = 2
+focus_mode = 0
+size_flags_horizontal = 3
+
+[node name="ItemNameLabel" type="Label" parent="HBox/TextVBox"]
+layout_mode = 2
+focus_mode = 0
+size_flags_horizontal = 3
+autowrap_mode = 3
 visible = false

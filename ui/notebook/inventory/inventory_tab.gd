@@ -90,6 +90,12 @@ var _weight_label: Label = null
 # Resolved inside populate_right().
 var _recycle_button: Button = null
 
+# Stored ref to the Equip/Unequip button. _on_slot_selected() and
+# _on_row_selected() rewrite its text between "Equip" and "Unequip (E)"
+# depending on whether an equipment slot or a bag row is selected (issue #7).
+# Resolved inside populate_right().
+var _equip_button: Button = null
+
 # Stored so we can clear and rebuild the right page on inventory changes
 # without passing the parent through multiple method calls.
 var _right_page_parent: Control = null
@@ -215,6 +221,13 @@ func populate_left(parent: Control) -> void:
 		# the slot nodes are reused and the signal would be connected a second time.
 		if not slot_node.slot_drop_received.is_connected(_on_slot_drop):
 			slot_node.slot_drop_received.connect(_on_slot_drop)
+
+		# When the player clicks a FILLED slot, _on_slot_selected() makes it the
+		# active selection so the Equip button becomes "Unequip (E)" (issue #7).
+		# Same duplicate-connection guard as slot_drop_received above.
+		if not slot_node.selected.is_connected(_on_slot_selected):
+			slot_node.selected.connect(_on_slot_selected)
+
 		_equipment_slots.append(slot_node)
 
 
@@ -259,9 +272,9 @@ func populate_right(parent: Control) -> void:
 	# this call makes the script the handler for each pressed event.
 	# Guard each connection with is_connected() so calling populate_right() a
 	# second time on the same InventoryTab instance does not register duplicates.
-	var equip_btn: Button = _right_page.get_node("Footer/EquipButton") as Button
-	if not equip_btn.pressed.is_connected(_do_equip):
-		equip_btn.pressed.connect(_do_equip)
+	_equip_button = _right_page.get_node("Footer/EquipButton") as Button
+	if not _equip_button.pressed.is_connected(_do_equip):
+		_equip_button.pressed.connect(_do_equip)
 
 	var throw_btn: Button = _right_page.get_node("Footer/ThrowButton") as Button
 	if not throw_btn.pressed.is_connected(_do_throw):
@@ -308,6 +321,7 @@ func _do_equip() -> void:
 			GameEvents.inventory_changed.emit()
 		_selected_slot = null
 		_refresh_both_pages()
+		_update_equip_button_label()
 
 
 ## Remove one unit of the selected item from the bag and emit item_dropped.
@@ -409,7 +423,31 @@ func _on_row_selected(row: InventoryRow) -> void:
 		_selected_row.set_selected(false)
 	_selected_row = row
 	_selected_row.set_selected(true)
-	_selected_slot = null
+
+	# Selecting a bag row supersedes any equipment-slot selection (issue #7):
+	# clear the slot's highlight and restore the Equip button to "Equip".
+	if _selected_slot != null:
+		_selected_slot.set_selected(false)
+		_selected_slot = null
+	_update_equip_button_label()
+
+
+## Called when the player clicks a FILLED equipment slot. Makes the slot the
+## active selection so _do_equip() unequips it instead of equipping a bag item
+## (issue #7). Mirrors _on_row_selected()'s mutual-exclusivity contract.
+func _on_slot_selected(slot: EquipmentSlot) -> void:
+	# Selecting a slot supersedes any bag-row selection — clear its highlight.
+	if _selected_row != null:
+		_selected_row.set_selected(false)
+		_selected_row = null
+
+	# Only one slot is ever the active selection; clear the previous one first.
+	if _selected_slot != null and _selected_slot != slot:
+		_selected_slot.set_selected(false)
+
+	_selected_slot = slot
+	_selected_slot.set_selected(true)
+	_update_equip_button_label()
 
 
 ## Called whenever GameEvents.inventory_changed fires, including from systems
@@ -582,6 +620,20 @@ func _rebind_selected_row(item_id: StringName) -> void:
 			_selected_row = row
 			_selected_row.set_selected(true)
 			return
+
+
+## Rewrite the Equip/Unequip button's label to match the current selection
+## (issue #7). A selected equipment slot means _do_equip() will unequip it,
+## so the button reads "Unequip (E)"; otherwise (a bag row, or nothing,
+## selected) it reads "Equip" — the normal equip action.
+func _update_equip_button_label() -> void:
+	if _equip_button == null:
+		return
+
+	if _selected_slot != null:
+		_equip_button.text = "Unequip (E)"
+	else:
+		_equip_button.text = "Equip"
 
 
 ## Update the weight header text to reflect the current inventory state.

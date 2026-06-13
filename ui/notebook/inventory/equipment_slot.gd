@@ -2,13 +2,23 @@ class_name EquipmentSlot
 extends Control
 ## Represents a single wearable equipment slot in the inventory left page.
 ##
-## Displays the slot name when empty and the item icon when an item is equipped.
+## The slot-name heading (SlotLabel) is ALWAYS visible, whether the slot is
+## empty or filled — per issue #7, equipping an item must not hide it. When
+## filled, the equipped item's icon appears in a persistent framed area
+## (IconFrame/IconRect) beside the heading, and the item's display name
+## appears under the heading (ItemNameLabel) only while the slot is selected.
+##
+## A filled slot is selectable: clicking it emits `selected` so the parent
+## InventoryTab can treat it as "Unequip" target. An empty slot is NOT
+## selectable — there is nothing to unequip.
+##
 ## Accepts drag-and-drop from InventoryRow so the player can equip items by
 ## dragging them onto the matching slot. The parent InventoryTab handles the
 ## actual Inventory.equip() call after receiving slot_drop_received.
 ##
-## Static layout (SlotLabel, IconRect, size/anchor properties) lives in
-## equipment_slot.tscn — this script only handles data binding and drop logic.
+## Static layout (SlotLabel, IconFrame/IconRect, ItemNameLabel, SelectionRect,
+## size/anchor properties) lives in equipment_slot.tscn — this script only
+## handles data binding, selection state, and drop logic.
 ##
 ## Drag-and-drop overview:
 ##   https://docs.godotengine.org/en/stable/tutorials/ui/gui_drag_and_drop.html
@@ -18,6 +28,12 @@ extends Control
 # We keep it local rather than on GameEvents because it is a within-scene
 # parent/child communication — not cross-system.
 signal slot_drop_received(stack: ItemStack, slot: int)
+
+# Emitted when the player left-clicks a FILLED slot. The parent InventoryTab
+# connects to this (mirroring InventoryRow.selected) and treats the slot as
+# the active selection — relabeling the Equip button to "Unequip (E)".
+# Empty slots never emit this signal; see _gui_input().
+signal selected(slot: EquipmentSlot)
 
 
 # ---------------------------------------------------------------------------
@@ -32,23 +48,36 @@ var _slot: ItemData.EquipSlot = ItemData.EquipSlot.NONE
 # Updated by setup() so the slot can show the correct state.
 var _item: ItemData = null
 
+# Whether this slot is the player's active selection. Mirrors
+# InventoryRow's selection flag — true reveals ItemNameLabel + SelectionRect.
+# Set via set_selected(); read by _update_display() and _gui_input().
+var _selected: bool = false
+
 
 # ---------------------------------------------------------------------------
 # @onready vars
 # ---------------------------------------------------------------------------
 
-# Shows the slot name ("Boots", "Gloves", etc.) when the slot is empty.
-# Replaced visually by _icon_rect when an item is present.
-# Declared in equipment_slot.tscn with PRESET_FULL_RECT anchors and centered
-# alignment — this script only toggles visibility and sets text.
-@onready var _slot_label: Label = $SlotLabel
+# Always-visible heading showing the slot name ("Boots", "Gloves", etc.),
+# whether the slot is empty or filled (issue #7).
+# Declared in equipment_slot.tscn — this script only sets its text.
+@onready var _slot_label: Label = $HBox/TextVBox/SlotLabel
 
 # Shows the item icon when an item is equipped. Hidden when slot is empty.
 # We use a TextureRect because it scales the Texture2D to fill the node bounds.
 # https://docs.godotengine.org/en/stable/classes/class_texturerect.html
-# Declared in equipment_slot.tscn with STRETCH_KEEP_ASPECT_CENTERED and
-# PRESET_FULL_RECT — starts hidden (visible = false in the scene).
-@onready var _icon_rect: TextureRect = $IconRect
+# Declared in equipment_slot.tscn inside IconFrame with
+# STRETCH_KEEP_ASPECT_CENTERED — starts hidden (visible = false in the scene).
+@onready var _icon_rect: TextureRect = $HBox/IconFrame/IconRect
+
+# Shows the equipped item's display name under the heading, but only while
+# this slot is selected. Hidden by default in the scene; toggled by
+# set_selected().
+@onready var _item_name_label: Label = $HBox/TextVBox/ItemNameLabel
+
+# Selection highlight, mirroring InventoryRow's SelectionRect convention.
+# Hidden by default in the scene; toggled by set_selected().
+@onready var _selection_rect: ColorRect = $SelectionRect
 
 
 # ---------------------------------------------------------------------------
@@ -62,6 +91,24 @@ func _ready() -> void:
 	_update_display()
 
 
+## Godot calls this during the engine's built-in control-event dispatch.
+## Mirrors InventoryRow._gui_input(): a left-click emits `selected` so the
+## parent InventoryTab can update its selection state.
+##
+## Per issue #7, an EMPTY slot has nothing to unequip, so empty slots do not
+## emit `selected` at all — clicking one is a no-op.
+## https://docs.godotengine.org/en/stable/classes/class_control.html#class-control-private-method-gui-input
+func _gui_input(event: InputEvent) -> void:
+	if _item == null:
+		return
+
+	if event is InputEventMouseButton:
+		var mb: InputEventMouseButton = event
+		if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
+			selected.emit(self)
+			accept_event()
+
+
 # ---------------------------------------------------------------------------
 # Public methods
 # ---------------------------------------------------------------------------
@@ -70,11 +117,35 @@ func _ready() -> void:
 ## currently equipped item. Call this after adding the node to the scene tree
 ## so _ready() has already run and child nodes exist.
 ##
+## An empty slot can never be selected (see _gui_input), so if `item` is null
+## we also clear `_selected`. This matters on refresh: when InventoryTab
+## unequips the item shown in this slot, _refresh_both_pages() calls setup()
+## with item == null without an explicit set_selected(false) — without this
+## guard the now-empty slot would still show its (now blank) ItemNameLabel
+## and SelectionRect.
+##
 ## @param slot - the EquipSlot enum value this node represents
 ## @param item - the ItemData currently in this slot (null = empty)
 func setup(slot: ItemData.EquipSlot, item: ItemData = null) -> void:
 	_slot = slot
 	_item = item
+	if _item == null:
+		_selected = false
+	_update_display()
+
+
+## Set or clear the visual selection indicator on this slot.
+##
+## Call set_selected(true) when the player clicks this (filled) slot, and
+## set_selected(false) when a different slot or bag row is selected, or when
+## the equipped item is removed (the slot becomes empty and unselectable).
+##
+## set_selected(true) reveals ItemNameLabel (showing the equipped item's
+## name) and SelectionRect; set_selected(false) hides both again.
+##
+## @param value - true to show the selection state; false to hide it
+func set_selected(value: bool) -> void:
+	_selected = value
 	_update_display()
 
 
@@ -125,25 +196,36 @@ func _drop_data(_at_position: Vector2, data: Variant) -> void:
 # Private helpers
 # ---------------------------------------------------------------------------
 
-## Refresh the child nodes to reflect the current _item state.
-## Label is shown when empty; icon_rect is shown when filled.
+## Refresh the child nodes to reflect the current _item and _selected state.
 ##
-## @onready guarantees _slot_label and _icon_rect are non-null by the time
-## _ready() runs, and setup() is always called after _ready(), so the null
-## guard that was needed when children were built with .new() is no longer
-## required here.
+## SlotLabel (the heading) is ALWAYS visible, filled or empty (issue #7).
+## IconRect shows the equipped item's icon when filled, and is cleared and
+## hidden when empty. ItemNameLabel and SelectionRect only appear while
+## _selected is true — and since empty slots can never become selected
+## (_gui_input ignores clicks when _item == null), they are effectively
+## filled-and-selected-only in practice.
+##
+## @onready guarantees all child refs are non-null by the time _ready() runs,
+## and setup() is always called after _ready(), so no null guards are needed.
 func _update_display() -> void:
+	# The heading always shows the slot name, regardless of fill state.
+	_slot_label.text = _slot_name()
+	_slot_label.visible = true
+
 	if _item == null:
-		# Empty slot — show the slot name so the player knows what goes here.
-		_slot_label.text = _slot_name()
-		_slot_label.visible = true
+		# Empty slot — clear the framed icon area.
 		_icon_rect.texture = null
 		_icon_rect.visible = false
+		_item_name_label.text = ""
 	else:
-		# Filled slot — show the item icon (or blank if none is set).
-		_slot_label.visible = false
+		# Filled slot — show the item icon in the persistent framed area.
 		_icon_rect.texture = _item.icon
 		_icon_rect.visible = true
+		_item_name_label.text = _item.display_name
+
+	# ItemNameLabel and SelectionRect only show while this slot is selected.
+	_item_name_label.visible = _selected
+	_selection_rect.visible = _selected
 
 
 ## Returns a human-readable label for this slot type.
