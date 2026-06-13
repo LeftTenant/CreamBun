@@ -6,7 +6,8 @@ extends Control
 ## empty or filled — per issue #7, equipping an item must not hide it. When
 ## filled, the equipped item's icon appears in a persistent framed area
 ## (IconFrame/IconRect) beside the heading, and the item's display name
-## appears under the heading (ItemNameLabel) only while the slot is selected.
+## appears under the heading (ItemNameLabel) whenever the slot is filled —
+## regardless of selection.
 ##
 ## A filled slot is selectable: clicking it emits `selected` so the parent
 ## InventoryTab can treat it as "Unequip" target. An empty slot is NOT
@@ -49,7 +50,7 @@ var _slot: ItemData.EquipSlot = ItemData.EquipSlot.NONE
 var _item: ItemData = null
 
 # Whether this slot is the player's active selection. Mirrors
-# InventoryRow's selection flag — true reveals ItemNameLabel + SelectionRect.
+# InventoryRow's selection flag — true reveals SelectionRect only.
 # Set via set_selected(); read by _update_display() and _gui_input().
 var _selected: bool = false
 
@@ -70,9 +71,10 @@ var _selected: bool = false
 # STRETCH_KEEP_ASPECT_CENTERED — starts hidden (visible = false in the scene).
 @onready var _icon_rect: TextureRect = $HBox/IconFrame/IconRect
 
-# Shows the equipped item's display name under the heading, but only while
-# this slot is selected. Hidden by default in the scene; toggled by
-# set_selected().
+# Shows the equipped item's display name under the heading whenever this
+# slot is filled, regardless of selection. Hidden by default in the scene
+# (the scene's default state represents an empty slot); toggled by
+# _update_display() based on _item.
 @onready var _item_name_label: Label = $HBox/TextVBox/ItemNameLabel
 
 # Selection highlight, mirroring InventoryRow's SelectionRect convention.
@@ -121,8 +123,9 @@ func _gui_input(event: InputEvent) -> void:
 ## we also clear `_selected`. This matters on refresh: when InventoryTab
 ## unequips the item shown in this slot, _refresh_both_pages() calls setup()
 ## with item == null without an explicit set_selected(false) — without this
-## guard the now-empty slot would still show its (now blank) ItemNameLabel
-## and SelectionRect.
+## guard the now-empty slot would still show its SelectionRect highlight.
+## ItemNameLabel always follows fill state independently, so it is hidden for
+## the empty slot regardless of `_selected`.
 ##
 ## @param slot - the EquipSlot enum value this node represents
 ## @param item - the ItemData currently in this slot (null = empty)
@@ -140,10 +143,11 @@ func setup(slot: ItemData.EquipSlot, item: ItemData = null) -> void:
 ## set_selected(false) when a different slot or bag row is selected, or when
 ## the equipped item is removed (the slot becomes empty and unselectable).
 ##
-## set_selected(true) reveals ItemNameLabel (showing the equipped item's
-## name) and SelectionRect; set_selected(false) hides both again.
+## set_selected(true) reveals SelectionRect; set_selected(false) hides it
+## again. ItemNameLabel is NOT affected — its visibility follows the slot's
+## fill state (_item), not selection.
 ##
-## @param value - true to show the selection state; false to hide it
+## @param value - true to show the selection highlight; false to hide it
 func set_selected(value: bool) -> void:
 	_selected = value
 	_update_display()
@@ -199,11 +203,10 @@ func _drop_data(_at_position: Vector2, data: Variant) -> void:
 ## Refresh the child nodes to reflect the current _item and _selected state.
 ##
 ## SlotLabel (the heading) is ALWAYS visible, filled or empty (issue #7).
-## IconRect shows the equipped item's icon when filled, and is cleared and
-## hidden when empty. ItemNameLabel and SelectionRect only appear while
-## _selected is true — and since empty slots can never become selected
-## (_gui_input ignores clicks when _item == null), they are effectively
-## filled-and-selected-only in practice.
+## IconRect and ItemNameLabel both follow fill state (_item != null) — they
+## show the equipped item's icon and display name whenever the slot is
+## filled, regardless of selection. SelectionRect is the only element driven
+## by _selected.
 ##
 ## @onready guarantees all child refs are non-null by the time _ready() runs,
 ## and setup() is always called after _ready(), so no null guards are needed.
@@ -213,18 +216,19 @@ func _update_display() -> void:
 	_slot_label.visible = true
 
 	if _item == null:
-		# Empty slot — clear the framed icon area.
+		# Empty slot — clear the framed icon area and hide the item name.
 		_icon_rect.texture = null
 		_icon_rect.visible = false
 		_item_name_label.text = ""
+		_item_name_label.visible = false
 	else:
-		# Filled slot — show the item icon in the persistent framed area.
+		# Filled slot — show the item icon and name, regardless of selection.
 		_icon_rect.texture = _item.icon
 		_icon_rect.visible = true
 		_item_name_label.text = _item.display_name
+		_item_name_label.visible = true
 
-	# ItemNameLabel and SelectionRect only show while this slot is selected.
-	_item_name_label.visible = _selected
+	# SelectionRect is the only element driven by selection state.
 	_selection_rect.visible = _selected
 
 

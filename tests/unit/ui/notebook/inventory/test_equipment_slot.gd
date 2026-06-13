@@ -9,11 +9,12 @@
 ##   - SlotLabel (the slot-name heading) stays visible ALWAYS, filled or empty.
 ##   - IconFrame/IconRect show the equipped item's icon in a persistent framed
 ##     area beside the heading when filled.
-##   - ItemNameLabel appears UNDER the heading only while the slot is selected.
+##   - ItemNameLabel appears UNDER the heading whenever the slot is filled
+##     (_item != null), regardless of selection — and is hidden when empty.
 ##   - A filled slot is selectable (click emits `selected`); an EMPTY slot is
 ##     NOT selectable (click does nothing, no `selected` emission).
-##   - set_selected(true) reveals ItemNameLabel + SelectionRect; set_selected(false)
-##     hides them again.
+##   - set_selected(true) reveals SelectionRect only; set_selected(false)
+##     hides it again. ItemNameLabel is unaffected by selection.
 ##
 ## These tests currently FAIL against the pre-fix equipment_slot.gd, which:
 ##   - hides SlotLabel when an item is set (_update_display branch),
@@ -163,23 +164,16 @@ func test_icon_rect_hidden_when_empty() -> void:
 
 
 # ---------------------------------------------------------------------------
-# Test 5 — set_selected(true) on a filled slot reveals ItemNameLabel + highlight
+# Test 5 — set_selected(true) on a filled slot reveals the SelectionRect
+#          highlight only (ItemNameLabel is unaffected by selection)
 # ---------------------------------------------------------------------------
 
-func test_set_selected_true_reveals_item_name_and_highlight() -> void:
+func test_set_selected_true_reveals_highlight_only() -> void:
 	var slot: EquipmentSlot = _make_slot()
 	var boots: ItemData = _make_item(&"select_test_boots", ItemData.EquipSlot.BOOTS)
 	slot.setup(ItemData.EquipSlot.BOOTS, boots)
 
 	slot.set_selected(true)
-
-	var name_label: Label = slot.find_child("ItemNameLabel", true, false) as Label
-	assert_not_null(name_label, "equipment_slot.tscn must declare 'ItemNameLabel'")
-	if name_label != null:
-		assert_true(name_label.visible,
-				"ItemNameLabel must become visible when set_selected(true) is called on a filled slot")
-		assert_eq(name_label.text, boots.display_name,
-				"ItemNameLabel must show the equipped item's display_name while selected")
 
 	var highlight: ColorRect = slot.find_child("SelectionRect", true, false) as ColorRect
 	assert_not_null(highlight, "equipment_slot.tscn must declare 'SelectionRect'")
@@ -187,12 +181,21 @@ func test_set_selected_true_reveals_item_name_and_highlight() -> void:
 		assert_true(highlight.visible,
 				"SelectionRect must become visible when set_selected(true) is called")
 
+	# ItemNameLabel was already visible because the slot is filled — selection
+	# must not change that.
+	var name_label: Label = slot.find_child("ItemNameLabel", true, false) as Label
+	assert_not_null(name_label, "equipment_slot.tscn must declare 'ItemNameLabel'")
+	if name_label != null:
+		assert_true(name_label.visible,
+				"ItemNameLabel must remain visible (driven by fill state, not selection)")
+
 
 # ---------------------------------------------------------------------------
-# Test 6 — set_selected(false) hides ItemNameLabel + highlight again
+# Test 6 — set_selected(false) hides the highlight again; ItemNameLabel stays
+#          visible because the slot is still filled
 # ---------------------------------------------------------------------------
 
-func test_set_selected_false_hides_item_name_and_highlight() -> void:
+func test_set_selected_false_hides_highlight_but_not_item_name() -> void:
 	var slot: EquipmentSlot = _make_slot()
 	var boots: ItemData = _make_item(&"deselect_test_boots", ItemData.EquipSlot.BOOTS)
 	slot.setup(ItemData.EquipSlot.BOOTS, boots)
@@ -200,15 +203,55 @@ func test_set_selected_false_hides_item_name_and_highlight() -> void:
 	slot.set_selected(true)
 	slot.set_selected(false)
 
-	var name_label: Label = slot.find_child("ItemNameLabel", true, false) as Label
-	if name_label != null:
-		assert_false(name_label.visible,
-				"ItemNameLabel must be hidden again after set_selected(false)")
-
 	var highlight: ColorRect = slot.find_child("SelectionRect", true, false) as ColorRect
 	if highlight != null:
 		assert_false(highlight.visible,
 				"SelectionRect must be hidden again after set_selected(false)")
+
+	var name_label: Label = slot.find_child("ItemNameLabel", true, false) as Label
+	if name_label != null:
+		assert_true(name_label.visible,
+				"ItemNameLabel must remain visible after set_selected(false) because the slot is still filled")
+		assert_eq(name_label.text, boots.display_name,
+				"ItemNameLabel must show the equipped item's display_name")
+
+
+# ---------------------------------------------------------------------------
+# Test 5b — setup() with a filled item shows ItemNameLabel even when NOT
+#           selected (the core change requested after manual testing)
+# ---------------------------------------------------------------------------
+
+func test_setup_with_item_shows_item_name_label_when_not_selected() -> void:
+	var slot: EquipmentSlot = _make_slot()
+	var boots: ItemData = _make_item(&"unselected_fill_test_boots", ItemData.EquipSlot.BOOTS)
+
+	slot.setup(ItemData.EquipSlot.BOOTS, boots)
+
+	var name_label: Label = slot.find_child("ItemNameLabel", true, false) as Label
+	assert_not_null(name_label, "equipment_slot.tscn must declare 'ItemNameLabel'")
+	if name_label == null:
+		return
+	assert_true(name_label.visible,
+			"ItemNameLabel must be visible whenever the slot is filled, even when not selected")
+	assert_eq(name_label.text, boots.display_name,
+			"ItemNameLabel must show the equipped item's display_name")
+
+
+# ---------------------------------------------------------------------------
+# Test 5c — setup() with no item (empty slot) hides ItemNameLabel
+# ---------------------------------------------------------------------------
+
+func test_setup_without_item_hides_item_name_label() -> void:
+	var slot: EquipmentSlot = _make_slot()
+
+	slot.setup(ItemData.EquipSlot.BOOTS, null)
+
+	var name_label: Label = slot.find_child("ItemNameLabel", true, false) as Label
+	assert_not_null(name_label, "equipment_slot.tscn must declare 'ItemNameLabel'")
+	if name_label == null:
+		return
+	assert_false(name_label.visible,
+			"ItemNameLabel must be hidden when the slot is empty")
 
 
 # ---------------------------------------------------------------------------

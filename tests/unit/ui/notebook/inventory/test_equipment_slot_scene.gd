@@ -13,8 +13,8 @@
 ## so the slot-name heading disappeared once filled. The fix keeps SlotLabel
 ## visible as a permanent heading and adds three more named nodes:
 ##   - IconFrame      — a framed container beside the heading that holds IconRect
-##   - ItemNameLabel  — shows the equipped item's display name, but only while
-##                       the slot is selected
+##   - ItemNameLabel  — shows the equipped item's display name whenever the
+##                       slot is filled, regardless of selection
 ##   - SelectionRect  — the selection highlight, mirroring inventory_row.tscn's
 ##                       SelectionRect convention
 ## These tests currently FAIL because equipment_slot.tscn does not yet declare
@@ -141,9 +141,11 @@ func test_scene_declares_icon_frame_containing_icon_rect() -> void:
 # ---------------------------------------------------------------------------
 
 func test_scene_declares_item_name_label_hidden_by_default() -> void:
-	# ItemNameLabel appears UNDER the heading only while the slot is selected
-	# (per issue #7's desired behavior). It must exist as a Label and start
-	# hidden — set_selected(true) is what reveals it.
+	# ItemNameLabel appears UNDER the heading whenever the slot is filled
+	# (per issue #7's desired behavior). The scene's default state represents
+	# an EMPTY slot (no setup() call has been made), so ItemNameLabel must
+	# start hidden — _update_display() reveals it once setup() is called with
+	# a non-null item.
 	var instance: Control = _make_scene_instance()
 
 	var node: Node = instance.find_child("ItemNameLabel", true, false)
@@ -154,7 +156,7 @@ func test_scene_declares_item_name_label_hidden_by_default() -> void:
 	assert_true(node is Label,
 			"'ItemNameLabel' must be a Label, got %s" % node.get_class())
 	assert_false((node as Label).visible,
-			"'ItemNameLabel' must be hidden by default — set_selected(true) reveals it")
+			"'ItemNameLabel' must be hidden by default — the default scene state represents an empty slot")
 
 
 # ---------------------------------------------------------------------------
