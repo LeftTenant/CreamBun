@@ -1,53 +1,57 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://c6x8alytf00yb"]
 
-[ext_resource type="Script" path="res://ui/notebook/inventory/equipment_slot.gd" id="1"]
+[ext_resource type="Script" uid="uid://b2wakewrrrqh5" path="res://ui/notebook/inventory/equipment_slot.gd" id="1"]
 
-[node name="EquipmentSlot" type="Control"]
-script = ExtResource("1")
-size_flags_horizontal = 3
+[node name="EquipmentSlot" type="Control" unique_id=922575727]
 custom_minimum_size = Vector2(0, 36)
+layout_mode = 3
+anchors_preset = 0
+size_flags_horizontal = 3
+script = ExtResource("1")
 
-[node name="SelectionRect" type="ColorRect" parent="."]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-color = Color(1, 0.9, 0.6, 0.35)
-mouse_filter = 2
+[node name="SelectionRect" type="ColorRect" parent="." unique_id=1420371369]
 visible = false
-
-[node name="HBox" type="HBoxContainer" parent="."]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(1, 0.9, 0.6, 0.35)
+
+[node name="HBox" type="HBoxContainer" parent="." unique_id=2053359688]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 
-[node name="IconFrame" type="PanelContainer" parent="HBox"]
+[node name="IconFrame" type="PanelContainer" parent="HBox" unique_id=481538253]
+custom_minimum_size = Vector2(32, 32)
 layout_mode = 2
 size_flags_vertical = 4
-custom_minimum_size = Vector2(32, 32)
 
-[node name="IconRect" type="TextureRect" parent="HBox/IconFrame"]
-layout_mode = 2
-focus_mode = 0
-stretch_mode = 5
+[node name="IconRect" type="TextureRect" parent="HBox/IconFrame" unique_id=281785222]
 visible = false
+layout_mode = 2
+stretch_mode = 5
 
-[node name="TextVBox" type="VBoxContainer" parent="HBox"]
+[node name="TextVBox" type="VBoxContainer" parent="HBox" unique_id=2033843178]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 
-[node name="SlotLabel" type="Label" parent="HBox/TextVBox"]
+[node name="SlotLabel" type="Label" parent="HBox/TextVBox" unique_id=1058788150]
 layout_mode = 2
-focus_mode = 0
 size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 12
 
-[node name="ItemNameLabel" type="Label" parent="HBox/TextVBox"]
-layout_mode = 2
-focus_mode = 0
-size_flags_horizontal = 3
-autowrap_mode = 3
+[node name="ItemNameLabel" type="Label" parent="HBox/TextVBox" unique_id=1129884815]
 visible = false
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 10
