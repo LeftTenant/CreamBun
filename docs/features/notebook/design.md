@@ -551,12 +551,12 @@ The existing `open_inventory` action in `project.godot` should be **removed** an
 Inside the notebook:
 
 - Mouse: click a `TabStrip` button.
-- Keyboard: **Tab** cycles forward through tabs; **Shift+Tab** cycles backward. Arrow keys are reserved for in-tab selection and are not used here.
+- Keyboard: **PageUp** cycles forward through tabs; **PageDown** cycles backward. Arrow keys are reserved for in-tab selection and are not used here. **Tab**/**Shift+Tab** are reserved for normal in-page focus navigation (e.g. moving between Settings sliders) and do not cycle tabs.
 - Gamepad: shoulder buttons (`L1`/`R1`).
 
-`notebook.gd` manages this via `_input` and dispatches to `_switch_tab(NotebookTab)`.
+`notebook.gd` manages this via `_unhandled_input` and dispatches to `_switch_tab(NotebookTab)`.
 
-> **Note:** Because Tab is consumed for tab cycling while the notebook is open, it must not appear in any `open_notebook_*` binding in `project.godot`. This also resolves the `ui_focus_next` conflict described in the open questions.
+> **Note:** PageUp/PageDown are dedicated `notebook_page_next`/`notebook_page_prev` actions in `project.godot`, so they keep cycling tabs even while a Control has focus — unlike `ui_focus_next`/`ui_focus_prev` (Tab/Shift+Tab), which a focused Control consumes first. This resolves the focus-conflict issue described in the open questions (issue #26). On macOS laptops without dedicated PageUp/PageDown keys, use fn+up/down arrow.
 
 ### 7.3 Within-tab input
 
@@ -665,7 +665,7 @@ Out of scope for this design doc, but the notebook hooks into existing autosave 
 
 **Phase 1 (minimum viable notebook)**
 
-- Scene structure, open/close, tab switching with Tab/Shift+Tab.
+- Scene structure, open/close, tab switching with PageUp/PageDown.
 - Inventory tab with mouse + keyboard, drag-and-drop, equip/throw/recycle.
 - Map tab: static terrain/landmark texture left page, static local-map placeholder right page (no fog of war yet).
 - Quests tab: list + detail, no objective tracking logic (reads `QuestLog` directly). Includes the pre-completed "The Foraging Book" intro quest.

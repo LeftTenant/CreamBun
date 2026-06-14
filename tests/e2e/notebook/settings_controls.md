@@ -41,11 +41,11 @@ scenario is meant to be the canonical proof for.
 - Wait: 10 frames
 - Press action: `open_notebook_inventory`
 - Wait: 5 frames
-- Press action: `ui_focus_next`     # INVENTORY → MAP
+- Press action: `notebook_page_next`     # INVENTORY → MAP
 - Wait: 5 frames
-- Press action: `ui_focus_next`     # MAP → QUESTS
+- Press action: `notebook_page_next`     # MAP → QUESTS
 - Wait: 5 frames
-- Press action: `ui_focus_next`     # QUESTS → SETTINGS
+- Press action: `notebook_page_next`     # QUESTS → SETTINGS
 - Wait: 15 frames
 - Assert: node property `Notebook._current_tab` == `3` (SETTINGS)
 

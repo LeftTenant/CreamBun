@@ -475,39 +475,76 @@ func test_notebook_input_ui_cancel_opens_to_last_tab_when_closed() -> void:
 
 
 # ---------------------------------------------------------------------------
-# Test 22 — _unhandled_input: Tab key cycles forward through tabs
+# Test 22 — PageUp/PageDown actions are registered in the InputMap (issue #26)
 # ---------------------------------------------------------------------------
 
-func test_notebook_input_tab_key_cycles_forward() -> void:
-	# While open, Tab advances to the next tab. INVENTORY(0) → MAP(1).
-	# This lets keyboard-only players browse tabs without using hotkeys.
+func test_notebook_page_cycle_actions_exist() -> void:
+	# Issue #26: page cycling was bound to the built-in ui_focus_next/_prev
+	# (Tab/Shift+Tab) actions, which broke once a Control had focus because the
+	# control consumed Tab first. The fix adds dedicated PageUp/PageDown actions.
+	# These must be present in project.godot's InputMap or page cycling cannot
+	# fire at all.
+	assert_true(InputMap.has_action("notebook_page_next"),
+			"InputMap must define notebook_page_next (PageUp) — see issue #26")
+	assert_true(InputMap.has_action("notebook_page_prev"),
+			"InputMap must define notebook_page_prev (PageDown) — see issue #26")
+
+
+# ---------------------------------------------------------------------------
+# Test 23 — _unhandled_input: PageUp cycles forward through tabs (issue #26)
+# ---------------------------------------------------------------------------
+
+func test_notebook_input_page_next_cycles_forward() -> void:
+	# While open, PageUp advances to the next tab. INVENTORY(0) → MAP(1).
+	# This lets keyboard-only players browse tabs without using hotkeys, and
+	# (unlike the old Tab binding) keeps working while a Control has focus.
+	var nb: Notebook = _make_notebook()
+	nb.open(Notebook.NotebookTab.INVENTORY)
+
+	nb._unhandled_input(_make_action("notebook_page_next"))
+
+	assert_eq(nb._current_tab, Notebook.NotebookTab.MAP,
+			"notebook_page_next from INVENTORY must advance _current_tab to MAP")
+
+
+# ---------------------------------------------------------------------------
+# Test 24 — _unhandled_input: PageDown cycles backward and wraps (issue #26)
+# ---------------------------------------------------------------------------
+
+func test_notebook_input_page_prev_cycles_backward_with_wrap() -> void:
+	# PageDown goes backward. From INVENTORY(0), wrapping backward should land
+	# on SESSIONS(4) — the last tab in the enum.
+	var nb: Notebook = _make_notebook()
+	nb.open(Notebook.NotebookTab.INVENTORY)
+
+	nb._unhandled_input(_make_action("notebook_page_prev"))
+
+	assert_eq(nb._current_tab, Notebook.NotebookTab.SESSIONS,
+			"notebook_page_prev from INVENTORY must wrap backward to SESSIONS")
+
+
+# ---------------------------------------------------------------------------
+# Test 25 — ui_focus_next/prev no longer change the tab (issue #26 regression)
+# ---------------------------------------------------------------------------
+
+func test_notebook_input_ui_focus_does_not_change_tab() -> void:
+	# Issue #26 regression guard: Tab / Shift+Tab (ui_focus_next/_prev) must be
+	# left for normal UI focus navigation and must NOT cycle notebook tabs. If
+	# either still moves _current_tab, the old broken binding has crept back in.
 	var nb: Notebook = _make_notebook()
 	nb.open(Notebook.NotebookTab.INVENTORY)
 
 	nb._unhandled_input(_make_action("ui_focus_next"))
-
-	assert_eq(nb._current_tab, Notebook.NotebookTab.MAP,
-			"Tab from INVENTORY must advance _current_tab to MAP")
-
-
-# ---------------------------------------------------------------------------
-# Test 23 — _unhandled_input: Shift+Tab cycles backward and wraps around
-# ---------------------------------------------------------------------------
-
-func test_notebook_input_shift_tab_cycles_backward_with_wrap() -> void:
-	# Shift+Tab goes backward. From INVENTORY(0), wrapping backward should
-	# land on SESSIONS(4) — the last tab in the enum.
-	var nb: Notebook = _make_notebook()
-	nb.open(Notebook.NotebookTab.INVENTORY)
+	assert_eq(nb._current_tab, Notebook.NotebookTab.INVENTORY,
+			"ui_focus_next must NOT change the tab — it is reserved for UI focus")
 
 	nb._unhandled_input(_make_action("ui_focus_prev"))
-
-	assert_eq(nb._current_tab, Notebook.NotebookTab.SESSIONS,
-			"Shift+Tab from INVENTORY must wrap backward to SESSIONS")
+	assert_eq(nb._current_tab, Notebook.NotebookTab.INVENTORY,
+			"ui_focus_prev must NOT change the tab — it is reserved for UI focus")
 
 
 # ---------------------------------------------------------------------------
-# Test 24 — close(): writes the current SaveManager.settings to settings.tres
+# Test 26 — close(): writes the current SaveManager.settings to settings.tres
 # ---------------------------------------------------------------------------
 
 func test_notebook_close_writes_settings_to_disk() -> void:
@@ -530,7 +567,7 @@ func test_notebook_close_writes_settings_to_disk() -> void:
 
 
 # ---------------------------------------------------------------------------
-# Test 25 — close() -> load_settings(): round-trips a changed setting
+# Test 27 — close() -> load_settings(): round-trips a changed setting
 # ---------------------------------------------------------------------------
 
 func test_notebook_close_then_load_settings_round_trips_changed_value() -> void:
@@ -558,7 +595,7 @@ func test_notebook_close_then_load_settings_round_trips_changed_value() -> void:
 
 
 # ---------------------------------------------------------------------------
-# Test 26 — reopen to Settings after close shows persisted (non-default) values
+# Test 28 — reopen to Settings after close shows persisted (non-default) values
 # ---------------------------------------------------------------------------
 
 func test_reopen_to_settings_after_close_shows_persisted_values() -> void:
@@ -589,7 +626,7 @@ func test_reopen_to_settings_after_close_shows_persisted_values() -> void:
 
 
 # ---------------------------------------------------------------------------
-# Test 27 — settings-only edit + close does not change PlayerData.to_resource()
+# Test 29 — settings-only edit + close does not change PlayerData.to_resource()
 # ---------------------------------------------------------------------------
 
 func test_settings_edit_and_close_does_not_change_player_data() -> void:
@@ -625,7 +662,7 @@ func test_settings_edit_and_close_does_not_change_player_data() -> void:
 
 
 # ---------------------------------------------------------------------------
-# Test 28 — close() persists settings regardless of which tab was last active
+# Test 30 — close() persists settings regardless of which tab was last active
 # ---------------------------------------------------------------------------
 
 func test_notebook_close_persists_settings_regardless_of_active_tab() -> void:
@@ -651,7 +688,7 @@ func test_notebook_close_persists_settings_regardless_of_active_tab() -> void:
 
 
 # ---------------------------------------------------------------------------
-# Test 29 — close(): notebook_closed still emits exactly once with the new hook
+# Test 31 — close(): notebook_closed still emits exactly once with the new hook
 # ---------------------------------------------------------------------------
 
 func test_notebook_close_emits_notebook_closed_exactly_once_with_save_hook() -> void:

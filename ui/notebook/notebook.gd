@@ -92,13 +92,19 @@ func _unhandled_input(event: InputEvent) -> void:
 		else:
 			open(_last_tab)
 		get_viewport().set_input_as_handled()
-	elif visible and event.is_action_pressed("ui_focus_next"):
-		# Tab key: cycle forward through notebook tabs while the notebook is open.
-		# We consume Tab here so it does not move UI focus to buttons/sliders.
+	elif visible and event.is_action_pressed("notebook_page_next"):
+		# PageUp: cycle forward through notebook tabs while the notebook is open.
+		# Issue #26: this used to be bound to ui_focus_next (Tab), but a focused
+		# Control (e.g. a Settings slider) consumes Tab for focus navigation
+		# before it reaches us here. Dedicated PageUp/PageDown actions keep
+		# page cycling working regardless of focus, and Tab is left free for
+		# normal UI focus navigation. On macOS laptops without a PageUp key,
+		# use fn+up arrow.
 		_switch_tab((_current_tab + 1) % NotebookTab.size())
 		get_viewport().set_input_as_handled()
-	elif visible and event.is_action_pressed("ui_focus_prev"):
-		# Shift+Tab: cycle backward.
+	elif visible and event.is_action_pressed("notebook_page_prev"):
+		# PageDown: cycle backward (see notebook_page_next above). On macOS
+		# laptops without a PageDown key, use fn+down arrow.
 		_switch_tab((_current_tab - 1 + NotebookTab.size()) % NotebookTab.size())
 		get_viewport().set_input_as_handled()
 
