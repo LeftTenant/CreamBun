@@ -9,8 +9,8 @@ Behaviour spec: `docs/features/notebook/design.md`. Plugin: `plugins/godot-testi
 ## Scope
 
 Phase 1 of the notebook ships five tabs (`INVENTORY`, `MAP`, `QUESTS`, `SETTINGS`,
-`SESSIONS`), three open hotkeys (I / M / Q), Esc toggle, Tab / Shift+Tab cycling,
-and keyboard verbs `E` / `T` / `R` for the inventory tab. The map and sessions
+`SESSIONS`), three open hotkeys (I / M / Q), Esc toggle, PageUp / PageDown
+cycling, and keyboard verbs `E` / `T` / `R` for the inventory tab. The map and sessions
 tabs are stubbed to placeholder content in Phase 1, so the scenarios for those
 tabs only assert "the page renders" rather than asserting on real content.
 
@@ -18,7 +18,7 @@ In scope:
 
 - Lifecycle (open / close / toggle / Esc / `get_tree().paused` / `GameState`)
 - Hotkey opens to specific tabs and switches between tabs without closing
-- Tab cycling via `ui_focus_next` / `ui_focus_prev`
+- Tab cycling via `notebook_page_next` / `notebook_page_prev`
 - Inventory tab: row selection, `E` equips, `T` discards, `R` ignored for
   non-recyclable items, weight header updates
 - Quests tab: clicking "View" populates the right page with title/description
@@ -40,7 +40,7 @@ Out of scope (deferred to dedicated future scenarios):
 | # | File | What it verifies |
 |---|------|------------------|
 | 1 | `lifecycle.md`          | Open with I, world pauses, `GameState.NOTEBOOK`; toggle closes; M opens to map; Esc reopens to last tab; Esc closes |
-| 2 | `tab_navigation.md`     | Tab cycles INVENTORY→MAP→QUESTS→SETTINGS→SESSIONS→INVENTORY; Shift+Tab reverses; hotkey on different tab switches without closing |
+| 2 | `tab_navigation.md`     | PageUp cycles INVENTORY→MAP→QUESTS→SETTINGS→SESSIONS→INVENTORY; PageDown reverses; hotkey on different tab switches without closing |
 | 3 | `inventory_actions.md`  | Sample leaf and boots present; clicking a row selects it; `E` equips boots into BOOTS slot; `T` removes one leaf and updates the weight header |
 | 4 | `quests_detail.md`      | "The Foraging Book" listed under "Completed"; clicking "View" renders title, description, and three `[x]` objective lines on the right page |
 | 5 | `settings_controls.md`  | Three volume sliders + text-speed slider on left; window-scale option on right; "Reset" buttons restore the underlying `GameSettings` values |

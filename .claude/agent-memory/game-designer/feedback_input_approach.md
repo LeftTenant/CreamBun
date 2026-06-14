@@ -25,3 +25,5 @@ type: feedback
 **Why:** Workarounds accumulate complexity. A clean input model is worth more than preserving every proposed binding.
 
 **How to apply:** When two bindings conflict, first ask whether one can simply be removed. Only add modifiers or guards if removal isn't viable.
+
+**Update (issue #26):** The Tab-repurposing decision above was reverted. Binding notebook page-cycling to `ui_focus_next`/`ui_focus_prev` (Tab/Shift+Tab) broke once any Control had focus, because the focused Control consumes Tab for focus navigation before the notebook's `_unhandled_input` sees it. Page cycling now uses dedicated `notebook_page_next`/`notebook_page_prev` actions (PageUp/PageDown), and Tab/Shift+Tab are left alone for normal UI focus navigation. Don't re-propose binding page/tab cycling onto `ui_focus_*` — a focused Control will always intercept those first.
