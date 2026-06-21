@@ -118,26 +118,22 @@ func populate_left(parent: Control) -> void:
 		_left_page.get_parent().remove_child(_left_page)
 	parent.add_child(_left_page)
 
-	# Anchor the VBox to fill the parent page so children get a real width.
-	# Without this, a plain Control parent won't resize its children automatically.
-	# Negative right/bottom offsets apply a 10 px inset on all sides (rule 2, ui/CLAUDE.md).
-	# https://docs.godotengine.org/en/stable/classes/class_control.html#class-control-method-set-anchors-and-offsets-preset
-	_left_page.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_left_page.offset_left = 10
-	_left_page.offset_top = 10
-	_left_page.offset_right = -10
-	_left_page.offset_bottom = -10
+	# Anchor the VBox to fill the parent page and inset it by PAGE_INSET pixels
+	# on every side — see NotebookTab._apply_page_inset() for the full rationale.
+	_apply_page_inset(_left_page)
 
 	# Resolve the CardsContainer from the LeftPage subtree.
 	# Using get_node() here (not @onready) because the tree shape is per-call —
 	# the node lives under _left_page, which is extracted in _ensure_pages_built().
-	var cards_container: VBoxContainer = _left_page.get_node("CardsContainer") as VBoxContainer
+	# CardsContainer is wrapped in SessionsScroll so a long list of story cards
+	# scrolls rather than overflowing the page boundary (ui/CLAUDE.md rule 3).
+	var cards_container: VBoxContainer = _left_page.get_node("SessionsScroll/CardsContainer") as VBoxContainer
 
 	# Guard against a renamed or missing CardsContainer in the .tscn — gives a
 	# clear message pointing to exactly which node and scene file is wrong,
 	# rather than a cryptic null-reference crash.
 	if cards_container == null:
-		push_warning("SessionsTab.populate_left: 'CardsContainer' node not found in sessions_tab.tscn — check node name matches")
+		push_warning("SessionsTab.populate_left: 'SessionsScroll/CardsContainer' node not found in sessions_tab.tscn — check node name matches")
 		return
 
 	# D1 FIX: Clear stale cards from CardsContainer before rebuilding so
@@ -194,11 +190,7 @@ func populate_right(parent: Control) -> void:
 	parent.add_child(_right_page)
 
 	# Anchor + inset (same scheme as populate_left for consistent margins).
-	_right_page.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_right_page.offset_left = 10
-	_right_page.offset_top = 10
-	_right_page.offset_right = -10
-	_right_page.offset_bottom = -10
+	_apply_page_inset(_right_page)
 
 	# The Placeholder Label ("Select a Story to see details.") is a static
 	# scene node in sessions_tab.tscn — nothing else is added here (D2).

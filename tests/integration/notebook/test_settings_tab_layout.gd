@@ -23,11 +23,13 @@
 ## a frame pass for layout to settle — a unit test against SettingsTab in
 ## isolation would have no LeftPage/RightPage rect to compare against.
 ##
-## THE 10px MARGIN
+## THE 8px MARGIN
 ## ---------------
-## Per the approved fix plan, all page contents must sit 10px inside the
+## Per the approved fix plan, all page contents must sit 8px inside the
 ## LeftPage / RightPage rects on every side, so the page background art has
 ## breathing room and content never touches the spine seam.
+## The inset is centralised as NotebookTab.PAGE_INSET = 8 in
+## ui/notebook/shared/notebook_tab.gd — update it there, not here.
 ##
 ## Requires GUT: https://github.com/bitwes/Gut
 ##
@@ -60,8 +62,11 @@ extends GutTest
 # ---------------------------------------------------------------------------
 
 # Inset every page-content edge must respect. Mirrors the offsets the fix sets
-# on the VBox (offset_left=10, offset_top=10, offset_right=-10, offset_bottom=-10).
-const PAGE_MARGIN: float = 10.0
+# on the VBox (offset_left=8, offset_top=8, offset_right=-8, offset_bottom=-8).
+# This value is centralised as NotebookTab.PAGE_INSET in
+# ui/notebook/shared/notebook_tab.gd — if you need to change it, change it
+# there and update this constant to match.
+const PAGE_MARGIN: float = 8.0
 
 # Float tolerance for rect comparisons. Layout produces clean integer pixel
 # values in practice, but Godot's anchor math can leave sub-pixel rounding so
@@ -189,9 +194,10 @@ func test_left_page_sliders_within_margin() -> void:
 	assert_not_null(left_page, "LeftPage Control must exist in notebook.tscn")
 
 	var sliders: Array = _find_descendants_of_type(left_page, "HSlider")
-	# Settings tab builds four sliders: Master, Music, SFX, Text Speed.
-	assert_true(sliders.size() >= 4,
-			"Expected at least 4 HSliders on Settings LeftPage, found %d" % sliders.size())
+	# NOTE (Slice 3, pixel-art-purist): TextSpeedSlider moved to the right page,
+	# so LeftPage now has exactly 3 sliders: Master, Music, SFX.
+	assert_true(sliders.size() >= 3,
+			"Expected at least 3 HSliders on Settings LeftPage, found %d" % sliders.size())
 
 	var page_rect: Rect2 = left_page.get_global_rect()
 	var allowed_left: float = page_rect.position.x + PAGE_MARGIN
@@ -239,7 +245,7 @@ func test_right_page_option_button_within_margin() -> void:
 
 
 # ---------------------------------------------------------------------------
-# Test C — the LeftPage VBox sits 10px inside the page on every side
+# Test C — the LeftPage VBox sits 8px inside the page on every side
 # ---------------------------------------------------------------------------
 #
 # We look up the VBox as a direct child of the page Control rather than
@@ -271,7 +277,7 @@ func test_left_page_vbox_respects_margin_on_all_sides() -> void:
 			"LeftPage VBox top edge must be inset by %.0f px" % PAGE_MARGIN)
 	assert_almost_eq(got.end.x, page.end.x - PAGE_MARGIN, POSITION_TOLERANCE,
 			"LeftPage VBox right edge must be inset by %.0f px" % PAGE_MARGIN)
-	# Bottom may sit anywhere from the 10px inset down to the page edge —
+	# Bottom may sit anywhere from the 8px inset down to the page edge —
 	# vertical content can fill the page; the bug is escaping it. Issue #4 is
 	# about content not OVERFLOWING the page, so the only hard constraint is
 	# that the VBox bottom stays at or above the page bottom. Top/left/right
@@ -284,7 +290,7 @@ func test_left_page_vbox_respects_margin_on_all_sides() -> void:
 
 
 # ---------------------------------------------------------------------------
-# Test D — the RightPage VBox sits 10px inside the page on every side
+# Test D — the RightPage VBox sits 8px inside the page on every side
 # ---------------------------------------------------------------------------
 
 func test_right_page_vbox_respects_margin_on_all_sides() -> void:
@@ -311,7 +317,7 @@ func test_right_page_vbox_respects_margin_on_all_sides() -> void:
 	assert_almost_eq(got.end.x, page.end.x - PAGE_MARGIN, POSITION_TOLERANCE,
 			"RightPage VBox right edge must be inset by %.0f px" % PAGE_MARGIN)
 	# Bottom kept symmetric with the LeftPage test: overflow-only check against
-	# the page edge, not the 10px inset. See the matching comment in
+	# the page edge, not the 8px inset. See the matching comment in
 	# test_left_page_vbox_respects_margin_on_all_sides.
 	assert_true(got.end.y <= page.end.y + POSITION_TOLERANCE,
 			"RightPage VBox bottom edge (%.1f) must not overflow page bottom (%.1f)" % [
@@ -332,14 +338,27 @@ func test_right_page_vbox_respects_margin_on_all_sides() -> void:
 func test_sliders_use_expand_fill() -> void:
 	var nb: Notebook = await _open_to_settings()
 
+	# Left page: Master, Music, SFX sliders (TextSpeed moved to right page in
+	# Slice 3 — pixel-art-purist — to fit the 320×180 viewport).
 	var left_page: Control = nb.get_node("Book/Pages/LeftPage") as Control
-	var sliders: Array = _find_descendants_of_type(left_page, "HSlider")
-	assert_true(sliders.size() >= 4,
-			"Expected at least 4 HSliders on Settings LeftPage, found %d" % sliders.size())
+	var left_sliders: Array = _find_descendants_of_type(left_page, "HSlider")
+	assert_true(left_sliders.size() >= 3,
+			"Expected at least 3 HSliders on Settings LeftPage, found %d" % left_sliders.size())
 
-	for slider in sliders:
+	for slider in left_sliders:
 		assert_eq((slider as Control).size_flags_horizontal,
 				Control.SIZE_EXPAND_FILL,
-				"Slider '%s' must set size_flags_horizontal = SIZE_EXPAND_FILL" % slider.name)
+				"Left-page slider '%s' must set size_flags_horizontal = SIZE_EXPAND_FILL" % slider.name)
+
+	# Right page: TextSpeedSlider must also use SIZE_EXPAND_FILL.
+	var right_page: Control = nb.get_node("Book/Pages/RightPage") as Control
+	var right_sliders: Array = _find_descendants_of_type(right_page, "HSlider")
+	assert_true(right_sliders.size() >= 1,
+			"Expected at least 1 HSlider on Settings RightPage (TextSpeedSlider), found %d" % right_sliders.size())
+
+	for slider in right_sliders:
+		assert_eq((slider as Control).size_flags_horizontal,
+				Control.SIZE_EXPAND_FILL,
+				"Right-page slider '%s' must set size_flags_horizontal = SIZE_EXPAND_FILL" % slider.name)
 
 	nb.close()

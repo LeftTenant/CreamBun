@@ -128,9 +128,11 @@ func test_scene_declares_master_slider() -> void:
 # ---------------------------------------------------------------------------
 
 func test_scene_declares_remaining_sliders() -> void:
-	# The four sliders form the complete left-page audio + gameplay controls.
-	# Each name must exist and be the correct type; a wrong type would cause a
-	# silent null cast when the script assigns the node ref.
+	# These three sliders span both pages: MusicSlider and SfxSlider live on the
+	# left page (audio); TextSpeedSlider lives on the right page (gameplay, moved
+	# there in Slice 3 — pixel-art-purist — to fit the 320×180 viewport).
+	# Each name must exist in the scene and be the correct type; a wrong type
+	# would cause a silent null cast when the script assigns the node ref.
 	var instance: Control = _make_scene_instance()
 
 	var slider_names: Array[String] = ["MusicSlider", "SfxSlider", "TextSpeedSlider"]
@@ -163,22 +165,34 @@ func test_scene_declares_window_scale_option() -> void:
 
 
 # ---------------------------------------------------------------------------
-# Test 5 — Scene declares at least two Button nodes (the two reset buttons)
+# Test 5 — Scene declares exactly ONE shared reset button (named "ResetButton")
 # ---------------------------------------------------------------------------
+#
+# NOTE (Slice 3, pixel-art-purist): Per-page reset buttons (ResetLeftButton,
+# ResetRightButton) were replaced by a SINGLE "Reset to Defaults" button on
+# the right page that resets ALL settings across both pages in one press.
+# This test was updated from "≥ 2 buttons" to "exactly 1 button named ResetButton"
+# to match the approved new design and prevent silent regressions where someone
+# accidentally re-adds a second button.
 
-func test_scene_declares_at_least_two_reset_buttons() -> void:
-	# The two reset buttons have stable names in the scene (ResetLeftButton,
-	# ResetRightButton), but this test asserts on type-and-count rather than
-	# name so it catches "a reset button was accidentally deleted in the editor"
-	# — a different failure mode than the name-based contract tests elsewhere
-	# in this file.
+func test_scene_declares_single_shared_reset_button() -> void:
+	# The one reset button is named "ResetButton" in settings_tab.tscn and lives
+	# on the RightPage VBoxContainer. This test asserts type-and-count so it also
+	# catches "a reset button was accidentally added back in the editor" alongside
+	# the name-based contract test above.
 	var instance: Control = _make_scene_instance()
 
 	var buttons: Array[Node] = _find_nodes_of_type(instance,
 			func(n: Node) -> bool: return n is Button and not n is OptionButton)
 
-	assert_true(buttons.size() >= 2,
-			"settings_tab.tscn must declare at least 2 Button nodes (one reset per page), found %d" % buttons.size())
+	assert_eq(buttons.size(), 1,
+			"settings_tab.tscn must declare exactly 1 Button node (the single shared reset), found %d" % buttons.size())
+
+	# Also verify the button has the correct name, so a rename in the editor
+	# does not silently break settings_tab.gd's get_node("ResetButton") lookup.
+	if buttons.size() == 1:
+		assert_eq(buttons[0].name, "ResetButton",
+				"The single reset Button must be named 'ResetButton' (settings_tab.gd uses get_node(\"ResetButton\"))")
 
 
 # ---------------------------------------------------------------------------

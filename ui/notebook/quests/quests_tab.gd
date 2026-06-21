@@ -112,32 +112,28 @@ func populate_left(parent: Control) -> void:
 		_left_page.get_parent().remove_child(_left_page)
 	parent.add_child(_left_page)
 
-	# Anchor the VBox to fill the parent page so children get a real width.
-	# Without this, a plain Control parent won't resize its children automatically.
-	# Negative right/bottom offsets apply a 10 px inset on all sides (rule 2, ui/CLAUDE.md).
-	# https://docs.godotengine.org/en/stable/classes/class_control.html#class-control-method-set-anchors-and-offsets-preset
-	_left_page.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_left_page.offset_left = 10
-	_left_page.offset_top = 10
-	_left_page.offset_right = -10
-	_left_page.offset_bottom = -10
+	# Anchor the VBox to fill the parent page and inset it by PAGE_INSET pixels
+	# on every side — see NotebookTab._apply_page_inset() for the full rationale.
+	_apply_page_inset(_left_page)
 
 	# Resolve the named section containers from the LeftPage subtree.
 	# Using get_node() here (not @onready) because the tree shape is per-call —
 	# the nodes live under _left_page, which is extracted in _ensure_pages_built().
-	var active_section: VBoxContainer = _left_page.get_node("ActiveSection") as VBoxContainer
-	var separator: Label = _left_page.get_node("CompletedSeparator") as Label
-	var completed_section: VBoxContainer = _left_page.get_node("CompletedSection") as VBoxContainer
+	# The sections sit inside QuestScroll/SectionsVBox so the list can scroll
+	# when there are more quests than the page height allows (ui/CLAUDE.md rule 3).
+	var active_section: VBoxContainer = _left_page.get_node("QuestScroll/SectionsVBox/ActiveSection") as VBoxContainer
+	var separator: Label = _left_page.get_node("QuestScroll/SectionsVBox/CompletedSeparator") as Label
+	var completed_section: VBoxContainer = _left_page.get_node("QuestScroll/SectionsVBox/CompletedSection") as VBoxContainer
 
 	# Guard against a renamed or missing section node in the .tscn — gives a
 	# clear message pointing to exactly which node and scene file is wrong,
 	# rather than a cryptic null-reference crash inside _add_quest_row().
 	# Mirrors the existing separator guard below.
 	if active_section == null:
-		push_warning("QuestsTab.populate_left: 'ActiveSection' node not found in quests_tab.tscn — check node name matches")
+		push_warning("QuestsTab.populate_left: 'QuestScroll/SectionsVBox/ActiveSection' node not found in quests_tab.tscn — check node name matches")
 		return
 	if completed_section == null:
-		push_warning("QuestsTab.populate_left: 'CompletedSection' node not found in quests_tab.tscn — check node name matches")
+		push_warning("QuestsTab.populate_left: 'QuestScroll/SectionsVBox/CompletedSection' node not found in quests_tab.tscn — check node name matches")
 		return
 
 	# Split quests into two buckets so ACTIVE work appears at the top and
@@ -189,11 +185,7 @@ func populate_right(parent: Control) -> void:
 	parent.add_child(_right_page)
 
 	# Anchor + inset (same scheme as populate_left for consistent margins).
-	_right_page.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_right_page.offset_left = 10
-	_right_page.offset_top = 10
-	_right_page.offset_right = -10
-	_right_page.offset_bottom = -10
+	_apply_page_inset(_right_page)
 
 	# Render the initial state. _refresh_right_page() operates on _right_page's
 	# children, rebuilding them from scratch each call — see that method for details.

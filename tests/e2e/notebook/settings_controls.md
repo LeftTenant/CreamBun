@@ -11,10 +11,10 @@ Defaults from `GameSettings`:
 - `music_volume = 1.0`, shown on slider as 100
 - `sfx_volume = 1.0`, shown on slider as 100
 - `text_speed = 1.0`, shown on slider as 100 (range 0–200)
-- `window_scale = 4` initially per `GameSettings`; left-page reset does not
-  touch the option; right-page reset restores it to `2` per
-  `_on_reset_right_pressed`. Both pre- and post-reset assertions read the
-  current value rather than hardcoding.
+- `window_scale = 4` default per `GameSettings`; the single shared reset
+  button (`_on_reset_all_pressed`, node `ResetButton` on the right page)
+  restores it to `4` along with all other settings. Both pre- and post-reset
+  assertions read the current value rather than hardcoding.
 
 Design doc reference: §5.5 (Settings tab).
 
@@ -25,13 +25,14 @@ deliberately exercises it. Run this scenario last in a batch so the resize
 does not interfere with other scenarios' screenshots.
 
 TODO: strengthen this scenario by changing the window scale to a non-default
-value (e.g. 1× or 4×) via the OptionButton popup **before** clicking the
+value (e.g. 2× or 8×) via the OptionButton popup **before** clicking the
 right-page reset. As written, `GameSettings.window_scale` already defaults
-to `2`, so the right-page reset is a no-op for window size and the scenario
-does not actually exercise a mid-scenario `DisplayServer.window_set_size`
-call. Adding a pre-step that pops the OptionButton, selects a different
-scale, then clicks a left-page slider in viewport coords would prove that
-the testing-sandbox's per-call viewport→window conversion in
+to `4` (index 1 in [2×, 4×, 6×, 8×]), so the right-page reset is a no-op
+for window size and the scenario does not actually exercise a mid-scenario
+`DisplayServer.window_set_size` call. Adding a pre-step that pops the
+OptionButton, selects a different scale, then clicks a left-page slider in
+viewport coords would prove that the testing-sandbox's per-call
+viewport→window conversion in
 `plugins/godot-testing/godot/testing_server.gd:_viewport_to_window` keeps
 mouse coords accurate across a live window resize — which is the case this
 scenario is meant to be the canonical proof for.
@@ -59,7 +60,7 @@ scenario is meant to be the canonical proof for.
 - Assert: the left page also contains an HSlider for Text Speed with `value`
   == `100.0` (Text Speed is 1.0 * 100).
 - Assert: the right page contains an `OptionButton` with `item_count` == 4
-  ("1× / 2× / 3× / 4×"). Record its current `selected` index for comparison
+  ("2× / 4× / 6× / 8×"). Record its current `selected` index for comparison
   after the reset.
 
 ### Step 2: Move sliders away from their defaults
@@ -101,12 +102,13 @@ scenario is meant to be the canonical proof for.
 - Assert: `SettingsTab._settings.text_speed` == `1.0`
   (data model must be restored alongside the widget)
 
-### Step 4: Click "Reset Display to Defaults"
-- Mouse move to: centre of the "Reset Display to Defaults" button on the right
-  page
+### Step 4: Click "Reset to Defaults" (shared reset button)
+- Mouse move to: centre of the "Reset to Defaults" button (`ResetButton`) on
+  the right page — this is the single shared button that resets ALL settings
+  (audio volumes, text speed, and window scale) via `_on_reset_all_pressed`
 - Mouse button press: `LEFT`
 - Mouse button release: `LEFT`
 - Wait: 15 frames     # window resize happens here; let it settle
-- Screenshot → save / compare reference: `settings_controls_step_04_right_reset.png`
-- Assert: the window-scale `OptionButton.selected` == `1` (index for "2×")
-- Assert: `SettingsTab._settings.window_scale` == `2`
+- Screenshot → save / compare reference: `settings_controls_step_04_shared_reset.png`
+- Assert: the window-scale `OptionButton.selected` == `1` (index for "4×" — the default in [2×,4×,6×,8×])
+- Assert: `SettingsTab._settings.window_scale` == `4`

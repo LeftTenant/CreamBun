@@ -1,6 +1,7 @@
 [gd_scene format=3]
 
 [ext_resource type="Script" path="res://ui/notebook/notebook.gd" id="1"]
+[ext_resource type="Theme" uid="uid://bg4c10ok8o3vy" path="res://resources/theme/base_theme.tres" id="2_theme"]
 
 [node name="Notebook" type="CanvasLayer" unique_id=1831674500]
 process_mode = 3
@@ -20,11 +21,15 @@ anchor_left = 0.1
 anchor_top = 0.1
 anchor_right = 0.9
 anchor_bottom = 0.9
+offset_left = -8.0
+offset_right = 8.0
+theme = ExtResource("2_theme")
 
 [node name="Pages" type="HBoxContainer" parent="Book" unique_id=1843206210]
 layout_mode = 0
 anchor_right = 1.0
 anchor_bottom = 1.0
+theme_override_constants/separation = 0
 
 [node name="LeftPage" type="Control" parent="Book/Pages" unique_id=188234719]
 layout_mode = 2

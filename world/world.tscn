@@ -1,6 +1,7 @@
 [gd_scene format=4 uid="uid://chsym4sjohvg4"]
 
-[ext_resource type="PackedScene" uid="uid://beaja7keolaqd" path="res://player/player.tscn" id="1_player"]
+[ext_resource type="Script" uid="uid://dy4kvsd5hfqoq" path="res://world/world.gd" id="1_world"]
+[ext_resource type="PackedScene" uid="uid://beaja7keolaqd" path="res://player/player.tscn" id="2_player"]
 [ext_resource type="Texture2D" uid="uid://dcnjsu22waidp" path="res://resources/tilesets/ground_placeholder.png" id="2_tcf2h"]
 [ext_resource type="PackedScene" path="res://ui/notebook/notebook.tscn" id="3_notebook"]
 [ext_resource type="Texture2D" uid="uid://clch2yj51jack" path="res://resources/sprites/terrain/grass.png" id="4_mmdvd"]
@@ -30,9 +31,10 @@ sources/2 = SubResource("TileSetAtlasSource_ai45w")
 
 [node name="World" type="Node2D" unique_id=1742113481]
 y_sort_enabled = true
+script = ExtResource("1_world")
 
-[node name="Player" parent="." unique_id=1307239076 instance=ExtResource("1_player")]
-position = Vector2(640, 360)
+[node name="Player" parent="." unique_id=1307239076 instance=ExtResource("2_player")]
+position = Vector2(576, 352)
 
 [node name="Notebook" parent="." unique_id=1312945757 instance=ExtResource("3_notebook")]
 

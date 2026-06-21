@@ -285,11 +285,17 @@ func test_view_button_keeps_usable_width_after_setup() -> void:
 	# zero width because TitleLabel's SIZE_EXPAND_FILL claimed the full row
 	# and the button had no custom_minimum_size to resist it.
 	#
-	# The fix sets custom_minimum_size = Vector2(64, 0) on ViewButton in
+	# The fix sets custom_minimum_size = Vector2(32, 0) on ViewButton in
 	# quest_row.tscn. This test measures that value directly — it is the layout
 	# contract the .tscn file must uphold. If a future scene edit accidentally
 	# removes or zeroes custom_minimum_size.x, the button will silently vanish
 	# again and this assertion will catch it.
+	#
+	# WHY 32px (not 60px):
+	# The button was reduced from 64 → 32 to give TitleLabel enough room so
+	# long titles like "The Foraging Book" no longer break mid-word. The button
+	# sits inside a ~110px page column; 32px is the confirmed usable floor at
+	# that column width.
 	#
 	# WHY THIS IS AN INTEGRATION TEST (not unit):
 	# We need the row in the tree with a real QuestData passed to setup() so
@@ -299,7 +305,7 @@ func test_view_button_keeps_usable_width_after_setup() -> void:
 	# size.x would report 0 regardless of custom_minimum_size.
 	#
 	# https://docs.godotengine.org/en/stable/classes/class_control.html#class-control-property-custom_minimum_size
-	const MIN_BUTTON_WIDTH: float = 60.0
+	const MIN_BUTTON_WIDTH: float = 32.0
 
 	# Instantiate the row from its scene so @onready refs (TitleLabel, ViewButton)
 	# are resolved before setup() writes to them.
@@ -327,8 +333,8 @@ func test_view_button_keeps_usable_width_after_setup() -> void:
 		return  # avoid null-ref crash on the width assertion below
 
 	# Assert the scene-declared minimum size is present. The .tscn sets
-	# custom_minimum_size = Vector2(64, 0), so >= 60 gives a small tolerance
-	# for any future intentional resize while still catching a collapse to zero.
+	# custom_minimum_size = Vector2(32, 0); asserting >= 32 catches any future
+	# accidental collapse to zero while matching the current intentional size.
 	assert_true(view_button.custom_minimum_size.x >= MIN_BUTTON_WIDTH,
 			"ViewButton.custom_minimum_size.x must be >= %.0f px after setup() so the button stays visible; got %.1f" % [MIN_BUTTON_WIDTH, view_button.custom_minimum_size.x])
 
