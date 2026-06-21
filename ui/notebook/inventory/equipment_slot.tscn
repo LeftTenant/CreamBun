@@ -3,7 +3,7 @@
 [ext_resource type="Script" uid="uid://b2wakewrrrqh5" path="res://ui/notebook/inventory/equipment_slot.gd" id="1"]
 
 [node name="EquipmentSlot" type="Control" unique_id=922575727]
-custom_minimum_size = Vector2(0, 36)
+custom_minimum_size = Vector2(0, 18)
 layout_mode = 3
 anchors_preset = 0
 size_flags_horizontal = 3
@@ -31,7 +31,7 @@ size_flags_horizontal = 3
 size_flags_vertical = 3
 
 [node name="IconFrame" type="PanelContainer" parent="HBox" unique_id=481538253]
-custom_minimum_size = Vector2(32, 32)
+custom_minimum_size = Vector2(16, 16)
 layout_mode = 2
 size_flags_vertical = 4
 
@@ -48,10 +48,10 @@ size_flags_vertical = 3
 [node name="SlotLabel" type="Label" parent="HBox/TextVBox" unique_id=1058788150]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_font_sizes/font_size = 12
+theme_override_colors/font_color = Color(0.23137254901960785, 0.1843137254901961, 0.16470588235294117, 1)
 
 [node name="ItemNameLabel" type="Label" parent="HBox/TextVBox" unique_id=1129884815]
 visible = false
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_font_sizes/font_size = 10
+theme_override_colors/font_color = Color(0.47843137254901963, 0.41568627450980394, 0.36470588235294116, 1)

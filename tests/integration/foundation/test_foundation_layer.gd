@@ -448,8 +448,8 @@ func test_game_settings_has_correct_defaults() -> void:
 			"music_volume should default to 1.0")
 	assert_eq(settings.sfx_volume, 1.0,
 			"sfx_volume should default to 1.0")
-	assert_eq(settings.window_scale, 2,
-			"window_scale should default to 2 (2× the 640×480 viewport)")
+	assert_eq(settings.window_scale, 4,
+			"window_scale should default to 4 (4× the 320×180 viewport → 1280×720 window)")
 	assert_eq(settings.text_speed, 1.0,
 			"text_speed should default to 1.0")
 

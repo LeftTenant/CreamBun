@@ -7,7 +7,7 @@ script = ExtResource("1")
 size_flags_horizontal = 3
 
 [node name="TitleLabel" type="Label" parent="."]
-custom_minimum_size = Vector2(80, 0)
+custom_minimum_size = Vector2(1, 0)
 focus_mode = 0
 size_flags_horizontal = 3
 autowrap_mode = 3
@@ -15,6 +15,6 @@ text = "Quest Title"
 
 [node name="ViewButton" type="Button" parent="."]
 tooltip_text = "View quest details"
-custom_minimum_size = Vector2(64, 0)
-clip_text = false
+custom_minimum_size = Vector2(32, 0)
+clip_text = true
 text = "View"

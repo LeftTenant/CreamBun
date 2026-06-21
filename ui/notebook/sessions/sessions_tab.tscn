@@ -9,7 +9,7 @@
 ; values below are PREVIEW ONLY — they make the scene legible in the editor and
 ; do not affect the running game:
 ;   * The root size and the LeftPage/RightPage offsets are overwritten by
-;     populate_left()/populate_right() (PRESET_FULL_RECT + 10px insets).
+;     populate_left()/populate_right() (PRESET_FULL_RECT + 8px insets — see NotebookTab.PAGE_INSET).
 ;   * CardsContainer children (StoryCard instances) are added dynamically by
 ;     populate_left(); the container is empty in editor preview.
 ;   * SaveButton (Slice 6) triggers SessionsTab._on_save_pressed(), wired in
@@ -19,6 +19,12 @@
 ; custom_minimum_size is set on the Placeholder Label both to silence Godot's
 ; "Labels with autowrapping enabled must have a custom minimum size" warning and
 ; to give it a sensible preview width.
+;
+; SCROLL NOTE: CardsContainer is wrapped in a SessionsScroll ScrollContainer so
+; a long list of story cards scrolls rather than overflowing the page boundary
+; (ui/CLAUDE.md rule 3). SaveButton sits outside the scroll so it is always
+; reachable. sessions_tab.gd resolves CardsContainer via
+; "SessionsScroll/CardsContainer".
 
 [node name="SessionsTab" type="Control"]
 offset_right = 480.0
@@ -33,7 +39,13 @@ offset_bottom = 290.0
 size_flags_horizontal = 3
 size_flags_vertical = 3
 
-[node name="CardsContainer" type="VBoxContainer" parent="LeftPage"]
+[node name="SessionsScroll" type="ScrollContainer" parent="LeftPage"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+vertical_scroll_mode = 3
+
+[node name="CardsContainer" type="VBoxContainer" parent="LeftPage/SessionsScroll"]
 size_flags_horizontal = 3
 
 [node name="SaveButton" type="Button" parent="LeftPage"]

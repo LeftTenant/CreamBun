@@ -176,15 +176,9 @@ func populate_left(parent: Control) -> void:
 		_left_page.get_parent().remove_child(_left_page)
 	parent.add_child(_left_page)
 
-	# Anchor the VBox to fill the parent page so children get a real width.
-	# Without this, a plain Control parent won't resize its children automatically.
-	# Negative right/bottom offsets apply a 10 px inset on all sides (rule 2, ui/CLAUDE.md).
-	# https://docs.godotengine.org/en/stable/classes/class_control.html#class-control-method-set-anchors-and-offsets-preset
-	_left_page.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_left_page.offset_left = 10
-	_left_page.offset_top = 10
-	_left_page.offset_right = -10
-	_left_page.offset_bottom = -10
+	# Anchor the VBox to fill the parent page and inset it by PAGE_INSET pixels
+	# on every side — see NotebookTab._apply_page_inset() for the full rationale.
+	_apply_page_inset(_left_page)
 
 	# Clear previously stored slot refs so a re-populate is safe.
 	_equipment_slots.clear()
@@ -255,11 +249,7 @@ func populate_right(parent: Control) -> void:
 	if _right_page.get_parent() != null:
 		_right_page.get_parent().remove_child(_right_page)
 	parent.add_child(_right_page)
-	_right_page.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_right_page.offset_left = 10
-	_right_page.offset_top = 10
-	_right_page.offset_right = -10
-	_right_page.offset_bottom = -10
+	_apply_page_inset(_right_page)
 
 	# Resolve named-node references from the RightPage subtree.
 	# Paths are relative to _right_page; using get_node() rather than @onready

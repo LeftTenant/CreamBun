@@ -150,8 +150,8 @@ func test_load_settings_produces_default_game_settings_when_no_file_exists() -> 
 	# Defaults per resources/data/settings/game_settings.gd / design §3.2.
 	assert_eq(SaveManager.settings.master_volume, 1.0,
 			"a first-run GameSettings should default master_volume to 1.0")
-	assert_eq(SaveManager.settings.window_scale, 2,
-			"a first-run GameSettings should default window_scale to 2")
+	assert_eq(SaveManager.settings.window_scale, 4,
+			"a first-run GameSettings should default window_scale to 4 (4× the 320×180 viewport)")
 
 
 # ---------------------------------------------------------------------------

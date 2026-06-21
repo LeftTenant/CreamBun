@@ -9,13 +9,20 @@
 ; values below are PREVIEW ONLY — they make the scene legible in the editor and
 ; do not affect the running game:
 ;   * The root size and the LeftPage/RightPage offsets are overwritten by
-;     populate_left()/populate_right() (PRESET_FULL_RECT + 10px insets).
+;     populate_left()/populate_right() (PRESET_FULL_RECT + 8px insets — see NotebookTab.PAGE_INSET).
 ;   * RightPage's Placeholder and QuestDetail subtree are freed and rebuilt from
 ;     code in _refresh_right_page(); their sample text exists only so a beginner
 ;     can see a representative quest layout in the editor.
 ; custom_minimum_size is set on every autowrapping Label both to silence Godot's
 ; "Labels with autowrapping enabled must have a custom minimum size" warning and
 ; to give each label a sensible preview width.
+;
+; SCROLL NOTE: The LeftPage wraps ActiveSection and CompletedSection inside a
+; ScrollContainer so a long quest list scrolls rather than overflowing the page
+; boundary (ui/CLAUDE.md rule 3). The ScrollContainer uses SIZE_EXPAND_FILL
+; vertically so it claims all slack space inside the LeftPage VBox.
+; quests_tab.gd resolves ActiveSection and CompletedSection via
+; "QuestScroll/SectionsVBox/ActiveSection" etc.
 
 [node name="QuestsTab" type="Control"]
 offset_right = 480.0
@@ -30,16 +37,26 @@ offset_bottom = 290.0
 size_flags_horizontal = 3
 size_flags_vertical = 3
 
-[node name="ActiveSection" type="VBoxContainer" parent="LeftPage"]
+[node name="QuestScroll" type="ScrollContainer" parent="LeftPage"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+vertical_scroll_mode = 3
+
+[node name="SectionsVBox" type="VBoxContainer" parent="LeftPage/QuestScroll"]
 size_flags_horizontal = 3
 
-[node name="CompletedSeparator" type="Label" parent="LeftPage"]
+[node name="ActiveSection" type="VBoxContainer" parent="LeftPage/QuestScroll/SectionsVBox"]
+size_flags_horizontal = 3
+
+[node name="CompletedSeparator" type="Label" parent="LeftPage/QuestScroll/SectionsVBox"]
 focus_mode = 0
 size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.47843137254901963, 0.41568627450980394, 0.36470588235294116, 1)
 text = "— Completed —"
 visible = false
 
-[node name="CompletedSection" type="VBoxContainer" parent="LeftPage"]
+[node name="CompletedSection" type="VBoxContainer" parent="LeftPage/QuestScroll/SectionsVBox"]
 size_flags_horizontal = 3
 
 [node name="RightPage" type="VBoxContainer" parent="."]
@@ -66,6 +83,7 @@ visible = false
 custom_minimum_size = Vector2(200, 0)
 focus_mode = 0
 size_flags_horizontal = 3
+theme_type_variation = &"Heading"
 autowrap_mode = 3
 text = "The Foraging Book"
 

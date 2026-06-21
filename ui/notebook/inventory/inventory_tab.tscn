@@ -11,10 +11,13 @@ script = ExtResource("1")
 [node name="LeftPage" type="VBoxContainer" parent="."]
 offset_right = 128.0
 offset_bottom = 180.0
+size_flags_horizontal = 3
+size_flags_vertical = 3
 
 [node name="EquipmentHeader" type="Label" parent="LeftPage"]
 focus_mode = 0
 size_flags_horizontal = 3
+theme_type_variation = &"Heading"
 text = "Equipment"
 
 [node name="Slot_BACKPACK" parent="LeftPage" instance=ExtResource("2")]
@@ -33,6 +36,8 @@ text = "Equipment"
 offset_left = 136.0
 offset_right = 264.0
 offset_bottom = 180.0
+size_flags_horizontal = 3
+size_flags_vertical = 3
 
 [node name="WeightLabel" type="Label" parent="RightPage"]
 focus_mode = 0

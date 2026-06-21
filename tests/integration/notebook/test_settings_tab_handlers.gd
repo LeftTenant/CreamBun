@@ -216,8 +216,9 @@ func test_sfx_slider_drives_audio_bus_2() -> void:
 func test_window_scale_option_calls_display_server() -> void:
 	# Selecting a window scale option must call DisplayServer.window_set_size
 	# with the correct pixel dimensions derived from the project viewport size.
-	# We pick index 0 (1×) because it produces the smallest window and is
-	# unlikely to cause issues on CI machines with restricted screen sizes.
+	# We pick index 0 (2× — the minimum) because it produces the smallest window
+	# and is unlikely to cause issues on CI machines with restricted screen sizes.
+	# Note: WINDOW_SCALE_OPTIONS = [2, 4, 6, 8]; there is no 1× option.
 	#
 	# DisplayServer.window_set_size docs:
 	# https://docs.godotengine.org/en/stable/classes/class_displayserver.html#class-displayserver-method-window-set-size
@@ -229,14 +230,19 @@ func test_window_scale_option_calls_display_server() -> void:
 
 	var opt_btn: OptionButton = option as OptionButton
 
-	# Derive expected size from project settings — mirrors the handler's own math.
+	# Derive expected size from project settings — mirrors the handler's own math
+	# (_scaled_window_size in settings_tab.gd). Fallbacks match the project's
+	# actual 320×180 base viewport (not the old 640×360 values).
 	var base_width: int = ProjectSettings.get_setting(
-			"display/window/size/viewport_width", 640) as int
+			"display/window/size/viewport_width", 320) as int
 	var base_height: int = ProjectSettings.get_setting(
-			"display/window/size/viewport_height", 360) as int
-	var expected_size: Vector2i = Vector2i(base_width * 1, base_height * 1)
+			"display/window/size/viewport_height", 180) as int
+	# Read the actual scale for index 0 from the source of truth rather than
+	# hardcoding 2, so this test stays correct if the options array ever changes.
+	var expected_scale: int = SettingsTab.WINDOW_SCALE_OPTIONS[0]
+	var expected_size: Vector2i = Vector2i(base_width * expected_scale, base_height * expected_scale)
 
-	# Emit the signal as the player would by selecting index 0 (1×).
+	# Emit the signal as the player would by selecting index 0 (2× — the minimum).
 	# item_selected is only emitted on user interaction, not programmatic select(),
 	# so we emit it directly to test the handler in isolation.
 	# https://docs.godotengine.org/en/stable/classes/class_optionbutton.html#signal-item-selected
@@ -256,108 +262,133 @@ func test_window_scale_option_calls_display_server() -> void:
 
 	var actual_size: Vector2i = DisplayServer.window_get_size()
 	assert_eq(actual_size, expected_size,
-			"DisplayServer.window_get_size() must be %s after selecting 1× scale; got %s" % [
+			"DisplayServer.window_get_size() must be %s after selecting 2× scale (index 0); got %s" % [
 					str(expected_size), str(actual_size)])
 
 
 # ---------------------------------------------------------------------------
-# Test 5 — Left reset button restores all sliders to default values
+# Test 5 — Single shared reset button restores all sliders to default values
 # ---------------------------------------------------------------------------
+#
+# NOTE (Slice 3, pixel-art-purist): Per-page reset buttons were replaced by a
+# SINGLE "Reset to Defaults" button on the RightPage. TextSpeedSlider also
+# moved from the left page to the right page. This test was updated to:
+#   - Look for TextSpeedSlider in _right_parent (not _left_parent)
+#   - Look for the reset button in _right_parent (not _left_parent)
+#   - Assert all settings across both pages are restored in one press
 
-func test_reset_left_restores_slider_defaults() -> void:
-	# The left-page reset button must restore all four sliders to 100.0 and
-	# update _settings to the corresponding 0.0–1.0 / 0.0–2.0 values. We first
-	# move each slider away from its default so the reset is observable.
+func test_shared_reset_restores_all_slider_defaults() -> void:
+	# The single shared reset button (on the right page) must restore all five
+	# settings — master/music/sfx volume, text speed, AND window scale — to their
+	# defaults, updating both widget state and _settings / SaveManager.settings.
+	# We first move each away from its default so the reset is observable.
 	var master_node: Node = _get_named_node(_left_parent, "MasterSlider")
 	var music_node: Node = _get_named_node(_left_parent, "MusicSlider")
 	var sfx_node: Node = _get_named_node(_left_parent, "SfxSlider")
-	var text_speed_node: Node = _get_named_node(_left_parent, "TextSpeedSlider")
+	# TextSpeedSlider and WindowScaleOption both live on the right page (Slice 3).
+	var text_speed_node: Node = _get_named_node(_right_parent, "TextSpeedSlider")
+	var window_scale_node: Node = _get_named_node(_right_parent, "WindowScaleOption")
 
 	for named: Array in [
-		["MasterSlider", master_node],
-		["MusicSlider", music_node],
-		["SfxSlider", sfx_node],
-		["TextSpeedSlider", text_speed_node],
+		["MasterSlider (left)", master_node],
+		["MusicSlider (left)", music_node],
+		["SfxSlider (left)", sfx_node],
+		["TextSpeedSlider (right)", text_speed_node],
+		["WindowScaleOption (right)", window_scale_node],
 	]:
 		assert_not_null(named[1],
-				"%s must exist in the populated left-page tree" % named[0])
+				"%s must exist in its respective populated tree" % named[0])
 
-	if master_node == null or music_node == null or sfx_node == null or text_speed_node == null:
+	if master_node == null or music_node == null or sfx_node == null \
+			or text_speed_node == null or window_scale_node == null:
 		return
 
 	(master_node as HSlider).value = 30.0
 	(music_node as HSlider).value = 40.0
 	(sfx_node as HSlider).value = 50.0
 	(text_speed_node as HSlider).value = 60.0
+	# Move window scale away from default (index 1 = 4×) to index 0 (2× — the minimum).
+	# Note: there is no 1× option any more; index 0 = 2×, index 1 = 4× (default).
+	(window_scale_node as OptionButton).selected = 0
+	SaveManager.settings.window_scale = 2
 	await get_tree().process_frame
 
-	# Find and press the left reset button. The button is identified by type
-	# (Button, not OptionButton) and its pressed signal is emitted directly to
-	# avoid needing screen coordinates, matching the testing pattern in the
-	# unit tests above.
-	#
-	# Locate the reset button by walking Button descendants and choosing the one
-	# inside the left parent (skipping the OptionButton).
+	# Find and press the single shared reset button. It lives on the right page
+	# (RightPage VBoxContainer), so search _right_parent. The button is identified
+	# by type (Button, not OptionButton) and its pressed signal is emitted directly
+	# to avoid needing screen coordinates.
 	var reset_btn: Button = null
-	for child: Node in _left_parent.find_children("*", "Button", true, false):
+	for child: Node in _right_parent.find_children("*", "Button", true, false):
 		if child is Button and not child is OptionButton:
 			reset_btn = child as Button
 			break
 
 	assert_not_null(reset_btn,
-			"A reset Button must exist inside the left-page populated tree")
+			"A reset Button must exist inside the right-page populated tree (single shared reset)")
 	if reset_btn == null:
 		return
 
 	reset_btn.pressed.emit()
 	await get_tree().process_frame
 
-	# Widget state
+	# Widget state — sliders
 	assert_almost_eq((master_node as HSlider).value, 100.0, 0.001,
-			"MasterSlider.value must be 100.0 after left reset")
+			"MasterSlider.value must be 100.0 after shared reset")
 	assert_almost_eq((music_node as HSlider).value, 100.0, 0.001,
-			"MusicSlider.value must be 100.0 after left reset")
+			"MusicSlider.value must be 100.0 after shared reset")
 	assert_almost_eq((sfx_node as HSlider).value, 100.0, 0.001,
-			"SfxSlider.value must be 100.0 after left reset")
+			"SfxSlider.value must be 100.0 after shared reset")
 	assert_almost_eq((text_speed_node as HSlider).value, 100.0, 0.001,
-			"TextSpeedSlider.value must be 100.0 after left reset")
+			"TextSpeedSlider.value must be 100.0 after shared reset")
+
+	# Widget state — OptionButton. Index 1 == 4× (the default scale in [2,4,6,8]).
+	# Note: the options are [2×, 4×, 6×, 8×]; index 0 = 2× (minimum), index 1 = 4× (default).
+	assert_eq((window_scale_node as OptionButton).selected, 1,
+			"WindowScaleOption.selected must be 1 (4× default in [2,4,6,8]) after shared reset")
 
 	# Data model — the handler resets _settings before setting slider.value,
 	# so these must match the reset values regardless of value_changed ordering.
 	assert_almost_eq(_tab._settings.master_volume, 1.0, 0.001,
-			"_settings.master_volume must be 1.0 after left reset")
+			"_settings.master_volume must be 1.0 after shared reset")
 	assert_almost_eq(_tab._settings.music_volume, 1.0, 0.001,
-			"_settings.music_volume must be 1.0 after left reset")
+			"_settings.music_volume must be 1.0 after shared reset")
 	assert_almost_eq(_tab._settings.sfx_volume, 1.0, 0.001,
-			"_settings.sfx_volume must be 1.0 after left reset")
+			"_settings.sfx_volume must be 1.0 after shared reset")
 	assert_almost_eq(_tab._settings.text_speed, 1.0, 0.001,
-			"_settings.text_speed must be 1.0 after left reset")
+			"_settings.text_speed must be 1.0 after shared reset")
+	assert_eq(_tab._settings.window_scale, 4,
+			"_settings.window_scale must be 4 (4× default) after shared reset")
 
 	# Slice 5: _tab._settings IS SaveManager.settings (same object, not a copy),
 	# so the reset must be visible on the shared instance too — proving the
 	# reset writes through to the per-device settings, not an in-memory copy.
 	assert_almost_eq(SaveManager.settings.master_volume, 1.0, 0.001,
-			"SaveManager.settings.master_volume must be 1.0 after left reset")
+			"SaveManager.settings.master_volume must be 1.0 after shared reset")
 	assert_almost_eq(SaveManager.settings.music_volume, 1.0, 0.001,
-			"SaveManager.settings.music_volume must be 1.0 after left reset")
+			"SaveManager.settings.music_volume must be 1.0 after shared reset")
 	assert_almost_eq(SaveManager.settings.sfx_volume, 1.0, 0.001,
-			"SaveManager.settings.sfx_volume must be 1.0 after left reset")
+			"SaveManager.settings.sfx_volume must be 1.0 after shared reset")
 	assert_almost_eq(SaveManager.settings.text_speed, 1.0, 0.001,
-			"SaveManager.settings.text_speed must be 1.0 after left reset")
+			"SaveManager.settings.text_speed must be 1.0 after shared reset")
+	assert_eq(SaveManager.settings.window_scale, 4,
+			"SaveManager.settings.window_scale must be 4 (4× default) after shared reset")
 
 
 # ---------------------------------------------------------------------------
-# Test 6 — Right reset button selects index 1 without emitting item_selected
+# Test 6 — Shared reset button sets OptionButton to index 1 without emitting item_selected
 # ---------------------------------------------------------------------------
 
 func test_reset_right_selects_default_scale_without_signal() -> void:
-	# The right reset button calls OptionButton.select(1), which does NOT emit
-	# item_selected (only user gestures do). This test confirms:
-	#   a) The OptionButton is set to index 1 (the 2× default).
+	# The shared reset button (_on_reset_all_pressed) assigns
+	# _window_scale_option.selected = index_of_DEFAULT_WINDOW_SCALE directly
+	# (NOT .select()), which does NOT emit item_selected (only user gestures do).
+	# This test confirms:
+	#   a) The OptionButton is set to index 1 (4× — the default in [2,4,6,8]).
 	#   b) item_selected is NOT emitted, so _on_window_scale_changed is not
 	#      called a second time via signal (it IS called directly — see handler).
 	#
-	# We first select a non-default index (0 = 1×) so the reset is observable.
+	# We first select a non-default index (0 = 2× — the minimum) so the reset
+	# is observable. Note: there is no 1× option; index 0 = 2× is now the minimum.
 	var option_node: Node = _get_named_node(_right_parent, "WindowScaleOption")
 	assert_not_null(option_node,
 			"WindowScaleOption must exist in the populated right-page tree")
@@ -366,7 +397,7 @@ func test_reset_right_selects_default_scale_without_signal() -> void:
 
 	var opt_btn: OptionButton = option_node as OptionButton
 
-	# Move away from the default (select 1× = index 0).
+	# Move away from the default (index 0 = 2×, which is not the default 4×).
 	opt_btn.selected = 0
 	await get_tree().process_frame
 
@@ -389,18 +420,19 @@ func test_reset_right_selects_default_scale_without_signal() -> void:
 	reset_btn.pressed.emit()
 	await get_tree().process_frame
 
-	# The reset handler calls _window_scale_option.selected = 1, NOT select(1).
-	# Either form is fine; what matters is the final state.
+	# The shared reset handler assigns _window_scale_option.selected = index directly
+	# (NOT .select()). Both forms avoid emitting item_selected; what matters is
+	# the final widget state. Default is index 1 = 4× in [2,4,6,8].
 	assert_eq(opt_btn.selected, 1,
-			"WindowScaleOption.selected must be 1 (2× default) after right reset")
+			"WindowScaleOption.selected must be 1 (4× default in [2,4,6,8]) after shared reset")
 
-	# item_selected must NOT fire on a programmatic select() call. If it did,
-	# the window would resize a second time via DisplayServer and any subsequent
-	# screenshot assertions in the e2e scenario would be wrong.
+	# item_selected must NOT fire on a programmatic .selected = assignment. If
+	# it did, the window would resize a second time via DisplayServer and any
+	# subsequent screenshot assertions in the e2e scenario would be wrong.
 	assert_signal_not_emitted(opt_btn, "item_selected",
 			"item_selected must not be emitted when the reset button programmatically sets the selection")
 
 	# Slice 5: _tab._settings IS SaveManager.settings (same object, not a copy),
 	# so the reset must be visible on the shared instance too.
-	assert_eq(SaveManager.settings.window_scale, 2,
-			"SaveManager.settings.window_scale must be 2 (default) after right reset")
+	assert_eq(SaveManager.settings.window_scale, 4,
+			"SaveManager.settings.window_scale must be 4 (default) after shared reset")
