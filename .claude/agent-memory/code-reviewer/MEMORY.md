@@ -1,5 +1,7 @@
-- [CreamBun Code Patterns](project_patterns.md) — Phase 1 patterns: current_weight registry param, signal typing safety, remove() multi-stack gap, equip(NONE) gap
-- [Scene Migration Pattern](scene_migration_pattern.md) — _ensure_pages_built() pattern, orphan trade-off, owner clearing, signal ordering, for Slices 2–5 reference
-- [Game Data Slices](game_data_slices.md) — PlayerData slices; Slice 1, Wave 2 (2-4), Wave 3 (5-6) all PASS clean; CACHE_MODE_REPLACE fix + shared-settings-by-reference confirmed correct
+# CreamBun Code Reviewer — Agent Memory
+
+- [CreamBun Code Patterns](project_patterns.md) — durable Godot 4 / GDScript / Control / theme conventions; the "this is intentional, don't re-flag it" list
+- [Scene Migration Pattern](scene_migration_pattern.md) — notebook-tab `_ensure_pages_built()` page-extraction pattern, orphan trade-off, owner-clear, re-entrancy guards
+- [Game Data Conventions](game_data_conventions.md) — PlayerData/SaveManager persistence: autoload never-null guarantee, ResourceSaver/CACHE_MODE_REPLACE facts, shared-settings-by-reference, hermetic user:// test I/O
 
 Per-developer profile memories live in `.claude/agent-memory-local/code-reviewer/` (gitignored). Check there for any local context before reviewing.
