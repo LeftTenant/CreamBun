@@ -1,78 +1,45 @@
 ---
 name: scene-migration-pattern
-description: The _ensure_pages_built() pattern used in the notebook UI scene migration (Slices 1–5), its orphan trade-off, re-entrancy guards, and conventions for all slices
+description: The notebook-tab _ensure_pages_built() page-extraction pattern, its orphan trade-off, and the surrounding durable conventions
 metadata:
   type: project
 ---
 
+The notebook tabs keep their static layout in `.tscn` files, but `notebook.gd` only wants
+the `LeftPage`/`RightPage` subtrees, not the tab scene's bare root. The pattern below is the
+established way to bridge that; treat its trade-offs as intentional.
+
 ## Pattern: extract page subtrees from a TAB_SCENE instantiation
 
-`settings_tab.gd` introduces `_ensure_pages_built()`: instantiate `TAB_SCENE`, grab `LeftPage`/`RightPage` VBoxContainers via `get_node()`, call `remove_child()` on each, clear `.owner = null` on the two roots only (NOT recursive — children still carry old owner), `queue_free()` the shell instance, then cache the pages as `_left_page`/`_right_page`.
+`_ensure_pages_built()` (in the tab scripts): instantiate `TAB_SCENE`, grab the
+`LeftPage`/`RightPage` `VBoxContainer`s via `get_node()`, `remove_child()` each, clear
+`.owner = null` on the two roots, `queue_free()` the shell, and cache the pages as
+`_left_page`/`_right_page`. `populate_left`/`populate_right` later `add_child` each page into
+the real page `Control` and apply `PRESET_FULL_RECT`.
 
-The two pages are later `add_child`'d into real page Controls inside `populate_left`/`populate_right`.
+Note: `notebook.gd` builds the tab *controller* with `TabClass.new()` — that is separate from
+the scene shell, which `_ensure_pages_built()` instantiates internally. Both coexist by design.
 
-**Why:** notebook.gd only wants the page subtrees, not the bare root Control the .tscn carries. Extracting the subtrees lets the static layout live in the editor while the shell is discarded.
+## Durable trade-offs & conventions
 
-**Known trade-off — orphan warnings:** `_ensure_pages_built()` is called at the start of the FIRST `populate_*` call, which extracts BOTH pages simultaneously. The second page has no parent until the second `populate_*` call. In unit tests that call only one of `populate_left`/`populate_right`, the other page (and all its children) are GUT orphans for the test's lifetime. In production, `notebook.gd` calls both immediately in sequence so no orphan occurs. Accepted as cosmetic (~17 nodes per affected test).
+- **Orphan warnings are expected in single-page unit tests.** `_ensure_pages_built()` extracts
+  BOTH pages on the first `populate_*` call, so a test that calls only `populate_left` (or only
+  `populate_right`) leaves the other page + children as GUT orphans for the test's lifetime. In
+  production `notebook.gd` calls both in sequence, so no orphan occurs. Cosmetic; don't flag.
+- **Owner clearing is not recursive.** Only the two page roots get `.owner = null`; descendants
+  keep the old owner. This silences the top-level `add_child` inconsistency warning but deeper
+  nodes may still warn — a recursive owner-clear helper is the fix if that surfaces.
+- **Set initial widget values BEFORE connecting `value_changed`** so handlers don't fire during
+  init — preferred over `set_value_no_signal()`.
+- **Re-entrancy guards** (populate may be called twice on the same instance): reparent with
+  `if node.get_parent() != null: node.get_parent().remove_child(node)` before `add_child`;
+  guard signals with `if not sig.is_connected(handler)`; guard `OptionButton` items with
+  `if get_item_count() == 0`.
+- **Runtime-populated `OptionButton` items** (e.g. a window-scale option whose labels embed
+  `ProjectSettings` values) are correct to add in `populate_*` rather than the `.tscn`.
+- **`free()` (not `queue_free()`) for stale leaf widgets in rebuild paths** (rows, cards): they
+  have no deferred logic and tests need them gone synchronously before inspecting the subtree.
 
-**Owner clearing is NOT recursive:** Only `_left_page.owner = null` and `_right_page.owner = null` are set. Child nodes of those VBoxContainers still carry the old owner. This suppresses the top-level inconsistency warning Godot emits on add_child, but descendants may still warn. If Slices 2–5 show owner warnings deeper in the tree, consider a recursive owner-clear helper.
+## Related
 
-**Signal ordering in populate_left:** slider initial values are set BEFORE `value_changed` is connected. This prevents handlers from firing during init without needing `set_value_no_signal()`. The simpler approach is preferred here.
-
-**OptionButton items at runtime:** `WindowScaleOption` is in the .tscn but its 4 items are added at runtime in `populate_right` because labels embed `ProjectSettings` viewport values. This is correct and documented.
-
-**Constant naming quirk:** `TAB_SCENE` has no underscore (public-style constant, used only internally). `_WINDOW_SCALE_OPTIONS` has underscore prefix (project's private-member convention). GDScript style guide does not prefix private constants — apply consistently in Slices 2–5 (prefer no underscore on constants, or be consistent within each file).
-
-**notebook.gd still uses `SettingsTab.new()`** (not `TAB_SCENE.instantiate()`). This is correct — the tab controller node is separate from the scene shell; `_ensure_pages_built()` instantiates the scene internally.
-
-## Slice 2 additions and confirmed conventions
-
-**Re-entrancy guards confirmed (Slice 2):** Both `populate_left` and `populate_right` now guard against being called twice on the same instance. Pattern: `if node.get_parent() != null: node.get_parent().remove_child(node)` before `parent.add_child(node)`. Signal connections guarded with `if not signal.is_connected(handler)`. OptionButton items guarded with `if get_item_count() == 0`. These guards were backported to `settings_tab.gd` as part of the same PR.
-
-**EQUIPMENT_SLOT_SCENE constant kept for documentation only:** `inventory_tab.gd` declares `const EQUIPMENT_SLOT_SCENE` even though the script never calls `instantiate()` on it at runtime (slots live in the .tscn as instanced children). This is a deliberate documentation choice. Future reviewers should not flag it as dead code without reading the comment.
-
-**_scroll_container stored-but-unused var:** `_scroll_container` is resolved inside `populate_right()` and stored as a private var, but as of Slice 2 nothing else reads it. It is a forward provision; acceptable for Phase 1 but worth noting in later reviews if it is still unused by Slice 5.
-
-**"B2 edit" breadcrumbs in test_inventory_tab.gd:** Each updated test has an inline `# B2 edit:` comment explaining the change from `.new()` to scene instantiation. These are migration-history comments, not spec documents. They are appropriate in test files (where future developers may wonder why the pattern changed) but should not appear in production scripts. This convention has been applied consistently throughout Slices 1–2.
-
-**`_refresh_both_pages()` null safety removed intentionally:** After Slice 2 the empty-slots guard (`if not _equipment_slots.is_empty()`) was removed from `_refresh_both_pages()`. The loop body is a no-op when the array is empty, so the guard was redundant. Consistent with how `_rows_container` null check in `_build_right_page()` acts as the real guard for the right page.
-
-## PR 5 (Map tab) — confirmed conventions and new observations
-
-**Map tab now has 10-px insets (tidy/notebook-scene-consistency):** `map_tab.gd` was updated to apply the same `offset_left/top = 10, offset_right/bottom = -10` block that `inventory_tab.gd` and `settings_tab.gd` use. The original omission was deliberate (preserving legacy behaviour), but the tidy-up PR explicitly approved adding the inset for visual consistency. The old "inset-free" comment was removed. Reviewers should no longer flag the inset block as a behaviour change — it is the approved standard for all tab populate functions.
-
-**`size_flags_horizontal = 3` (EXPAND_FILL) set on all four Label nodes in `map_tab.tscn`:** Labels that might approach the column width carry `SIZE_EXPAND_FILL` per `ui/CLAUDE.md` rule 4. The two heading labels are short fixed strings and technically do not need it, but having it is not harmful (no autowrap, so no Godot warning). The note/phase-2 labels are the ones that actually benefit.
-
-**Color equality: `Color(r,g,b)` vs `Color(r,g,b,1)` in GDScript:** Godot 4 `Color` equality treats `Color(0.2, 0.3, 0.2)` (alpha defaults to 1.0) as equal to `Color(0.2, 0.3, 0.2, 1)`. The tscn stores the 4-component form; test constants use the 3-component form. Tests pass correctly.
-
-**`_ensure_pages_built()` guard uses `_left_page != null`:** The guard only checks `_left_page`. If somehow `_right_page` were null while `_left_page` were set (impossible in normal flow since both are assigned in the same block), the method would be a no-op and `_right_page` would stay null. This edge case is theoretical — both are set atomically in the same `_ensure_pages_built()` block, so no real risk. Pattern is consistent with InventoryTab and SettingsTab.
-
-**Related:** [[project_patterns]]
-
-## Slice 3 (Quests tab) — confirmed conventions and new observations
-
-**_refresh_right_page() is a full free-and-rebuild, not show/hide:** The right page frees ALL children on every refresh, then rebuilds from code (`Label.new()`, `VBoxContainer.new()`). This means the `QuestDetail` and `Placeholder` scene nodes in `quests_tab.tscn` are **decorative only** — they are freed on the first `_refresh_right_page()` call and never appear at runtime. The design rationale (documented in code) is that `_find_labels()` in integration tests walks ALL children including hidden ones, so hiding the placeholder would leave it findable; freeing ensures clean assertions. Reviewers should not flag this as inconsistency with the scene; it is intentional.
-
-**Section containers (ActiveSection, CompletedSection) have no null guard at call sites:** `populate_left()` resolves `active_section` and `completed_section` via `get_node()` (can return null if tscn is renamed) and passes them directly to `_add_quest_row()` with no null check. `_add_quest_row()` would crash on `section.add_child(row)` if null. The separator `null` guard (`if separator != null`) is inconsistent with this. This is a known pattern gap — acceptable for Phase 1 since the names are test-covered by `test_quests_tab_scene.gd`, but worth flagging.
-
-**Quests tab right page does NOT store resolved onready refs:** Unlike `inventory_tab.gd` which stores `_weight_label`, `_rows_container` etc. as instance vars, `quests_tab.gd` stores only `_right_page` and rebuilds detail nodes from code each refresh. This is correct for this tab since the detail children are quest-specific and change on every selection.
-
-**Dead code loop in unit test 8:** `test_view_button_press_drives_selection` (test_quests_tab.gd lines 237–241) contains a `for` loop that builds a `candidates` array then immediately `break`s. The `candidates` variable is never used. The actual search uses `_find_view_button(left_parent)` on the next line. The loop is vestigial and should be deleted.
-
-**Missing .uid files for new test files:** New test files `test_quests_tab_scene.gd`, `test_quest_row_scene.gd`, and `tests/integration/notebook/test_quests_tab.gd` have no `.uid` sidecar files. Godot generates these when files are first opened in the editor. They are not critical for test execution but Godot will create and stage them on first import, which creates noise. The existing unit test (`test_quests_tab.gd`) does have a `.uid` file, so the pattern is inconsistent.
-
-**project.godot main scene** was changed in the working tree (notebook.tscn instead of world.tscn) — this is a local dev convenience for testing, not a Slice 3 change. Must not be committed as part of this slice.
-
-**`_quest_log: QuestLog` has type hint** — unlike `_quest` and `_status` in quest_row.gd which lack type hints. The quest_row.gd private vars `var _quest: QuestData` and `var _status: int` both actually DO have type hints in the current code. All type hints present and correct in production files.
-
-## Slice 4 (Sessions tab) — confirmed conventions and new observations
-
-**D1 fix uses `free()` for stale StoryCards:** `populate_left()` calls `stale_child.free()` on CardsContainer children before rebuilding. This is consistent with `quests_tab.gd`'s `_refresh_right_page()` which also uses `free()` (not `queue_free()`) for the same rationale: leaf-node widgets with no deferred logic, and tests need them gone synchronously before inspecting the subtree.
-
-**D2 right page is purely static:** `populate_right()` reparents the RightPage VBoxContainer and applies PRESET_FULL_RECT + 10px insets, then stops — no `_refresh_right_page()`, no dynamic rebuild. The Placeholder Label lives exclusively in the .tscn. This is intentionally leaner than QuestsTab, which free-and-rebuilds on every selection.
-
-**`_last_played_label` is an `@onready` var but is never read after assignment in Phase 1.** The declaration is correct forward-provision — Phase 2 will use it to format the timestamp. Not dead code (cf. `_scroll_container` in Slice 2 memory note). Acceptable.
-
-**Missing .uid files for `test_sessions_tab_scene.gd` and `test_story_card_scene.gd`:** Consistent with the same pattern gap from Slice 3 — `test_sessions_tab.gd` has a `.uid` file, the two new scene-contract test files do not. Godot will generate them on first editor import. Cosmetic noise, not a blocker.
-
-**`LastPlayedLabel` lacks `size_flags_horizontal` / `autowrap_mode` in story_card.tscn:** The label text "Last played: N/A" is short and fixed, so autowrap is not needed and omitting `SIZE_EXPAND_FILL` is correct per ui/CLAUDE.md rule 4 ("do NOT apply to short fixed labels"). This is intentional, not an omission.
+[[project_patterns]]

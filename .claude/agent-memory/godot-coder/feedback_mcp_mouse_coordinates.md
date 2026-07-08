@@ -1,16 +1,18 @@
 ---
-name: mcp-mouse-coordinates-2x
-description: MCP testing-sandbox mouse coords must be OS window coords (2×), not logical viewport coords
+name: mcp-mouse-coordinates-window-space
+description: MCP testing-sandbox mouse coords are OS-window pixels, not logical viewport pixels — scale by window/viewport ratio
 metadata:
   type: feedback
 ---
 
-MCP `mouse_button_press` x/y values must be in **OS window space**, not logical viewport space.
+MCP `mouse_button_press` / `mouse_button_release` / `mouse_move` x/y values are in **OS window pixel space**, not logical render-viewport space. `Input.parse_input_event` receives the event in window coords; Godot maps it to the viewport internally.
 
-This project uses `viewport_width=640, viewport_height=480` with `window_width_override=1280, window_height_override=960` and `stretch mode="viewport"`. The OS window is 2× the logical canvas. `Input.parse_input_event` receives the event in OS coords; Godot then maps it to viewport coords internally.
+**Why:** if you read a coordinate off a viewport-sized screenshot and pass it straight to the MCP call while the window is larger than the render viewport, the click lands at `coord ÷ scale` in the scene and misses its target — making a working feature look broken.
 
-**Why:** Clicking at logical y=87 via MCP (which sends `position = Vector2(x, 87)`) lands at logical y=43 in the scene, missing the row entirely. The row never gets selected. This makes features look broken when they actually work fine.
+**How to apply:** convert logical/viewport coordinates to window coordinates before sending them, using the current scale factor:
 
-**How to apply:** Always multiply logical screenshot coordinates by 2 when passing to `mouse_button_press` / `mouse_button_release` / `mouse_move`. E.g. a row visible at y=87 in a 640×480 screenshot needs y=174 in the MCP call. This is also why early e2e tests must document their coordinate assumptions.
+    scale = current_window_size / render_viewport_size
+
+Do not hardcode the factor — this project's render viewport (`display/window/size/viewport_*`) and the window are decoupled, and the window is user-resizable through the Settings window-scale option, so the ratio changes at runtime. Read the live window size (`DisplayServer.window_get_size()`) and the viewport size rather than assuming a fixed multiple. When authoring an e2e scenario, capture the screenshot and the window size together and document the coordinate space the scenario assumes.
 
 See also: [[testing-sandbox-stdout-devnull]] — stdout is also discarded, so print() diagnostics are invisible via MCP.
