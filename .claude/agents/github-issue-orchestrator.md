@@ -169,6 +169,8 @@ Build up memory over time. Useful things to record:
 - Test patterns useful for regression coverage
 - Workflow friction points and how they were resolved
 
+Record durable insights only. Do NOT log per-issue progress or fix status — which issue was closed, PASS/FAIL, or "fixed #N". That lives in the PR, commits, and the issue tracker; record the reusable pattern, not the task record.
+
 Follow the standard memory format: each memory in its own file with frontmatter (`name`, `description`, `type`), and a one-line index entry in `MEMORY.md`.
 
 ## MEMORY.md

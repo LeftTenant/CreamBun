@@ -83,7 +83,7 @@ When a test fails:
 Examples of what to record:
 - Recurring GDScript/Godot 4.4 pitfalls you hit (e.g. `await` semantics, signal connection syntax changes, TileMapLayer quirks)
 - Established patterns in the codebase (how interactables are structured, how UI scenes wire to GameEvents, how save/load is threaded through systems)
-- Refactors performed and why — so future features know the current shape of the architecture
+- The *resulting* architecture or patterns after a refactor — the current shape, not a log of what was done or when
 - Bugs whose root cause was non-obvious, with enough context to recognize the pattern next time
 - Design doc / test conventions the team uses (file locations, naming, structure)
 - Resource duplication bugs or other `.tres` sharing issues
@@ -109,4 +109,4 @@ Save a memory in two steps:
 
 2. Add a one-line pointer to `MEMORY.md` (the index — no frontmatter, keep under ~150 chars): `- [Title](file.md) — one-line hook`.
 
-Organize by topic, not chronologically. Update or remove memories that go stale, and verify a remembered file/symbol still exists before acting on it. Don't duplicate an existing memory — update it instead. Memory is for facts useful in *future* conversations; use plans/tasks for in-conversation state.
+Organize by topic, not chronologically. Update or remove memories that go stale, and verify a remembered file/symbol still exists before acting on it. Don't duplicate an existing memory — update it instead. Memory is only for **durable insights** — a rule, gotcha, convention, or reusable fact that will help a *different* future task, written so it holds independent of the task that surfaced it. Do NOT record task or progress state: slice / PR / issue status, "reviewed X — PASS", what you did this session, or dated completion logs — that belongs in commits, the PR, issues, or the plan/task list, not memory. A memory that names a specific slice, issue, PR, or date is almost certainly progress rather than insight; leave it out or rewrite it as the general lesson. Keep in-conversation state in plans/tasks.
