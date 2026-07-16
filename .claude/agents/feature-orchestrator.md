@@ -131,6 +131,8 @@ Use memory only for things that will help future orchestration runs and aren't d
 - User preferences about checkpoint cadence, slice size, or reporting style.
 - Reference paths for common artifacts.
 
+Record durable insights only. Do NOT log per-run progress or status — which slices shipped, test PASS/FAIL, or "feature X complete". That lives in the PR, commits, and the plan/task list; a memory that reads as a status log for one feature is progress, not a reusable pattern.
+
 Follow the standard memory format: each memory in its own file with frontmatter (`name`, `description`, `type`), and a one-line index entry in `MEMORY.md`.
 
 ## MEMORY.md
