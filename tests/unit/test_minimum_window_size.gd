@@ -13,6 +13,13 @@
 ## proves the computation world.gd performs is correct without loading the
 ## world scene at all.
 ##
+## Note: tests/integration/world/test_world_scene.gd now instantiates
+## world.tscn headless and runs World._ready() cleanly, so the scene graph
+## dependencies above are no longer actually fragile to instantiate — this
+## test still stands on its own merits (it isolates the arithmetic from the
+## rest of _ready()), but "fragile under headless GUT" is no longer the
+## reason to avoid an integration test against world.tscn.
+##
 ## The invariant: MINIMUM_SCALE (2) × viewport size = (640, 360).
 ## If project.godot ever changes the viewport dimensions, this test will fail
 ## — which is the desired signal, because world.gd would need a review.

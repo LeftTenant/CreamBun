@@ -6,28 +6,9 @@ extends Node2D
 ## autoloads (dependency injection point). Direct autoload access is acceptable
 ## here specifically because this node's job is orchestration.
 
-# @onready resolves $Player before _ready() runs, giving us a typed reference
-# without an explicit get_node() call in _ready().
-# https://docs.godotengine.org/en/stable/tutorials/scripting/gdscript/gdscript_basics.html#onready-annotation
-@onready var _player: CharacterBody2D = $Player
-
 
 func _ready() -> void:
-	_place_player_at_viewport_centre()
 	_set_minimum_window_size()
-
-
-## Position the player at the centre of the current render viewport so the
-## spawn point stays correct regardless of the configured viewport resolution.
-##
-## We read the live viewport size at runtime rather than hard-coding a constant
-## (e.g. Vector2(160, 90)) so that if the render resolution changes again the
-## spawn automatically follows without a code edit.
-##
-## get_viewport_rect() returns the viewport's Rect2 in local-space pixels.
-## https://docs.godotengine.org/en/stable/classes/class_node.html#class-node-method-get-viewport-rect
-func _place_player_at_viewport_centre() -> void:
-	_player.position = get_viewport_rect().size / 2.0
 
 
 ## Prevent the OS window from being dragged smaller than the 2× scale size.
