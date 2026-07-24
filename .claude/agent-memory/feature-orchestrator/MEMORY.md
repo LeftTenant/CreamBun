@@ -1,1 +1,1 @@
-- [Execution tools not available](execution-tools-not-available.md) — orchestrator is a planner; can't spawn agents or run godot MCP; produce a handoff for the parent instead of executing
+- [Execution tools not available](execution-tools-not-available.md) — orchestrator is a planner; can't spawn agents or run godot MCP; produce a self-sufficient slices.md for the parent's /implement-feature flow instead of executing
