@@ -149,6 +149,16 @@ layer can be authored against them). Benefits from slice 3 being done first so t
 against the corrected feet-anchored collider rather than the old centred circle, but is not
 strictly blocked by it.
 
+**Note — the two `Solids` test cells are scaffolding, not real terrain art.** The two painted
+cells at `(11,11)`/`(12,11)`, and the new atlas alternative tile (`alternative_tile 1`) they use,
+exist solely to prove the collision mechanism end-to-end; the alternative tile is a pixel-identical
+copy of the flower-grass texture with no visual distinction from ordinary walkable ground. Expect
+these to be replaced or supplemented with real solid-terrain art once slice 6 (the boulder prop) or
+later level-design work gives the team a visual convention for "this tile blocks you." Because
+`Solids` is Y-sorted, standing north of one of these test cells currently draws the player behind
+a flat ground-level sprite with no cliff-like silhouette to justify it — this will read as a
+depth-sorting bug rather than intended behavior until real art exists. That's expected for now.
+
 ---
 
 ## Slice 5 — `WorldProp` base class

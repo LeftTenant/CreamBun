@@ -1,6 +1,6 @@
 ---
 name: gotcha-tilemap-geometry-review
-description: Reviewing TileSet/tile_size changes — decode tile_map_data to verify atlas source_ids, and re-check every pixel-authored world position
+description: Reviewing TileSet/tile_size/collision changes — decode tile_map_data, check alt-tile collision scope, re-check pixel-authored positions, round-trip hand-spliced .tscn text
 metadata:
   type: project
 ---
@@ -62,6 +62,48 @@ holes = [(x, y) for y in range(ty0, ty1 + 1) for x in range(tx0, tx1 + 1) if (x,
 Also diff the decoded `tile_map_data` bytes against `main` (sha1 the blob) — an identical hash
 proves the geometry change did not repaint or shift a single cell, which is the one thing the
 GUT suite genuinely cannot tell you.
+
+## 3. TileSet collision belongs to `(atlas_coords, alternative_id)`, not to a layer or a cell
+
+Adding a `physics_layer_N/polygon_M/points` entry to a tile makes **every already-painted cell
+using that exact `(source_id, atlas_coords, alt)` solid**, retroactively and on every
+`TileMapLayer` sharing the TileSet — including a non-Y-sorted `Ground` layer. The safe pattern
+(used for the Ground/Solids split) is `TileSetAtlasSource.create_alternative_tile()`: a new
+alternative id sharing the same texture region carries the polygon, `alt 0` stays walkable, and
+only newly painted cells reference the new alt. Serialization looks like `0:0/next_alternative_id
+= 2`, `0:0/1 = 1`, `0:0/1/physics_layer_0/polygon_0/points = ...`.
+
+**How to review:** decode `tile_map_data` on *every* layer sharing the TileSet and confirm no
+existing cell uses the alt that gained a polygon; then confirm at runtime with a probe —
+`src.get_tile_data(coords, alt).get_collision_polygons_count(0)` should be `0` for alt 0.
+Polygon points are tile-local and centred: a full 32×16 tile is `(-16,-8, 16,-8, 16,8, -16,8)`.
+
+Watch the *visual* consequence too: an alternative of a flat ground texture used as a Solids
+tile is an invisible wall, and because `Solids` is Y-sorted the player sorts *behind* it when
+standing north of the tile centre. Fine as slice scaffolding, worth flagging as a follow-up.
+
+## 4. Verify hand-spliced `.tscn` text with a ResourceSaver round trip
+
+When a coder hand-writes serialized text into a `.tscn` (to avoid regenerating `unique_id`s and
+`ext_resource` ids), prove the splice is canonical: `load()` the scene and
+`ResourceSaver.save()` it to a throwaway path, then `diff` the two. Everything except
+`ext_resource` ids/uids (which the resaver regenerates) should match byte-for-byte.
+
+Save to `user://` (`ResourceSaver.save(load(path), "user://roundtrip.tscn")`, then diff the
+globalized path) so the probe never litters the project tree. The complete benign-difference
+set is: the `[gd_scene]` header's `uid=` attribute (dropped on resave), the `[ext_resource]`
+lines themselves, and every `ExtResource("...")` id reference. Anything else — a physics
+layer key, an alternative-tile key, a `PackedByteArray` blob — differing means the splice
+was not canonical.
+
+Known-benign difference from that diff: `PackedByteArray` accepts both the base64 string form
+and a decimal byte list, and they parse identically — but Godot always *writes* base64, so a
+decimal list will be rewritten on the next editor save and show up as a spurious diff. Ask for
+it to be pre-normalized to the base64 form.
+
+`TileMapLayer.tile_map_data`'s 2-byte header is `0` in current Godot (TileMapLayer has its own
+data-format enum starting at 0 — not the old `TileMap` FORMAT_3); a `0` header is correct, not
+a stale format.
 
 ## Related
 
