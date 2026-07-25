@@ -8,3 +8,4 @@
 - [Theme .tres serialization](reference_theme_tres_serialization.md) — global color path format, Color() float precision for GUT equality, has_font() fallback gotcha
 - [GUT Image.load() import warning](reference_gut_image_load_warning.md) — Image.load() on an imported texture path warns and GUT counts it as a failure even if the real assert passed
 - [TileSet source_id renumbering trap](reference_tileset_source_id_renumbering.md) — deleting a TileSetAtlasSource must not renumber remaining sources/N keys; tile_map_data references source_id by value
+- [Pixel art resize needs nearest-neighbor](reference_pixel_art_resize_nearest.md) — `sips -z` blurs pixel art (no nearest option); use PIL Image.NEAREST and sanity-check with a unique-color count
