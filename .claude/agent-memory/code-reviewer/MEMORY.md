@@ -7,5 +7,7 @@
 - [Perspective Terminology](project_perspective_terminology.md) — three-quarter top-down, never "isometric"; never name the projection in identifiers; square 32×16 grid
 - [.tscn Editor Drift](gotcha_tscn_editor_drift.md) — editor writes stray root-node `position` into scene files; audit every .tscn hunk against `main`, revert rather than leave unstaged
 - [TileMap Geometry Review](gotcha_tilemap_geometry_review.md) — never renumber `sources/N`; decode `tile_map_data`; halving `tile_size` breaks pixel-authored node positions
+- [.tscn Default-Valued Props](gotcha_tscn_default_valued_props.md) — Godot drops props equal to the class default on save (`collision_mask = 1` vanishes); they can't document intent
+- [Player Sprite Geometry](reference_player_sprite_geometry.md) — 32×32 frames have ~5px transparent padding below the body, so `offset = (0,-16)` floats the feet above the origin
 
 Per-developer profile memories live in `.claude/agent-memory-local/code-reviewer/` (gitignored). Check there for any local context before reviewing.

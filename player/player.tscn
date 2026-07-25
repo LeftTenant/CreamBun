@@ -6,8 +6,8 @@
 [ext_resource type="Texture2D" uid="uid://doctkl43v5sr2" path="res://resources/sprites/player/walk forward creambun.png" id="4_g6k8r"]
 [ext_resource type="Texture2D" uid="uid://dmbywmxicv5oj" path="res://resources/sprites/player/walk side creambun.png" id="5_boad6"]
 
-[sub_resource type="CircleShape2D" id="CircleShape2D_1"]
-radius = 16.0
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_1"]
+size = Vector2(20, 10)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_g1dw6"]
 atlas = ExtResource("2_rkbax")
@@ -250,14 +250,17 @@ animations = [{
 }]
 
 [node name="Player" type="CharacterBody2D" unique_id=403433154]
+collision_layer = 2
+collision_mask = 1
 script = ExtResource("1_player")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=105470762]
-shape = SubResource("CircleShape2D_1")
+shape = SubResource("RectangleShape2D_1")
 
 [node name="Camera2D" type="Camera2D" parent="." unique_id=74936866]
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="." unique_id=1693060602]
+offset = Vector2(0, -16)
 sprite_frames = SubResource("SpriteFrames_boad6")
 animation = &"idle"
 autoplay = "idle"

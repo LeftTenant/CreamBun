@@ -9,3 +9,4 @@
 - [GUT Image.load() import warning](reference_gut_image_load_warning.md) — Image.load() on an imported texture path warns and GUT counts it as a failure even if the real assert passed
 - [TileSet source_id renumbering trap](reference_tileset_source_id_renumbering.md) — deleting a TileSetAtlasSource must not renumber remaining sources/N keys; tile_map_data references source_id by value
 - [Pixel art resize needs nearest-neighbor](reference_pixel_art_resize_nearest.md) — `sips -z` blurs pixel art (no nearest option); use PIL Image.NEAREST and sanity-check with a unique-color count
+- [Collision layer/mask explicit defaults](reference_collision_layer_mask_explicit_defaults.md) — engine default mask=1 coincidentally matches "world" bit; explicit .tscn value gets stripped on re-save, so tests are the real source of truth
