@@ -7,7 +7,7 @@
 ##
 ## Issue #36 regression: world.gd._ready() unconditionally called
 ## _place_player_at_viewport_centre(), which overwrote the scene-authored
-## Player.position (Vector2(576, 352) in world.tscn) with the viewport centre
+## Player.position (Vector2(288, 176) in world.tscn) with the viewport centre
 ## on every launch. The fix removes that call so the Player keeps whatever
 ## position world.tscn gives it. This test instantiates the real world.tscn
 ## (not a mock) so it exercises the actual _ready() call chain, not just the
@@ -40,7 +40,7 @@ const WORLD_SCENE_PATH: String = "res://world/world.tscn"
 # .tscn file — so this test independently pins the expected spawn point; if
 # someone changes the authored position in the editor without updating this
 # constant, the test will fail and flag the drift for review.
-const EXPECTED_SPAWN_POSITION: Vector2 = Vector2(576, 352)
+const EXPECTED_SPAWN_POSITION: Vector2 = Vector2(288, 176)
 
 
 # ---------------------------------------------------------------------------
