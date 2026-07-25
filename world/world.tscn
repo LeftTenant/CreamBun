@@ -2,30 +2,22 @@
 
 [ext_resource type="Script" uid="uid://dy4kvsd5hfqoq" path="res://world/world.gd" id="1_world"]
 [ext_resource type="PackedScene" uid="uid://beaja7keolaqd" path="res://player/player.tscn" id="2_player"]
-[ext_resource type="Texture2D" uid="uid://dcnjsu22waidp" path="res://resources/tilesets/ground_placeholder.png" id="2_tcf2h"]
 [ext_resource type="PackedScene" path="res://ui/notebook/notebook.tscn" id="3_notebook"]
 [ext_resource type="Texture2D" uid="uid://clch2yj51jack" path="res://resources/sprites/terrain/grass.png" id="4_mmdvd"]
 [ext_resource type="Texture2D" uid="uid://xqvf201uswvm" path="res://resources/sprites/terrain/flower grass.png" id="5_fn3g3"]
 
-[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_4717r"]
-resource_name = "ground"
-texture = ExtResource("2_tcf2h")
-texture_region_size = Vector2i(64, 32)
-0:0/0 = 0
-
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_sc4t8"]
 texture = ExtResource("4_mmdvd")
-texture_region_size = Vector2i(64, 32)
+texture_region_size = Vector2i(32, 16)
 0:0/0 = 0
 
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_ai45w"]
 texture = ExtResource("5_fn3g3")
-texture_region_size = Vector2i(64, 32)
+texture_region_size = Vector2i(32, 16)
 0:0/0 = 0
 
 [sub_resource type="TileSet" id="TileSet_h5o24"]
-tile_size = Vector2i(64, 32)
-sources/0 = SubResource("TileSetAtlasSource_4717r")
+tile_size = Vector2i(32, 16)
 sources/1 = SubResource("TileSetAtlasSource_sc4t8")
 sources/2 = SubResource("TileSetAtlasSource_ai45w")
 
@@ -34,7 +26,7 @@ y_sort_enabled = true
 script = ExtResource("1_world")
 
 [node name="Player" parent="." unique_id=1307239076 instance=ExtResource("2_player")]
-position = Vector2(576, 352)
+position = Vector2(288, 176)
 
 [node name="Notebook" parent="." unique_id=1312945757 instance=ExtResource("3_notebook")]
 
