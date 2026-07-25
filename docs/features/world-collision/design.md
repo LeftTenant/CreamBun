@@ -682,6 +682,38 @@ area root. The wall becomes a doorway; the transition and opposite-edge spawn ar
 
 At no point does anyone open a "blocked areas" layer, draw a polygon, or mark a tile as solid.
 
+### 14.1 Reference documentation (for the humans doing this work)
+
+Everything in §14 is a human workflow, not a code path: a level designer paints tiles, drags
+prop scenes, and fills in `neighbour_*` slots by hand in the Godot editor. None of that is
+exercised by automated tests or code review — it lives in whoever's head last touched it, unless
+it is written down. That documentation is a deliverable of this feature, not an afterthought
+tacked on once someone gets confused.
+
+**New docs subfolder: `docs/reference/`.** `docs/` currently splits into `features/` (per-feature
+design docs like this one), `migrations/`, `refactors/`, and `ideas/` — all implementation
+history, not standing how-to material. None of those is the right home for "here is how you, a
+human, paint a tile or place a prop." `docs/reference/` is a new sibling category for
+operational documentation: written once the mechanism exists, kept current, and read repeatedly
+by whoever is doing art or level work — not tied to a single feature's implementation history the
+way `docs/features/` entries are.
+
+Deliverable: `docs/reference/creating-world-areas.md`, covering at minimum:
+
+- How to paint terrain and give a tile type collision via the TileSet physics layer (§6).
+- How to create a new `WorldProp`: duplicate a prop scene, set `footprint`, swap the placeholder
+  shape for real art (§7–§8).
+- How to lay out a new `WorldArea` scene — the `Ground`/`Solids` layer structure, and the
+  ground-anchor / footprint rules that keep depth sorting correct when placing props (§6.1, §8,
+  §9).
+- How to link two areas via the `neighbour_*` slots, and what an empty slot means (§12.2, §12.4).
+- Common mistakes worth flagging up front: sprites not offset from the ground anchor, footprint
+  drawn to match silhouette instead of the ground contact point, areas smaller than one viewport
+  (§12.3).
+
+This is written from the finished mechanisms, not from this design doc's proposal — it documents
+what got built, once it exists to describe. See the Phasing section below for when it lands.
+
 ---
 
 ## 15. Phasing
@@ -714,6 +746,11 @@ At no point does anyone open a "blocked areas" layer, draw a polygon, or mark a 
    `neighbour_*` slot; open that edge with a trigger; fade to the neighbour and spawn on the
    opposite edge (§12.5). Runnable: walk off the east edge, fade, and appear at the west edge of
    the next area. This delivers the full requested behaviour end-to-end.
+8. **Designer reference documentation.** Create the `docs/reference/` subfolder and write
+   `docs/reference/creating-world-areas.md` (§14.1), documenting the terrain, prop, area, and
+   area-linking workflows built in slices 1–7. Runnable: someone with no prior context on this
+   design doc can follow the guide alone to paint a new tile's collision, place a prop, and link
+   a new area.
 
 **Phase 2 — named, deferred.**
 
