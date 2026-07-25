@@ -2,7 +2,7 @@
 
 ## Project
 
-CreamBun is a cozy isometric RPG built in **Godot 4.6** using the **Mobile renderer**. The player character is Cream Bun — a small round creature who forages ingredients, brews drinks, and sells them at market. No combat; no enemies. The tone is cozy life-sim. The `combat/` folder and `COMBAT` game state are stubs reserved for future design — do not implement combat mechanics.
+CreamBun is a cozy top-down RPG built in **Godot 4.6** using the **Mobile renderer**. The player character is Cream Bun — a small round creature who forages ingredients, brews drinks, and sells them at market. No combat; no enemies. The tone is cozy life-sim. The `combat/` folder and `COMBAT` game state are stubs reserved for future design — do not implement combat mechanics.
 
 See `README.md` in the root project folder for more details on project requirements and the intended game experience.
 
@@ -86,7 +86,7 @@ Prefer direct node references and `$Node` paths for parent/child communication w
 ### Resources for data
 Game data lives in `.tres` resource files backed by `.gd` resource classes: `ItemData`, `CharacterStats`, `NpcData`, `AbilityData`. Always call `stats.duplicate()` at runtime — never share a `.tres` instance between multiple characters.
 
-### Isometric depth sorting
+### Depth sorting
 Y Sort must be enabled on `TileMapLayer` nodes **and** their parent `Node2D`. Use `TileMapLayer` — `TileMap` is deprecated in Godot 4.3+.
 
 ### UI during pause

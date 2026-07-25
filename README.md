@@ -1,6 +1,6 @@
 # CreamBun
 
-A cozy isometric RPG about foraging, brewing, and building a life in the wild.
+A cozy top-down RPG about foraging, brewing, and building a life in the wild.
 
 ---
 
@@ -38,7 +38,7 @@ The forest includes many plants from which items can be harvested. Some examples
 
 ## Art Style
 
-The game uses a top-down isometric perspective with a soft, cute pixel art aesthetic. Colours are warm and saturated, with chunky sprites and gentle animations. The world should feel handcrafted and inviting — like a children's book illustration brought to life on a grid. Seasonal changes affect the colour palette and what can be foraged, keeping the world feeling alive throughout the year.
+The game uses a three-quarter top-down perspective — a square grid viewed at an angle, with front-facing sprites and foreshortened ground. The Stardew Valley look. The aesthetic is soft and cute pixel art. Colours are warm and saturated, with chunky sprites and gentle animations. The world should feel handcrafted and inviting — like a children's book illustration brought to life on a grid. Seasonal changes affect the colour palette and what can be foraged, keeping the world feeling alive throughout the year.
 
 ---
 
