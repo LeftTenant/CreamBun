@@ -29,6 +29,13 @@ they only surface by comparing against sibling test files.
 - **Test plans live at `docs/features/<area>/<name>-test-plan.md`** as `- [ ]` / `- [x]`
   checklists grouped by `### E2E` / `### Integration` / `### Unit`. Boxes are ticked once
   the corresponding test exists and passes — an unticked box on a delivered test is stale.
+- **Every committed `tests/e2e/**/screenshots/*.png` has a committed `*.png.import`
+  sibling.** `.gitignore` only ignores `art/**/*.import`, so screenshot `.import` files are
+  tracked. A `.png` committed without one shows up as an untracked `.import` the next time
+  anyone imports the project. To confirm such a stray file is a benign reimport artifact and
+  not a content change: check the `.png` blob hash still matches `HEAD`, and diff the
+  `.import`'s `[params]` against a committed sibling — only `uid=`, `path=`, `source_file=`,
+  and `dest_files=` should differ.
 
 ## Style
 
@@ -39,6 +46,27 @@ they only surface by comparing against sibling test files.
           "message")
   ```
   A single-tab continuation is a deviation, not the house style.
+
+## Map-driven movement tests: validate the whole travel window, not just the approach
+
+Tests that pick a target cell out of `TileMapLayer.get_used_cells()` and then drive the
+player at it are silently **order-dependent**: `get_used_cells()` order is the tile-paint
+order, so "the first cell that matches" can change when anyone repaints the map, and a test
+can pass (or fail) for a reason that has nothing to do with the tile it named.
+
+The mitigation is a "clear corridor" predicate that rejects a candidate whose path is
+contaminated by an unrelated collidable cell. **The corridor must span the entire simulated
+run, not just the approach offset.** A blocked-case test only travels `start → target`, so
+checking that span is enough; an *unblocked*-case test travels the full
+`speed * ticks * delta` (200px at the current `Player.speed = 200`, 60 ticks, 60Hz) — i.e.
+~150px *past* the target — and a Solids tile in that tail stops the player just as
+effectively, with a failure message that blames collision instead of candidate selection.
+
+**How to review:** for each movement test, compute the actual end position
+(`target - approach_offset + speed * ticks * delta`) and confirm the clearance predicate's
+`corridor_max_x` reaches it. Then prove the gap or its absence empirically rather than by
+eye — drop a throwaway `tests/**/test_zzz_probe_tmp.gd` that forces a specific candidate
+cell through the same GUT helpers, run it with `-gselect=`, and delete it.
 
 ## Engine / harness facts
 
