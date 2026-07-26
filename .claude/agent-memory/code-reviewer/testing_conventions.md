@@ -29,6 +29,11 @@ they only surface by comparing against sibling test files.
 - **Test plans live at `docs/features/<area>/<name>-test-plan.md`** as `- [ ]` / `- [x]`
   checklists grouped by `### E2E` / `### Integration` / `### Unit`. Boxes are ticked once
   the corresponding test exists and passes — an unticked box on a delivered test is stale.
+- **"RED STATE, EXPECTED" header sections go stale.** The TDD workflow here writes the test
+  first, so new test files often carry a header paragraph saying the implementation "does not
+  exist yet / this script will not parse". Once the implementation lands that paragraph is
+  false and actively misleads the next reader. Check for it in every review of a
+  test-first slice and ask for it to be rewritten (or deleted) before commit.
 - **Every committed `tests/e2e/**/screenshots/*.png` has a committed `*.png.import`
   sibling.** `.gitignore` only ignores `art/**/*.import`, so screenshot `.import` files are
   tracked. A `.png` committed without one shows up as an untracked `.import` the next time

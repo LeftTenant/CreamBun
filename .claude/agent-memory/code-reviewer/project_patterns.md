@@ -42,6 +42,22 @@ Conventions and engine facts that recur across reviews. Treat these as intention
   directly in a GUT test) emits a `WARN_PRINT`, not an error — GUT does not fail on it and
   the return value is still valid.
 
+## `@tool` scripts and generated sub-resources
+
+- **A resource embedded in a `.tscn` as a `[sub_resource]` is SHARED by every
+  instantiation of that scene** unless `resource_local_to_scene = true`. So a base class
+  that *generates* its collider shape (`RectangleShape2D.new()` in `_ready()`) is correct as
+  written — the fresh allocation per instance is what keeps two placed props from stomping
+  each other's shape. Do not "optimize" such code into mutating the existing
+  `_collision.shape` in place; that reintroduces the shared-instance bug the same way a
+  non-`duplicate()`d `.tres` does.
+- **`@tool` + writing node properties in `_ready()` has editor-side consequences**: `_ready()`
+  runs when the scene is opened in the editor, so the generated value is written into the
+  edited scene and serialized on the next save (a fresh `[sub_resource]` id each time → `.tscn`
+  churn), and any inspector-authored value for that same property is silently overwritten on
+  reload. Flag it when a property a designer might reasonably want to override is assigned
+  unconditionally in a `@tool` `_ready()`.
+
 ## Theme / project.godot facts
 
 - **`get_theme_color_override(name)` does NOT exist** in Godot 4. To read a per-node color

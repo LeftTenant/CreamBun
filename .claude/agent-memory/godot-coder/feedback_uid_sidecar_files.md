@@ -14,3 +14,9 @@ When adding a new `.gd` script to the project, also create the matching `.uid` s
 A missing `.uid` on a new `.gd` script has previously slipped through a PR and needed a follow-up repair commit — so treat it as part of adding any script, not an afterthought.
 
 **How to apply:** After adding any new `.gd` script, either (a) open the project in the editor so Godot writes the `.uid`, then `git add` it; or (b) write the `.uid` directly using a fresh `uid://` value of the form `uid://` followed by a 13-char base32 string. For `.tres` edits, just preserve the existing `uid="..."` in the `[gd_resource ...]` header line — do not create a `.uid` sidecar for it. Always `git status` before committing to verify staged files match expectations.
+
+**Headless generation that reliably works:** the `mcp__godot__update_project_uids` tool (runs a `resave_resources` operation) has been observed to report "Found 0 scenes"/"Found 0 scripts" and do nothing — it mishandles an absolute `projectPath`, producing a malformed `res:///Users/...` search root. Don't rely on it. Instead run Godot headless in editor mode against the project, which forces a full filesystem scan + global class registration and writes any missing `.uid` files as a side effect:
+```
+/Applications/Godot.app/Contents/MacOS/Godot --headless --editor --path <project_root> --quit
+```
+(Plain `--headless --quit` without `--editor` does NOT trigger this — it just runs the game's main loop and exits without a uid-generation pass.) Verify with `ls <script>.uid` afterward.
