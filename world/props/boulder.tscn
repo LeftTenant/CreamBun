@@ -1,4 +1,4 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene format=3 uid="uid://cjh00dq3cweeb"]
 
 [ext_resource type="Script" uid="uid://bcluyhxxyvfbn" path="res://world/props/shared/world_prop.gd" id="1_world_prop"]
 

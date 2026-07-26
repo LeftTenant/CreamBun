@@ -13,3 +13,5 @@
 - [TileSet physics layer serialization](reference_tileset_physics_layer_serialization.md) — exact .tscn key format for physics layers/TileData collision polygons; probe via headless script + ResourceSaver rather than guessing; use an alternative tile id to avoid retroactively blocking existing painted cells
 - [GUT simulate() needs a scripted _physics_process](reference_gut_simulate_needs_scripted_physics_process.md) — a bare CharacterBody2D.new() probe never moves under simulate(); drive move_and_slide() manually in a loop instead
 - [WorldProp placeholder visual convention](reference_worldprop_placeholder_visual_convention.md) — boulder.tscn's node structure/anchoring pattern for future concrete WorldProp scenes (tree, cottage)
+- [GDScript % format operator precedence](reference_gdscript_percent_format_precedence.md) — unparenthesized "a"+"b" % [arg] silently applies % only to the last string, crashes eagerly regardless of assertion outcome
+- [Scene uid:// generation](reference_scene_uid_generation.md) — bare `-s` resave silently strips existing ext_resource uids; must pair with `--editor`; referencing scenes need manual ext_resource uid= updates

@@ -13,13 +13,21 @@ type: reference
   (`tests/unit/world/props/shared/fixtures/test_world_prop.tscn`). Don't set the node `type` to
   the class name itself; instance as the base engine type + script, matching every other scene in
   the project.
-- Exactly two children: one placeholder visual (`Polygon2D` or `ColorRect`, any name other than
-  `CollisionShape2D`) and a bare `CollisionShape2D` named exactly `CollisionShape2D` (no shape
+- One or more placeholder visuals (`Polygon2D` or `ColorRect`, any name other than
+  `CollisionShape2D`) plus a bare `CollisionShape2D` named exactly `CollisionShape2D` (no shape
   resource needed in the file — `world_prop.gd`'s `_rebuild_collider()` populates it in `_ready()`
-  from `footprint`).
-- The visual child's **node `position.y` must be strictly negative** (never 0 or centred on the
-  origin) — the origin is the ground anchor (design §8.1), and a placeholder that cheats this
-  won't sort correctly once real art replaces it (design §7.1).
+  from `footprint`). boulder.tscn has one visual (`Silhouette`); tree_oak.tscn (Slice 7) has two
+  (`Trunk` + `Canopy`), since a tree needs to visually distinguish the footprint-sized trunk from
+  the wider, taller canopy that must NOT collide.
+- The rule that actually matters is on the **bounding box**, not the node's `position` property:
+  each visual's bounding box must sit above the ground anchor (design §8.1's origin), never
+  centred on or hanging below it (design §7.1). There are two equally valid ways to achieve this:
+  (a) author the polygon's own points directly in anchor-local space (so they already span
+  negative/zero y) and leave `position` at the default `(0, 0)` — tree_oak.tscn's `Trunk` does
+  this, with points spanning `y ∈ [-16, 0]`; or (b) author the polygon centred on its own local
+  origin and offset it upward via a strictly-negative `position.y` — boulder.tscn's `Silhouette`
+  and tree_oak.tscn's `Canopy` (`position = Vector2(0, -30)`) do this. Don't assume a visual with
+  `position.y == 0` is wrong — check where its actual bounding box lands before flagging it.
 - The visual's silhouette must be authored **wider/taller than the footprint's generated collider**
   on purpose — for a 1×1 footprint the collider spans local `y ∈ [-16, 0]`, `x ∈ [-16, 16]`
   (`TILE_SIZE = Vector2i(32, 16)`). Tests for these scenes deliberately probe for a "silhouette
