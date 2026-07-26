@@ -73,8 +73,14 @@ func _ready() -> void:
 	# in "world" by accident. Slice 4 applies the same explicit-zero rule to
 	# the Solids TileSet physics layer for the same reason (see
 	# tests/integration/world/test_solids_collision.gd).
-	collision_layer = WORLD_LAYER_BIT
-	collision_mask = 0
+	#
+	# Only at runtime: writing these during the @tool editor pass dirties every
+	# placed instance, serializing a redundant `collision_mask = 0` (etc.)
+	# override into each area scene that carries a prop when it's opened/saved
+	# in the editor.
+	if not Engine.is_editor_hint():
+		collision_layer = WORLD_LAYER_BIT
+		collision_mask = 0
 	_rebuild_collider()
 
 

@@ -5,10 +5,63 @@ extends Node2D
 ## Per CLAUDE.md, the world scene is the natural owner of scene-wiring from
 ## autoloads (dependency injection point). Direct autoload access is acceptable
 ## here specifically because this node's job is orchestration.
+##
+## Slice 8 (world-collision design doc §12.1) splits world.tscn into a
+## persistent shell — this script's node — and a swappable WorldArea scene
+## instanced under ActiveArea. The player is a permanent child of the shell
+## but gets reparented into the active area on load so Y-sort has one shared
+## scope to interleave the player against the area's tiles and props (§9).
 
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+## The area loaded into ActiveArea on startup. Slice 8 only supports a single
+## hard-coded starting area; slice 10 adds edge-triggered switching between
+## areas via the neighbour_* slots declared on WorldArea.
+const STARTING_AREA_SCENE: PackedScene = preload("res://world/areas/meadow.tscn")
+
+
+# ---------------------------------------------------------------------------
+# Onready variables
+# ---------------------------------------------------------------------------
+
+@onready var _active_area: Node2D = $ActiveArea
+@onready var _player: CharacterBody2D = $Player
+
+
+# ---------------------------------------------------------------------------
+# Built-in overrides
+# ---------------------------------------------------------------------------
 
 func _ready() -> void:
 	_set_minimum_window_size()
+	_load_starting_area()
+
+
+# ---------------------------------------------------------------------------
+# Private methods
+# ---------------------------------------------------------------------------
+
+## Instance the starting WorldArea under ActiveArea and reparent the
+## persistent Player into it (design doc §12.1):
+##
+##     _active_area.add_child(area)   # `area` is the freshly-instanced WorldArea
+##     _player.reparent(area)         # move the persistent player into the sort scope
+##
+## The reparent is not optional bookkeeping — it is what makes depth sorting
+## work. Y-sort only interleaves nodes that share one Y-sorted parent (§9);
+## the area's Ground/Solids layers and props all live under the WorldArea
+## root, so the player must join that scope to sort against them.
+## reparent() preserves the node and all its state (including its child
+## Camera2D), so nothing about the player is rebuilt — it is the same node,
+## moved.
+## https://docs.godotengine.org/en/stable/classes/class_node.html#class-node-method-reparent
+func _load_starting_area() -> void:
+	var area: WorldArea = STARTING_AREA_SCENE.instantiate()
+	_active_area.add_child(area)
+	_player.reparent(area)
 
 
 ## Prevent the OS window from being dragged smaller than the 2× scale size.

@@ -29,10 +29,14 @@ four sides of it, not on this specific coordinate.
 - Call `launch_game`.
 - Wait: 20 frames (allow the world scene, tilemap, boulder, player, and camera to fully initialize
   before the first screenshot).
-- Get node property: `World/Boulder.position` (check the actual node path/name in the live scene
-  tree if it differs — design doc §6.1 names it `Boulder`, a direct child of the world root).
+- Get node property: `World/ActiveArea/Meadow/Boulder.position` (check the actual node path/name
+  in the live scene tree if it differs — design doc §6.1 names it `Boulder`; post-Slice-8 it is a
+  child of the `Meadow` WorldArea instanced under `World/ActiveArea`, not the world root directly).
   Record this as **boulder_origin**.
-- Get node property: `World/Player.position`. Record this as **spawn_position**.
+- Get node property: `World/ActiveArea/Meadow/Player.position`. Record this as
+  **spawn_position**. (The player is a permanent child of the world shell but gets reparented into
+  the active area on load — see `world.gd`'s `_load_starting_area()` — so its live path is under
+  `Meadow`, not directly under `World`.)
 - Screenshot → save to `<reports_dir>/e2e/` (not the committed tree): a baseline reference showing
   the boulder as a grey ellipse near the player, useful context for judging the checkpoints below.
 

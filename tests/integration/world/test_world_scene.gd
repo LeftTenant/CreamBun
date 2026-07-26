@@ -13,8 +13,26 @@
 ## (not a mock) so it exercises the actual _ready() call chain, not just the
 ## math in isolation.
 ##
+## SLICE 8 UPDATE: world.gd's _ready() now reparents Player out of World and
+## into the freshly-instanced WorldArea (design doc §12.1's
+## `_player.reparent(area)`), so `world.get_node_or_null("Player")` returns
+## null once _ready() has run — Player is no longer World's direct child.
+## The fix below grabs the Player reference from the freshly-instantiated
+## (not-yet-in-tree) scene BEFORE add_child_autofree() triggers _ready(),
+## while it is still a plain child of World per the .tscn's authored
+## structure. Node identity survives reparent() (it is the same node, moved —
+## design doc §12.1), so that reference stays valid afterwards; only its
+## parent changes. This keeps the Issue #36 regression coverage working
+## across the shell/area restructure without assuming anything about the
+## instanced WorldArea's node name. The structural assertions about WHERE
+## Player ends up (and that it shares a Y-sort scope with the slice 6/7
+## props) live in the sibling file test_world_area_shell.gd, kept separate
+## since they target Slice 8's own new behavior rather than this file's
+## original Issue #36 scope.
+##
 ## Design reference: GitHub issue #36,
 ##   "Player spawns at viewport centre instead of the scene-placed position".
+## Design reference (reparent): docs/features/world-collision/design.md §12.1.
 ##
 ## Requires GUT: https://github.com/bitwes/Gut
 ##
@@ -55,32 +73,50 @@ func test_player_spawns_at_scene_authored_position() -> void:
 	if packed == null:
 		return
 
-	# Instantiate and add to the test's scene tree so World._ready() runs —
-	# add_child_autofree ensures the node (and its children, including
-	# Player) is freed when the test ends, preventing a node-leak warning
-	# in GUT.
-	# https://docs.godotengine.org/en/stable/classes/class_node.html#class-node-method-add-child
+	# Instantiate WITHOUT adding to the tree yet — at this point _ready() has
+	# not run, so Player is still exactly where world.tscn authors it: a
+	# direct child of World (design doc §12.1's shell layout puts Player as a
+	# sibling of ActiveArea, not nested under it, until the runtime reparent
+	# happens). Grabbing the reference here means this test does not need to
+	# know or guess the instanced WorldArea's node name — the same Node
+	# instance is what gets reparented, so the reference stays valid for the
+	# position check below regardless of where _ready() subsequently moves it.
 	var world: Node = packed.instantiate()
-	add_child_autofree(world)
-
 	var player: Node2D = world.get_node_or_null("Player") as Node2D
-	assert_not_null(player, "world.tscn must have a child node named 'Player'")
+	assert_not_null(player, "world.tscn must have a child node named 'Player' prior to _ready()")
 	if player == null:
 		return
 
-	# The critical assertion: after _ready() has run, the Player must still be
-	# at the position authored in world.tscn. Before the Issue #36 fix,
+	# NOW add to the test's scene tree so World._ready() runs — this is what
+	# triggers the Slice 8 reparent (_player.reparent(area)), same as it
+	# previously triggered the Issue #36 bug's viewport-centre overwrite.
+	# add_child_autofree ensures the node (and its children, including
+	# Player, wherever _ready() ends up moving it to) is freed when the test
+	# ends, preventing a node-leak warning in GUT.
+	# https://docs.godotengine.org/en/stable/classes/class_node.html#class-node-method-add-child
+	add_child_autofree(world)
+
+	# The critical assertion: after _ready() has run (and Player has been
+	# reparented into the WorldArea per design doc §12.1), Player must still
+	# be at the position authored in world.tscn. Before the Issue #36 fix,
 	# World._ready() called _place_player_at_viewport_centre(), which
 	# overwrote this with get_viewport_rect().size / 2.0 — clobbering the
-	# scene-authored spawn point on every launch.
+	# scene-authored spawn point on every launch. reparent()'s default
+	# keep_global_transform=true preserves global position across the move;
+	# since the shell's ActiveArea/WorldArea wrapper nodes introduce no
+	# offset of their own, Player's LOCAL position should still read as the
+	# original authored value even parented under the new WorldArea.
+	# https://docs.godotengine.org/en/stable/classes/class_node.html#class-node-method-reparent
 	assert_eq(
 		player.position,
 		EXPECTED_SPAWN_POSITION,
 		(
 		"Player.position must remain the scene-authored spawn point "
-		+ "(%s) after World._ready() runs, not the viewport centre. "
-		+ "If this fails, world.gd is still calling "
-		+ "_place_player_at_viewport_centre() (or similar) in _ready() "
-		+ "and clobbering the authored position — see Issue #36."
+		+ "(%s) after World._ready() runs (and Player has been reparented "
+		+ "into the active WorldArea), not the viewport centre and not "
+		+ "shifted by the reparent. If this fails, either world.gd is still "
+		+ "clobbering the authored position (see Issue #36), or the "
+		+ "reparent introduced an unexpected offset (check ActiveArea/the "
+		+ "WorldArea instance for a non-zero position)."
 		) % [EXPECTED_SPAWN_POSITION]
 	)

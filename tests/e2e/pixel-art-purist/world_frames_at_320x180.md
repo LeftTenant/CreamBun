@@ -51,8 +51,9 @@ or update the references to reflect the current 1280×720 default launch window.
 
 - (No additional input — still in the initial world state from Step 1.)
 - Wait: 5 frames
-- Get node property: `World/TileMapLayer.visible` (or the actual TileMapLayer
-  node path in world.tscn — check the scene tree if the path differs)
+- Get node property: `World/ActiveArea/Meadow/Ground.visible` (or the actual TileMapLayer node
+  path — check the scene tree if the path differs; post-Slice-8 the tile layers live on the
+  `Meadow` WorldArea instanced under `World/ActiveArea`, not directly under `World`)
 - Assert: `visible` == `true`
 - Screenshot → compare / save reference:
   `tests/e2e/pixel-art-purist/screenshots/world_frames_step_02_world_visible.png`
@@ -170,9 +171,10 @@ or update the references to reflect the current 1280×720 default launch window.
   live tree if a `get_node_property` call fails with "node not found", and
   adjust the path accordingly. Document any path corrections in these notes
   after the first run.
-- **Step 2 tilemap path note**: If `World/TileMapLayer` does not resolve, try
-  `World/IsometricMap` or `World/Ground` — the actual node name in world.tscn
-  takes precedence over this document.
+- **Step 2 tilemap path note**: If `World/ActiveArea/Meadow/Ground` does not resolve, try
+  `World/ActiveArea/Meadow/Solids` — post-Slice-8's WorldArea restructure moved the tile layers
+  into the swappable `Meadow` area instanced under `ActiveArea`; the actual node name/path in the
+  live scene tree takes precedence over this document.
 - **Player spawn concern (test plan §Judgment calls)**: If Step 5 fails
   because the player is off-screen, the fix is either moving the Player node's
   `position` in world.tscn from `Vector2(640, 360)` to `Vector2(160, 90)`, or

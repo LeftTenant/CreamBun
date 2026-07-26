@@ -49,3 +49,42 @@ the next real editor save) and not worth restoring by hand.
 See also `feedback_uid_sidecar_files.md` for the script-file version of this
 problem, and [[worldprop-placeholder-visual-convention]] for the scenes used
 as the worked example here.
+
+**Timing trap even with `--editor`:** a `SceneTree`-script's `_init()` (or
+`_initialize()`) runs *before* the editor's own async startup steps
+(`first_scan_filesystem` / `update_scripts_classes` / `loading_editor_layout`
+in the log output) — so calling `ResourceSaver.save()` immediately, even with
+`--editor` on the command line, still hits the ResourceUID-cache-not-yet-populated
+state and silently strips uids exactly like the bare-`-s` failure mode above.
+Confirmed by running the same script both ways: saving in `_init()` produced
+the strip; delaying via an overridden `_process(delta) -> bool` that counts
+~60-120 idle frames before saving (returning `false` until then, `true` once
+done to end the loop) produced the correct add-and-preserve result. Also drop
+`--quit` from the invocation when doing this — `--quit` tears down the
+SceneTree before enough idle frames elapse for a delayed `_process` to ever
+fire; let the script's own `quit()` call end the process instead (run it
+backgrounded with `&`/`run_in_background` and poll for the process to exit).
+
+**Getting `unique_id=` node attributes** (the per-node id Godot's editor
+stamps on nodes when a scene is saved through the real GUI — e.g.
+`world.tscn`'s root/instanced nodes have it) is a *different, stronger*
+requirement than the header/`ext_resource` uid above. A plain
+`load()` + `ResourceSaver.save()` SceneTree script — even delayed correctly —
+does **not** add `unique_id=` to plain (non-instanced) nodes; only some nodes
+picked it up historically, seemingly from an earlier editor-GUI save. To
+force it onto every node in one pass, go through the live editor's own save
+codepath instead: in the same delayed `--headless --editor` SceneTree script,
+fetch `Engine.get_singleton("EditorInterface")`, call
+`open_scene_from_path(path)`, wait more idle frames, then call
+`save_scene()` (not `ResourceSaver.save()`). This reliably stamped
+`unique_id=` onto every node of `meadow.tscn` (root, plain TileMapLayers, and
+instanced props alike) in one shot. Side effect to expect: this actually
+opens the scene, so any `@tool` script on an instanced child runs its
+editor-mode `_ready()` — if that script sets a property in code (e.g.
+`world_prop.gd` setting `collision_mask = 0`), the value gets captured as an
+explicit per-instance override in the saved `.tscn` even though it was never
+authored there. Harmless when (as here) the override matches what the script
+would force at runtime anyway — see
+`gotcha_tscn_editor_drift.md`/`testing_conventions.md`'s existing note that
+such collision-layer/mask values are stripped/rewritten on editor saves
+regardless, so tests — not the `.tscn` file — are the real source of truth.

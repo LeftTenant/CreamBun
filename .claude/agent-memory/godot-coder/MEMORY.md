@@ -15,3 +15,4 @@
 - [WorldProp placeholder visual convention](reference_worldprop_placeholder_visual_convention.md) — boulder.tscn's node structure/anchoring pattern for future concrete WorldProp scenes (tree, cottage)
 - [GDScript % format operator precedence](reference_gdscript_percent_format_precedence.md) — unparenthesized "a"+"b" % [arg] silently applies % only to the last string, crashes eagerly regardless of assertion outcome
 - [Scene uid:// generation](reference_scene_uid_generation.md) — bare `-s` resave silently strips existing ext_resource uids; must pair with `--editor`; referencing scenes need manual ext_resource uid= updates
+- [WorldArea shell/area split](reference_world_area_shell_split.md) — world.tscn shell + swappable WorldArea scenes; find_child not get_node_or_null for tests spanning the reparent boundary

@@ -42,6 +42,20 @@ they only surface by comparing against sibling test files.
   `.import`'s `[params]` against a committed sibling — only `uid=`, `path=`, `source_file=`,
   and `dest_files=` should differ.
 
+- **E2E scenarios are markdown, and they hard-code node paths.** `tests/e2e/**/*.md` steps
+  contain literal `get_node_property: World/Player.position`, `World/Boulder.position`,
+  `World/Ground` etc., executed by the testing-sandbox MCP server. Any scene restructure
+  that moves a node changes those paths and silently breaks the scenarios — GUT will still
+  be green. **Grep `tests/e2e/` for the affected node names in every review of a structural
+  scene change** and require the paths be updated in the same slice.
+- **Textual guards read a specific file.** `test_tile_geometry.gd` scans one scene's raw text
+  (for a banished placeholder texture name, and to check every `ext_resource` path exists).
+  Its subject has already moved once — `world/world.tscn` → `world/areas/meadow.tscn` when the
+  TileSet was extracted into the WorldArea. When content moves out of the scanned file, those
+  assertions go vacuously green *and* the file they left behind loses its `ext_resource`
+  coverage. Check whether a textual guard's subject moved, ask for the guard to follow it, and
+  confirm non-vacuity by grepping the new target for the thing being asserted about.
+
 ## Style
 
 - **Multi-line call continuation uses TWO indent levels (two tabs)**, matching the GDScript

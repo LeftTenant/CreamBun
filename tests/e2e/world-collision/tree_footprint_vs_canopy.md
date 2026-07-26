@@ -35,9 +35,12 @@ steps), not on this specific coordinate.
 - Wait: 20 frames (allow the world scene, tilemap, tree, player, and camera to fully initialize
   before the first screenshot).
 - Get node property: the tree instance's `position` (find its node path in the live scene tree —
-  design doc §6.1 places it as a direct child of the world root, likely named `TreeOak`). Record
-  this as **tree_origin**.
-- Get node property: `World/Player.position`. Record this as **spawn_position**.
+  likely named `TreeOak`, and per the note below, under `World/ActiveArea/Meadow/` rather than
+  directly under the world root). Record this as **tree_origin**.
+- Get node property: `World/ActiveArea/Meadow/Player.position`. Record this as **spawn_position**.
+  (Post-Slice-8, the player is reparented from the world shell into the active `Meadow` WorldArea
+  on load — see `world.gd`'s `_load_starting_area()` — so its live path is under `Meadow`, not
+  directly under `World`.)
 - Screenshot → save to `<reports_dir>/e2e/` (not the committed tree): a baseline reference showing
   the tree — wide green canopy over a narrow brown trunk — near the player, useful context for
   judging the checkpoints below.

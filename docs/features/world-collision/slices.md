@@ -282,7 +282,7 @@ reorganized, with no camera or transition behavior yet (those are slices 9–10)
 **Files likely touched:** `world/areas/shared/world_area.gd` (new), `world/areas/meadow.tscn`
 (new), `world/world.tscn` (restructured), `world/world.gd` (area-loading + reparent logic),
 `tests/integration/world/test_world_scene.gd` (the existing spawn-position test hard-codes
-`Vector2(576, 352)` as the Player's authored position and parent — this will very likely need
+`Vector2(288, 176)` as the Player's authored position and parent — this will very likely need
 updating since the player's parent changes from `World` to the instanced `WorldArea`; flag this to
 the test-engineer rather than silently deleting the coverage).
 

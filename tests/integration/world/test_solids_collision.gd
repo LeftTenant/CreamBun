@@ -9,6 +9,17 @@
 ## of assertions (Ground/Solids layer structure + physics-layer collision
 ## response), not because either existing file is wrong on its own.
 ##
+## SLICE 8 UPDATE: world.tscn is now the persistent shell (design doc §12.1)
+## — Ground, Solids, and Player all moved out of being World's direct
+## children (Ground/Solids into world/areas/meadow.tscn; Player reparented
+## into the instanced WorldArea at runtime by world.gd's _ready()). Every
+## `world.get_node_or_null("Ground"/"Solids"/"Player")` direct-child lookup
+## below was updated to `world.find_child(name, true, false)` (recursive
+## search, not restricted to owned nodes) so these Slice 4 tests keep
+## resolving the same nodes wherever the Slice 8 restructure moved them to.
+## Everything else in this file — collision behavior, layer structure,
+## movement-simulation assertions — is unchanged Slice 4 scope.
+##
 ## Design reference: docs/features/world-collision/design.md §6, §6.1, §11.
 ## Test plan: docs/features/world-collision/slice-4-tileset-physics-test-plan.md
 ##
@@ -345,8 +356,8 @@ func test_ground_layer_exists_and_is_not_y_sorted() -> void:
 	if world == null:
 		return
 
-	var ground: TileMapLayer = world.get_node_or_null("Ground") as TileMapLayer
-	assert_not_null(ground, "world.tscn should contain a TileMapLayer named 'Ground'")
+	var ground: TileMapLayer = world.find_child("Ground", true, false) as TileMapLayer
+	assert_not_null(ground, "world.tscn's instantiated tree should contain a TileMapLayer named 'Ground' (post-Slice-8 this lives on the instanced meadow WorldArea, not world.tscn's own root)")
 	if ground == null:
 		return
 
@@ -365,8 +376,8 @@ func test_solids_layer_exists_and_is_y_sorted() -> void:
 	if world == null:
 		return
 
-	var solids: TileMapLayer = world.get_node_or_null("Solids") as TileMapLayer
-	assert_not_null(solids, "world.tscn should contain a TileMapLayer named 'Solids'")
+	var solids: TileMapLayer = world.find_child("Solids", true, false) as TileMapLayer
+	assert_not_null(solids, "world.tscn's instantiated tree should contain a TileMapLayer named 'Solids' (post-Slice-8 this lives on the instanced meadow WorldArea, not world.tscn's own root)")
 	if solids == null:
 		return
 
@@ -385,8 +396,8 @@ func test_ground_preserves_all_originally_painted_tiles() -> void:
 	if world == null:
 		return
 
-	var ground: TileMapLayer = world.get_node_or_null("Ground") as TileMapLayer
-	assert_not_null(ground, "world.tscn should contain a TileMapLayer named 'Ground'")
+	var ground: TileMapLayer = world.find_child("Ground", true, false) as TileMapLayer
+	assert_not_null(ground, "world.tscn's instantiated tree should contain a TileMapLayer named 'Ground' (post-Slice-8 this lives on the instanced meadow WorldArea, not world.tscn's own root)")
 	if ground == null:
 		return
 
@@ -423,8 +434,8 @@ func test_tileset_has_physics_layer_with_world_collision_layer_only() -> void:
 	if world == null:
 		return
 
-	var solids: TileMapLayer = world.get_node_or_null("Solids") as TileMapLayer
-	assert_not_null(solids, "world.tscn should contain a TileMapLayer named 'Solids'")
+	var solids: TileMapLayer = world.find_child("Solids", true, false) as TileMapLayer
+	assert_not_null(solids, "world.tscn's instantiated tree should contain a TileMapLayer named 'Solids' (post-Slice-8 this lives on the instanced meadow WorldArea, not world.tscn's own root)")
 	if solids == null:
 		return
 
@@ -467,8 +478,8 @@ func test_at_least_one_solids_tile_has_a_collision_polygon() -> void:
 	if world == null:
 		return
 
-	var solids: TileMapLayer = world.get_node_or_null("Solids") as TileMapLayer
-	assert_not_null(solids, "world.tscn should contain a TileMapLayer named 'Solids'")
+	var solids: TileMapLayer = world.find_child("Solids", true, false) as TileMapLayer
+	assert_not_null(solids, "world.tscn's instantiated tree should contain a TileMapLayer named 'Solids' (post-Slice-8 this lives on the instanced meadow WorldArea, not world.tscn's own root)")
 	if solids == null:
 		return
 
@@ -493,9 +504,9 @@ func test_player_stops_at_a_solids_tile_with_collision() -> void:
 	if world == null:
 		return
 
-	var solids: TileMapLayer = world.get_node_or_null("Solids") as TileMapLayer
-	var player: CharacterBody2D = world.get_node_or_null("Player") as CharacterBody2D
-	assert_not_null(solids, "world.tscn should contain a TileMapLayer named 'Solids'")
+	var solids: TileMapLayer = world.find_child("Solids", true, false) as TileMapLayer
+	var player: CharacterBody2D = world.find_child("Player", true, false) as CharacterBody2D
+	assert_not_null(solids, "world.tscn's instantiated tree should contain a TileMapLayer named 'Solids' (post-Slice-8 this lives on the instanced meadow WorldArea, not world.tscn's own root)")
 	assert_not_null(player, "world.tscn must have a child node named 'Player'")
 	if solids == null or player == null:
 		return
@@ -548,11 +559,11 @@ func test_player_crosses_a_ground_only_tile_uninterrupted() -> void:
 	if world == null:
 		return
 
-	var ground: TileMapLayer = world.get_node_or_null("Ground") as TileMapLayer
-	var solids: TileMapLayer = world.get_node_or_null("Solids") as TileMapLayer
-	var player: CharacterBody2D = world.get_node_or_null("Player") as CharacterBody2D
-	assert_not_null(ground, "world.tscn should contain a TileMapLayer named 'Ground'")
-	assert_not_null(solids, "world.tscn should contain a TileMapLayer named 'Solids'")
+	var ground: TileMapLayer = world.find_child("Ground", true, false) as TileMapLayer
+	var solids: TileMapLayer = world.find_child("Solids", true, false) as TileMapLayer
+	var player: CharacterBody2D = world.find_child("Player", true, false) as CharacterBody2D
+	assert_not_null(ground, "world.tscn's instantiated tree should contain a TileMapLayer named 'Ground' (post-Slice-8 this lives on the instanced meadow WorldArea, not world.tscn's own root)")
+	assert_not_null(solids, "world.tscn's instantiated tree should contain a TileMapLayer named 'Solids' (post-Slice-8 this lives on the instanced meadow WorldArea, not world.tscn's own root)")
 	assert_not_null(player, "world.tscn must have a child node named 'Player'")
 	if ground == null or solids == null or player == null:
 		return

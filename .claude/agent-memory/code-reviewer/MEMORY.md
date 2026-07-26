@@ -8,7 +8,9 @@
 - [.tscn Editor Drift](gotcha_tscn_editor_drift.md) — editor writes stray root-node `position` into scene files; audit every .tscn hunk against `main`, revert rather than leave unstaged
 - [TileMap Geometry Review](gotcha_tilemap_geometry_review.md) — never renumber `sources/N`; decode `tile_map_data`; tile collision is per-alternative; round-trip hand-spliced .tscn
 - [.tscn Default-Valued Props](gotcha_tscn_default_valued_props.md) — Godot drops props equal to the class default on save (`collision_mask = 1` vanishes); they can't document intent
+- [@tool _ready writes get serialized](gotcha_tool_ready_writes_serialize.md) — editor-run `_ready()` bakes instance-ROOT props into the placing .tscn; child writes never stored
 - [Vacuous "blocked" movement tests](gotcha_vacuous_blocked_movement_assertions.md) — upper-bound-only assertions pass when the probe never moves; GUT `simulate()` no-ops on scriptless bodies
+- [find_child owned flag](gotcha_find_child_owned_flag.md) — `owned=true` prunes whole subtrees under script-instanced (owner-less) nodes; reparent preserves owner
 - [GUT helper silent passes](gotcha_gut_helper_silent_passes.md) — `return node as T` swallows a failed cast; `%` binds tighter than `+` in concatenated assert messages
 - [Player Sprite Geometry](reference_player_sprite_geometry.md) — 32×32 frames have ~5px padding below the body and overhang the 20px collider ~6px per side
 

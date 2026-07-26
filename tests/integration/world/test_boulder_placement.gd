@@ -10,18 +10,23 @@
 ## Per design doc §6.1, props must be DIRECT children of the area's Y-sorted
 ## root, never nested under an intermediate node — Y-sort only interleaves a
 ## node's direct children, so a props sub-node would sort as one block
-## against the player instead of prop-by-prop (§9). This slice's own
-## world.tscn is still the pre-Slice-8 flat structure (the World root IS the
-## Y-sort scope — see test_solids_collision.gd's
-## test_root_node_still_y_sort_enabled), so "direct child of the Y-sorted
-## root" here means "direct child of World".
+## against the player instead of prop-by-prop (§9).
+##
+## SLICE 8 UPDATE: world.tscn is now the persistent shell (design doc §12.1);
+## the Boulder instance placed here in Slice 6 moved, unchanged, into
+## world/areas/meadow.tscn as part of the Slice 8 shell/area extraction. The
+## Y-sorted root Boulder must be a direct child of is therefore the instanced
+## WorldArea (meadow) reachable through World's ActiveArea node, not World
+## itself. This file's own Slice 6 scope — "is there a Boulder instance, and
+## is it a direct (not nested) child of the Y-sort scope" — is unchanged; only
+## WHICH node is the Y-sort scope has moved.
 ##
 ## Written test-first, ahead of the Boulder instance being placed in
 ## world.tscn (that placement, alongside boulder.tscn itself, is part of this
 ## slice's own implementation) — the instance now exists and this test passes
 ## against it.
 ##
-## Design reference: docs/features/world-collision/design.md §6.1, §9
+## Design reference: docs/features/world-collision/design.md §6.1, §9, §12.1
 ## Test plan: docs/features/world-collision/slice-6-boulder-test-plan.md
 ##
 ## Requires GUT: https://github.com/bitwes/Gut
@@ -59,12 +64,34 @@ func _instantiate_world() -> Node:
 	return world
 
 
-func test_boulder_instance_is_a_direct_child_of_world_root() -> void:
+## ActiveArea's single expected child: the instanced meadow WorldArea, which
+## is the Y-sort scope after the Slice 8 shell/area extraction (design doc
+## §12.1). Returns null (with a failed assertion already recorded) if
+## ActiveArea is missing or empty.
+func _get_instanced_area(world: Node) -> Node:
+	var active_area: Node = world.get_node_or_null("ActiveArea")
+	assert_not_null(active_area, "world.tscn should have a direct child named 'ActiveArea' (design doc §12.1)")
+	if active_area == null:
+		return null
+
+	assert_gt(active_area.get_child_count(), 0,
+			"ActiveArea should hold the instanced WorldArea (the meadow) — found no children")
+	if active_area.get_child_count() == 0:
+		return null
+
+	return active_area.get_child(0)
+
+
+func test_boulder_instance_is_a_direct_child_of_the_world_area_root() -> void:
 	var world: Node = _instantiate_world()
 	if world == null:
 		return
 
-	# Search only world's DIRECT children (get_children() never reaches
+	var area: Node = _get_instanced_area(world)
+	if area == null:
+		return
+
+	# Search only the area's DIRECT children (get_children() never reaches
 	# through a nested node) — this is the assertion itself, not just a
 	# lookup convenience: if a future edit nested the boulder under a
 	# "Props" node, it would not be found here, and the test would fail with
@@ -72,18 +99,19 @@ func test_boulder_instance_is_a_direct_child_of_world_root() -> void:
 	# Boulder")`-style path that would tolerate the very structure design
 	# doc §6.1 forbids.
 	var boulder: Node = null
-	for child in world.get_children():
+	for child in area.get_children():
 		if child.name == BOULDER_NODE_NAME:
 			boulder = child
 			break
 
 	assert_not_null(boulder,
 			(
-			"world.tscn should have a direct child named '%s' — Slice 6 places one Boulder "
-			+ "instance in the world for manual/e2e verification (design doc §6.1, slices.md "
-			+ "Slice 6). If a node named '%s' exists elsewhere in the tree but not as a direct "
-			+ "child of World, it has been nested under an intermediate node, which breaks "
-			+ "Y-sort (§6.1, §9: Y-sort only interleaves a node's DIRECT children)."
+			"the instanced WorldArea (meadow) should have a direct child named '%s' — Slice 6 "
+			+ "places one Boulder instance for manual/e2e verification (design doc §6.1, "
+			+ "slices.md Slice 6), moved into meadow.tscn unchanged by the Slice 8 extraction "
+			+ "(design doc §12.1). If a node named '%s' exists elsewhere in the tree but not as "
+			+ "a direct child of the WorldArea, it has been nested under an intermediate node, "
+			+ "which breaks Y-sort (§6.1, §9: Y-sort only interleaves a node's DIRECT children)."
 			) % [BOULDER_NODE_NAME, BOULDER_NODE_NAME])
 	if boulder == null:
 		return
