@@ -28,6 +28,21 @@ work, remember the sprite's visual ground plane is ~4–5px above `global_positi
 fixing, the choices are trimming the art or changing the offset (a design-doc decision, not a
 unilateral edit) — don't silently "correct" the documented `-16`.
 
+## Horizontally: the sprite overhangs the collider by ~6px per side
+
+The frame is 32px wide but `player.tscn`'s `RectangleShape2D` is only 20×10, so the sprite sticks
+out ~6px on each side of the body that actually collides.
+
+**Why it matters for prop review:** when judging whether a prop's *visual* lines up with its
+generated footprint collider, the player's own 6px sprite overhang closes an equal-sized gap. A
+prop visual up to ~12px narrower than its collider (e.g. a 20px-wide tree trunk on a 32px 1×1
+footprint) still reads as a flush stop on an east/west approach — the player's sprite edge meets
+the visual's edge even though their colliders are 6px apart. Do the sprite-vs-collider arithmetic
+before flagging "invisible blocking"; the naive collider-vs-visual comparison overstates it.
+
+**North/south approaches have no such slack** — the collider is only 10px deep against a 32px-tall
+sprite, so vertical stop positions are dominated by the sprite's ~5px bottom padding instead.
+
 ## Related
 
 [[perspective-terminology]] — 32×16 square grid, tile depth 16.

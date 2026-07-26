@@ -1,0 +1,18 @@
+[gd_scene format=3 uid="uid://2qpip7x2apuw"]
+
+[ext_resource type="Script" uid="uid://bcluyhxxyvfbn" path="res://world/props/shared/world_prop.gd" id="1_world_prop"]
+
+[node name="TreeOak" type="StaticBody2D"]
+script = ExtResource("1_world_prop")
+footprint = Vector2i(1, 1)
+
+[node name="Trunk" type="Polygon2D" parent="."]
+color = Color(0.45, 0.29, 0.15, 1)
+polygon = PackedVector2Array(-10, 0, -8, -8, -6, -16, 6, -16, 8, -8, 10, 0)
+
+[node name="Canopy" type="Polygon2D" parent="."]
+position = Vector2(0, -30)
+color = Color(0.24, 0.52, 0.24, 1)
+polygon = PackedVector2Array(30, 0, 25.98, 11, 15, 19.05, 0, 22, -15, 19.05, -25.98, 11, -30, 0, -25.98, -11, -15, -19.05, 0, -22, 15, -19.05, 25.98, -11)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
