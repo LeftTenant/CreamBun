@@ -580,6 +580,13 @@ cam.limit_bottom = int(b.end.y)
 Docs: [drag margin](https://docs.godotengine.org/en/stable/classes/class_camera2d.html#class-camera2d-property-drag-horizontal-margin),
 [limit](https://docs.godotengine.org/en/stable/classes/class_camera2d.html#class-camera2d-property-limit-left)
 
+**Consequence for area authors: the north edge needs headroom.** `limit_top` clamps the camera's
+view rect to the exact pixel of the painted north edge — but the player is feet-anchored (§10), so
+a perimeter wall flush with that same edge would let the player stand with their entire sprite
+above the clamped view. §12.4 covers the fix (an inset north wall) and the resulting non-walkable
+backdrop strip it leaves along every area's north edge; read that note before laying out a new
+area's `Ground` extent.
+
 **Areas must be at least one viewport in each dimension** (≥ 320×180px — roughly ≥ 10 wide × 11
 tall in tiles). If an area is smaller than the viewport on an axis, Godot cannot both keep the
 player on-screen and honour the limits; it centres the small area and the dead zone stops
@@ -607,6 +614,23 @@ signal edge_reached(direction: Edge)   # Edge: an enum NORTH / EAST / SOUTH / WE
 `world.gd` connects to `edge_reached` and starts the transition (§12.5). This is a plain node
 signal, not `GameEvents`: the area is a direct child of the world scene, so a signal-bus hop would
 be ceremony (the bus rule in `CLAUDE.md` is for *cross-scene* events).
+
+**North-edge headroom inset — a permanent per-area consequence.** The north perimeter wall's
+player-facing surface is not flush with the true painted north edge like the other three walls
+are — it sits one sprite-height south of it (`NORTH_WALL_HEADROOM_INSET_PX`,
+`world/areas/shared/world_area.gd`). This exists because `limit_top` (§12.3) clamps the camera's
+view rect to that exact edge, while the player's sprite is feet-anchored (§10): a wall flush with
+the edge would let the player stop with their whole sprite above the clamped view — invisible.
+Insetting the wall guarantees the camera always keeps a full sprite-height of headroom above the
+player, no matter how far north they walk.
+
+The consequence for every area, present and future: **the topmost ~2 tile rows of painted `Ground`
+are a non-walkable decorative backdrop** — visible behind the invisible wall, but never reachable,
+since the player is stopped short of it. A designer laying out a new area should paint that strip
+as normal ground (it still needs to look right on screen) but should expect the player can never
+actually stand on it. Only the north edge needs this: south already leaves headroom below the
+player, and east/west only clip a few px of the sprite's transparent side padding (see
+`world_area.gd`'s `build_perimeter_walls()` doc comment for the full reasoning).
 
 ### 12.5 The transition and the opposite-edge spawn
 
