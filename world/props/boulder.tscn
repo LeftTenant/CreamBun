@@ -1,0 +1,14 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" uid="uid://bcluyhxxyvfbn" path="res://world/props/shared/world_prop.gd" id="1_world_prop"]
+
+[node name="Boulder" type="StaticBody2D"]
+script = ExtResource("1_world_prop")
+footprint = Vector2i(1, 1)
+
+[node name="Silhouette" type="Polygon2D" parent="."]
+position = Vector2(0, -16)
+color = Color(0.55, 0.55, 0.58, 1)
+polygon = PackedVector2Array(22, 0, 20.33, 6.12, 15.56, 11.31, 8.42, 14.78, 0, 16, -8.42, 14.78, -15.56, 11.31, -20.33, 6.12, -22, 0, -20.33, -6.12, -15.56, -11.31, -8.42, -14.78, 0, -16, 8.42, -14.78, 15.56, -11.31, 20.33, -6.12)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]

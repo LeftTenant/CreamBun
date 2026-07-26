@@ -8,6 +8,7 @@
 - [.tscn Editor Drift](gotcha_tscn_editor_drift.md) — editor writes stray root-node `position` into scene files; audit every .tscn hunk against `main`, revert rather than leave unstaged
 - [TileMap Geometry Review](gotcha_tilemap_geometry_review.md) — never renumber `sources/N`; decode `tile_map_data`; tile collision is per-alternative; round-trip hand-spliced .tscn
 - [.tscn Default-Valued Props](gotcha_tscn_default_valued_props.md) — Godot drops props equal to the class default on save (`collision_mask = 1` vanishes); they can't document intent
+- [Vacuous "blocked" movement tests](gotcha_vacuous_blocked_movement_assertions.md) — upper-bound-only assertions pass when the probe never moves; GUT `simulate()` no-ops on scriptless bodies
 - [Player Sprite Geometry](reference_player_sprite_geometry.md) — 32×32 frames have ~5px transparent padding below the body, so `offset = (0,-16)` floats the feet above the origin
 
 Per-developer profile memories live in `.claude/agent-memory-local/code-reviewer/` (gitignored). Check there for any local context before reviewing.

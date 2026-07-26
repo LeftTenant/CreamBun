@@ -13,6 +13,14 @@ so the line disappears the first time anyone opens and saves the scene in the ed
 kept `collision_layer = 2` and `AnimatedSprite2D.offset = Vector2(0, -16)` but **dropped
 `collision_mask = 1`**, because `CollisionObject2D.collision_mask` defaults to 1.
 
+**The same rule applies to `@export` vars, compared against the *script's* default.** Verified
+(Godot 4.6, `world/props/boulder.tscn`): a pack round-trip dropped `footprint = Vector2i(1, 1)`,
+because `world_prop.gd` declares `@export var footprint: Vector2i = Vector2i.ONE`. A designer
+opening and saving that scene loses the authored line even though the slice spec names the value
+explicitly. Note that plain `ResourceSaver.save(load(path))` does **not** reproduce this — it
+resaves the stored bundle verbatim. To see what the editor would write, instantiate, `add_child`,
+then `PackedScene.new().pack(instance)` and save that.
+
 **Why it matters:**
 - Writing such a line "to document intent" does not work — the intent evaporates on the next
   editor save, and a test asserting the runtime value (`collision_mask == 1`) still passes, so

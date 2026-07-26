@@ -5,6 +5,7 @@
 [ext_resource type="PackedScene" path="res://ui/notebook/notebook.tscn" id="3_notebook"]
 [ext_resource type="Texture2D" uid="uid://clch2yj51jack" path="res://resources/sprites/terrain/grass.png" id="4_mmdvd"]
 [ext_resource type="Texture2D" uid="uid://xqvf201uswvm" path="res://resources/sprites/terrain/flower grass.png" id="5_fn3g3"]
+[ext_resource type="PackedScene" path="res://world/props/boulder.tscn" id="6_boulder"]
 
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_sc4t8"]
 texture = ExtResource("4_mmdvd")
@@ -43,3 +44,6 @@ tile_set = SubResource("TileSet_h5o24")
 y_sort_enabled = true
 tile_map_data = PackedByteArray("AAALAAsAAgAAAAAAAQAMAAsAAgAAAAAAAQA=")
 tile_set = SubResource("TileSet_h5o24")
+
+[node name="Boulder" parent="." instance=ExtResource("6_boulder")]
+position = Vector2(288, 240)
