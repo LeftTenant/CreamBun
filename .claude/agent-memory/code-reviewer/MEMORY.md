@@ -13,5 +13,8 @@
 - [find_child owned flag](gotcha_find_child_owned_flag.md) — `owned=true` prunes whole subtrees under script-instanced (owner-less) nodes; reparent preserves owner
 - [GUT helper silent passes](gotcha_gut_helper_silent_passes.md) — `return node as T` swallows a failed cast; `%` binds tighter than `+` in concatenated assert messages
 - [Player Sprite Geometry](reference_player_sprite_geometry.md) — 32×32 frames have ~5px padding below the body and overhang the 20px collider ~6px per side
+- [Camera edge lock vs tall sprite](gotcha_camera_edge_lock_vs_tall_sprite.md) — fixed by insetting the north wall 32px; only 5px of slack, redo the math if any constant moves
+- [Corner-gap wall test is inert](gotcha_perimeter_corner_gap_test_inert.md) — widened-span checks can't detect a missing corner extension on a wall ring; mutate the source to prove a test's catch
+- [get_bounds_px() coordinate space](gotcha_worldarea_bounds_coordinate_space.md) — Ground-local rect consumed as both WorldArea-local (walls) and global (camera limits)
 
 Per-developer profile memories live in `.claude/agent-memory-local/code-reviewer/` (gitignored). Check there for any local context before reviewing.

@@ -58,10 +58,43 @@ func _ready() -> void:
 ## Camera2D), so nothing about the player is rebuilt — it is the same node,
 ## moved.
 ## https://docs.godotengine.org/en/stable/classes/class_node.html#class-node-method-reparent
+##
+## Slice 9 adds two more per-area setup steps after the reparent, both driven
+## by the loaded area's own get_bounds_px() rather than any hard-coded
+## per-area numbers (design doc §12.3, §12.4):
+##   - build_perimeter_walls(): wall off every edge with no neighbour_*
+##     scene declared, so the player cannot walk off the painted map.
+##   - _set_camera_limits(): clamp the player's Camera2D to the area bounds,
+##     so the camera never reveals the void past the floor.
 func _load_starting_area() -> void:
 	var area: WorldArea = STARTING_AREA_SCENE.instantiate()
 	_active_area.add_child(area)
 	_player.reparent(area)
+	area.build_perimeter_walls()
+	_set_camera_limits(area)
+
+
+## Clamp the player's Camera2D to the loaded area's bounds (design doc
+## §12.3, "Locked at the map edge") so the camera can never scroll past the
+## painted floor and reveal the void beyond it. Read from get_bounds_px()
+## on every call rather than a fixed rect, so this stays correct however the
+## area's painted extent changes (and, from slice 10 onward, on every
+## area-to-area transition, not just this initial load).
+##
+## int() truncation matches design doc §12.3's exact wiring snippet — camera
+## limits are integer pixel coordinates
+## (https://docs.godotengine.org/en/stable/classes/class_camera2d.html#class-camera2d-property-limit-left),
+## while get_bounds_px() returns floats.
+func _set_camera_limits(area: WorldArea) -> void:
+	var bounds: Rect2 = area.get_bounds_px()
+	var camera: Camera2D = _player.get_node_or_null("Camera2D") as Camera2D
+	if camera == null:
+		push_error("World._set_camera_limits: Player has no Camera2D child named 'Camera2D' — camera limits not set")
+		return
+	camera.limit_left = int(bounds.position.x)
+	camera.limit_top = int(bounds.position.y)
+	camera.limit_right = int(bounds.end.x)
+	camera.limit_bottom = int(bounds.end.y)
 
 
 ## Prevent the OS window from being dragged smaller than the 2× scale size.

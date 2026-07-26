@@ -4,11 +4,21 @@
 ##
 ## This file mirrors the source location: player/ → tests/integration/player/.
 ##
-## Slice 4 (pixel-art-purist) concern: the Camera2D in player.tscn must NOT have
-## position_smoothing_enabled=true. The Slice 4 design relies on Godot's
-## engine default of false (smoothing off). If any editor action or merge ever
-## sets it explicitly to true in the .tscn, this test will catch the regression
-## before the e2e shimmer check is needed.
+## Camera2D smoothing — SUPERSEDED, see world-collision Slice 9: Slice 4
+## (pixel-art-purist) originally required position_smoothing_enabled to stay
+## false, relying on Godot's engine default (smoothing off) to avoid sub-pixel
+## shimmer on pixel art. World-collision design.md §12.3 resolves this in favor
+## of turning smoothing ON: the two-tile camera dead zone (drag margins) needs
+## a soft "cozy glide" as the camera catches up once the player leaves it,
+## which requires position_smoothing_enabled = true. The slice-9 test plan's
+## "Decision: smoothing enabled (resolved)" section records this explicitly as
+## superseding the Slice 4 shimmer guard. The test below —
+## test_camera2d_position_smoothing_enabled() — was renamed from
+## test_camera2d_position_smoothing_not_enabled() (which asserted the old,
+## now-wrong requirement in both its name and docstring) rather than simply
+## flipping its assertion, so no misleadingly-named test survives into the
+## suite. See also tests/integration/world/test_camera_dead_zone_and_limits.gd,
+## which checks the same property on the live, world-loaded camera.
 ##
 ## Slice 3 concern: the player's ground anchor and collider. Node origin must
 ## be the FEET (ground contact point), not the body centre — this is what
@@ -97,24 +107,28 @@ func after_each() -> void:
 
 
 # ---------------------------------------------------------------------------
-# Camera2D position-smoothing guard (Slice 4)
+# Camera2D position-smoothing guard (world-collision Slice 9 — supersedes the
+# old pixel-art-purist Slice 4 requirement that smoothing stay OFF; see the
+# test below for the full history of that reversal)
 # ---------------------------------------------------------------------------
 
-func test_camera2d_position_smoothing_not_enabled() -> void:
-	# Slice 4 relies on Camera2D.position_smoothing_enabled being false so that
-	# the camera tracks the player at exact pixel positions each frame. If
-	# smoothing is on, the camera lags behind and sub-pixel offsets cause
-	# shimmer on world sprites — exactly what the snap flags in project.godot
-	# are designed to prevent.
+func test_camera2d_position_smoothing_enabled() -> void:
+	# RENAMED from test_camera2d_position_smoothing_not_enabled() — world-collision
+	# design.md §12.3 (world-collision Slice 9) supersedes the old Slice 4
+	# (pixel-art-purist) shimmer guard that required smoothing to stay OFF.
 	#
-	# Godot's engine default for position_smoothing_enabled is false, so the
-	# property should NOT appear explicitly in the .tscn as true. This test
-	# instantiates the scene and reads the live property value to catch any
-	# accidental editor override.
+	# Why the reversal: Slice 9 gives the camera a two-tile "dead zone" via
+	# Camera2D's drag margins (see test_camera_dead_zone_and_limits.gd) — the
+	# player can drift within it before the camera starts panning to follow.
+	# Without position_smoothing_enabled, the camera would snap instantly to
+	# the dead-zone boundary the moment the player exits it, which reads as an
+	# abrupt jerk rather than the "soft cozy glide" design.md §12.3 calls for.
+	# Smoothing trades the old pixel-perfect-tracking guarantee for that glide
+	# — a deliberate, resolved trade-off (see the slice-9 test plan's
+	# "Decision: smoothing enabled (resolved)" section), not an oversight.
 	#
 	# If this test ever fails, the fix is a single scene property set:
-	#   Camera2D.position_smoothing_enabled = false (explicit, documented)
-	# That one-liner is not in scope for Slice 4 unless this test regresses.
+	#   Camera2D.position_smoothing_enabled = true (explicit, documented)
 	if _player == null:
 		return
 
@@ -128,16 +142,18 @@ func test_camera2d_position_smoothing_not_enabled() -> void:
 	if camera == null:
 		return
 
-	# The critical assertion: smoothing must not be active.
-	# Checking the live property catches both an explicit true and any future
-	# script logic that might set it in _ready().
-	assert_false(
+	# The critical assertion: smoothing must be active for the cozy glide.
+	# Checking the live property catches both a missing explicit override and
+	# any future script logic that might turn it back off in _ready().
+	assert_true(
 		camera.position_smoothing_enabled,
 		(
-			"Camera2D.position_smoothing_enabled must be false — "
-			+ "smoothing causes sub-pixel shimmer on pixel art. "
-			+ "If this fails, add 'position_smoothing_enabled = false' "
-			+ "explicitly to the Camera2D node in player.tscn."
+			"Camera2D.position_smoothing_enabled must be true — the two-tile "
+			+ "dead zone (design.md §12.3) needs a soft glide as the camera "
+			+ "catches up once the player leaves it, superseding the old "
+			+ "pixel-art-purist shimmer guard. If this fails, add "
+			+ "'position_smoothing_enabled = true' explicitly to the "
+			+ "Camera2D node in player.tscn."
 		)
 	)
 
