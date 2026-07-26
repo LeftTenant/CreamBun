@@ -11,3 +11,5 @@
 - [Pixel art resize needs nearest-neighbor](reference_pixel_art_resize_nearest.md) — `sips -z` blurs pixel art (no nearest option); use PIL Image.NEAREST and sanity-check with a unique-color count
 - [Collision layer/mask explicit defaults](reference_collision_layer_mask_explicit_defaults.md) — engine default mask=1 coincidentally matches "world" bit; explicit .tscn value gets stripped on re-save, so tests are the real source of truth
 - [TileSet physics layer serialization](reference_tileset_physics_layer_serialization.md) — exact .tscn key format for physics layers/TileData collision polygons; probe via headless script + ResourceSaver rather than guessing; use an alternative tile id to avoid retroactively blocking existing painted cells
+- [GUT simulate() needs a scripted _physics_process](reference_gut_simulate_needs_scripted_physics_process.md) — a bare CharacterBody2D.new() probe never moves under simulate(); drive move_and_slide() manually in a loop instead
+- [WorldProp placeholder visual convention](reference_worldprop_placeholder_visual_convention.md) — boulder.tscn's node structure/anchoring pattern for future concrete WorldProp scenes (tree, cottage)
