@@ -88,3 +88,20 @@ would force at runtime anyway — see
 `gotcha_tscn_editor_drift.md`/`testing_conventions.md`'s existing note that
 such collision-layer/mask values are stripped/rewritten on editor saves
 regardless, so tests — not the `.tscn` file — are the real source of truth.
+
+**Not reliable enough to reach for by default.** A later attempt to stamp
+`unique_id=` onto `world.tscn` (a plain scene, no `@tool` scripts among its
+direct children) using this same delayed-`_process` +
+`Engine.get_singleton("EditorInterface")` pattern errored every frame once past
+the delay threshold (`ERROR: Condition '!nc' is true. Breaking..` /
+`SCRIPT ERROR: Internal script error! Opcode: 28`, at the
+`open_scene_from_path()` call) instead of reproducing the earlier success —
+root cause not isolated (possibly needs more idle frames than 120, or a
+`has_singleton()` guard first). Given this and the separate, worse corruption
+seen from `mcp__godot__save_scene` (see
+[[gotcha-mcp-godot-save-scene-corrupts-autoload-scenes]]), treat *any*
+automated attempt to stamp `unique_id=`/uid metadata as genuinely risky, not a
+routine op: always back up the target `.tscn` first, diff after, and if it
+doesn't work cleanly within one or two tries, stop and hand it to the user as
+a manual "open and save in the editor" step rather than continuing to
+experiment against a tracked file.
