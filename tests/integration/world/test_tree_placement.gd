@@ -33,6 +33,13 @@
 ## from spawn on all four sides (design doc §12.3/§9), which holds for any
 ## position with this column's clearance.
 ##
+## SLICE 8 UPDATE: world.tscn is now the persistent shell (design doc §12.1);
+## the TreeOak instance placed here in Slice 7 moved, unchanged, into
+## world/areas/meadow.tscn as part of the Slice 8 shell/area extraction. The
+## Y-sorted root the instance must be a direct child of is therefore the
+## instanced WorldArea (meadow) reachable through World's ActiveArea node,
+## not World itself. This file's own Slice 7 scope is otherwise unchanged.
+##
 ## Design reference: docs/features/world-collision/design.md §6.1, §9, §12.1
 ## Test plan: docs/features/world-collision/slice-7-tree-test-plan.md
 ##
@@ -104,7 +111,7 @@ func _find_tree_instance(root: Node) -> Node:
 # Test 1 — a TreeOak instance exists, as a DIRECT child of the Y-sorted root
 # ---------------------------------------------------------------------------
 
-func test_tree_instance_is_direct_child_of_world_root() -> void:
+func test_tree_instance_is_direct_child_of_the_world_area_root() -> void:
 	var world: Node2D = _instantiate_world()
 	if world == null:
 		return
@@ -124,13 +131,29 @@ func test_tree_instance_is_direct_child_of_world_root() -> void:
 	# Y-sorted area root — Y-sort only interleaves a node's direct children,
 	# so a tree instance placed under an intermediate "Props" node would sort
 	# as one block against the player instead of correctly, per-prop.
-	assert_eq(tree_instance.get_parent(), world,
+	#
+	# SLICE 8: the Y-sorted area root is the instanced WorldArea (meadow),
+	# not World itself — the Ground/Solids/props all moved into meadow.tscn
+	# during the Slice 8 shell/area extraction (design doc §12.1). world.tscn
+	# is now the persistent shell; ActiveArea holds exactly one WorldArea
+	# instance, which is what "direct child of the Y-sorted root" refers to
+	# here.
+	var active_area: Node = world.get_node_or_null("ActiveArea")
+	assert_not_null(active_area, "world.tscn should have a direct child named 'ActiveArea' (design doc §12.1)")
+	if active_area == null:
+		return
+	var area: Node = active_area.get_child(0) if active_area.get_child_count() > 0 else null
+	assert_not_null(area, "ActiveArea should hold the instanced WorldArea (the meadow) — found no children")
+	if area == null:
+		return
+
+	assert_eq(tree_instance.get_parent(), area,
 			(
-			"the tree_oak.tscn instance must be a DIRECT child of world.tscn's root, not nested "
-			+ "under an intermediate node (e.g. a 'Props' container) — design doc §6.1: "
-			+ "'Y-sort only interleaves a node's direct children, so a props sub-node would sort "
-			+ "as one block against the player instead of tile-by-tile, prop-by-prop.' Found it "
-			+ "parented under '%s' instead."
+			"the tree_oak.tscn instance must be a DIRECT child of the instanced WorldArea "
+			+ "(meadow), not nested under an intermediate node (e.g. a 'Props' container) — "
+			+ "design doc §6.1: 'Y-sort only interleaves a node's direct children, so a props "
+			+ "sub-node would sort as one block against the player instead of tile-by-tile, "
+			+ "prop-by-prop.' Found it parented under '%s' instead."
 			) % [tree_instance.get_parent().name if tree_instance.get_parent() else "<no parent>"])
 
 

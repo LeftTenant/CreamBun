@@ -27,7 +27,8 @@ Test plan: `docs/features/world-collision/slice-4-tileset-physics-test-plan.md`.
   fully initialize before the first screenshot).
 - Get node property: `Player.position` — record this as the baseline. (Check
   the actual Player node path in the live scene tree if it differs from
-  `World/Player`.)
+  `World/ActiveArea/Meadow/Player` — post-Slice-8 the player is reparented from the world shell
+  into the active `Meadow` WorldArea on load, so it is no longer a direct child of `World`.)
 
 **Important — this scenario is exploratory by design.** Slice 4 only
 guarantees that *at least one* tile painted on `Solids` has a collision

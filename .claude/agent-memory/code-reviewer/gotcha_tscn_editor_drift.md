@@ -25,6 +25,15 @@ along into any `git commit -a`.
 - Node **local** `position` assertions in tests are immune to a root-node offset, so a
   green suite does not clear this class of drift.
 
+**The mirror-image case: a hand-authored `.tscn` that is missing editor-generated
+metadata.** Every `.tscn` in this repo carries `uid="uid://…"` in its `[gd_scene]` header
+and `uid=` on its `ext_resource` lines (the sole exception is the hand-written
+`ui/notebook/notebook.tscn`). A newly hand-authored scene typically has neither, because a
+bare `godot -s` resave strips uids unless paired with `--editor`. Flag it: the first editor
+save fills them in, producing a churn diff, and until then every reference to the file is
+path-only (renames break silently). Same applies to Godot 4.6's per-node `unique_id=`
+attributes.
+
 ## Related
 
 [[testing-conventions]] — scene-instantiation tests under GUT.

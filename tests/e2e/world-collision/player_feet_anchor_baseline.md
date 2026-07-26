@@ -33,8 +33,9 @@ Test plan: `docs/features/world-collision/slice-3-player-collider-test-plan.md`.
 
 - Screenshot → compare / save reference:
   `tests/e2e/world-collision/screenshots/player_feet_anchor_step_01_idle.png`
-- Get node property: `World/Player.position` (or the actual Player node path
-  in world.tscn — check the scene tree if the path differs)
+- Get node property: `World/ActiveArea/Meadow/Player.position` (or the actual Player node path —
+  check the scene tree if the path differs; post-Slice-8 the player is reparented from the world
+  shell into the active `Meadow` WorldArea on load, so it is no longer a direct child of `World`)
 - Assert: no red engine error/assertion overlay visible anywhere in the frame.
 
 **Visual checkpoints for this screenshot:**
