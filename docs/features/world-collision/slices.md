@@ -343,44 +343,100 @@ per-area on load).
 
 ## Slice 10 — Edge transition (fade) and a second area
 
-**Goal:** Deliver the full requested end-to-end behavior (design §15 slice 7): link the meadow to
-a second area via a `neighbour_*` slot, open that edge with a trigger instead of a wall, and fade
-to the neighbour, spawning the player on the opposite edge at the preserved perpendicular offset.
+**Goal:** Deliver the full requested end-to-end behavior (design §15 slice 7; mechanism fully
+specified in design §12.4–§12.5): link the meadow to a second area via a `neighbour_*` slot, open
+that edge with a trigger instead of a wall, and fade to the neighbour, spawning the player on the
+opposite edge at the preserved perpendicular offset. **The mechanism is symmetric across both
+axes** — any east/west framing below is an illustrative example, not a scope restriction; this
+slice must prove the mechanism works on a north/south link too, not east/west only (see "second
+area" below).
 
-**Concrete values:**
+**Concrete values (see design §12.4–§12.5 for full rationale — this is a condensed restatement,
+not a substitute for reading those sections):**
+- **API change to already-committed code, decided with the user during this slice's test-planning
+  pass:** `world/areas/shared/world_area.gd`'s `neighbour_north/east/south/west` exports change
+  from `@export var: PackedScene` (slice 8) to `@export_file("*.tscn") var: String`. Two areas
+  linking back to each other — the normal case — deadlock Godot's loader if both hold a live
+  `PackedScene` ext_resource pointing at one another; this was confirmed empirically while building
+  this slice's two-area test fixture, not a hypothetical. A path string has no such resource
+  reference for the loader to eagerly resolve; `world.gd` calls `load(path)` on it at transition
+  time instead (design §12.2, §12.5 step 3). Update `meadow.tscn`'s existing neighbour wiring (none
+  yet set, so this is a clean type change with nothing to migrate) and design §12.2's code snippet
+  to match.
 - `world/areas/shared/world_area.gd`: add `signal edge_reached(direction: Edge)` with an `Edge`
-  enum (`NORTH/EAST/SOUTH/WEST`), and for each edge with a filled `neighbour_*` slot, build an
-  `Area2D` (layer `interactable`, one tile deep, spanning that edge) instead of the slice 9 wall;
-  emit `edge_reached` on player body entry.
-- New minimal fixture scene `world/areas/<second_area>.tscn` (e.g. a small second `WorldArea` with
-  its own `Ground` layer, no props needed) purely to prove the hand-off — full art/content for a
-  "real" second area is not required by this slice.
-- Wire `meadow.tscn`'s `neighbour_east` (or whichever edge is convenient) to the new area, and its
-  reciprocal `neighbour_west` back to the meadow, so the transition is testable in both
-  directions.
+  enum (`NORTH/EAST/SOUTH/WEST`). For each edge with a filled `neighbour_*` slot, build an `Area2D`
+  (layer `interactable`) instead of the slice 9 wall, positioned at the *exact same rect*
+  `build_perimeter_walls()` would have used for a wall on that edge (including the north headroom
+  inset) — not a full tile back from the true edge. This makes "trigger fires" and "player collides
+  with the edge" the same event.
+- **Corner dead zones (design §12.4):** every edge trigger excludes a 32×32px square at each of
+  its two corners, so no transition ever starts from a corner. A horizontal edge's (north/south)
+  trigger is inset 1 tile (32px) horizontally from each end; a vertical edge's (east/west) trigger
+  is inset 2 tiles (32px) vertically from each end. (These are the same 32px either way — tiles are
+  2:1 — so both edges sharing a corner carve back from the identical square.)
+- **Arrival debounce (design §12.4):** the edge the player just arrived through is inert until
+  they've moved 0.5 tile away from it, measured along the axis they crossed it on (16px for an
+  east/west edge, 8px for a north/south edge) — a distance check, not a timer. Needed because the
+  trigger now sits flush at the true edge and the player spawns only ~1 tile inside it.
+- New minimal fixture scene(s) for the **second area** (e.g. `world/areas/<second_area>.tscn`) — a
+  small `WorldArea` with its own `Ground` layer, sized to at least one full viewport
+  (≥ 10×11 tiles per design §12.3 — this is a hard floor, not optional for a "minimal" fixture, or
+  the camera dead-zone/limit checks below will fail for reasons unrelated to this slice's actual
+  logic). No props needed. **Must prove both axes**: wire at least one east/west link (e.g.
+  `meadow.neighbour_east` ↔ `second_area.neighbour_west`) and at least one north/south link (e.g.
+  `meadow.neighbour_south` ↔ `second_area.neighbour_north` — reusing the same second area on a
+  different edge is fine; a third area scene is not required) so the transition code is exercised
+  on both a horizontal and a vertical edge, not just one.
 - `world/world.gd`: on `edge_reached(dir)` — set `GameState.current_state = LOADING` (reuses the
   existing state per design §12.5, no new state added); fade the new `Transition` `CanvasLayer`
   (from slice 8) to opaque via `Tween`; free the old area, instance the neighbour, reparent the
-  player, rebuild the perimeter (slice 9's wall/trigger logic) and camera limits for the new area;
-  place the player on the *opposite* edge at the same perpendicular coordinate (clamped to the new
-  area's bounds, inset ~1 tile); fade back in; set `GameState.current_state = PLAYING`.
+  player, rebuild the perimeter (slice 9's wall/trigger logic, now trigger-aware) and camera limits
+  for the new area; place the player on the *opposite* edge, carrying over the exact perpendicular
+  world coordinate they exited at, offset one tile inward along the crossed axis (32px for
+  east/west entry, 16px for north/south entry), clamped into the new area's valid range (excluding
+  its corner dead zones) only if the new area is smaller than the one departed; fade back in; set
+  `GameState.current_state = PLAYING`.
+- **Important correction found while generating tests for this slice (design §12.5):** the "one
+  tile inward" spawn offset must be measured from the entry edge's *playable-facing boundary* —
+  the same boundary a wall on that edge would use to stop the player — not from the raw painted
+  edge (`get_bounds_px()`). These coincide for south/east/west but not north: the north edge's
+  playable boundary is already `NORTH_WALL_HEADROOM_INSET_PX` (32px) in from the true edge (design
+  §12.4), and its trigger zone spans that entire 32px. Measuring "one tile in" from the *true* edge
+  for a north entry would spawn the player only 16px in — still inside that edge's own 32px trigger
+  zone, an immediate bounce-back bug. Implement this as one uniform rule (inset from the
+  perimeter-build step's own per-edge playable boundary, whatever that is for the given edge), not
+  as a north-specific branch in the spawn-math code.
+- **Debounce is a safety margin, not the mechanism the spawn math depends on.** Once the spawn
+  offset above correctly clears each edge's own trigger zone (including north's wider one), the
+  arrival debounce (design §12.4) should never actually be load-bearing under correct geometry — it
+  exists to absorb physics-timing/reparenting jitter on the transition frame. Don't size one against
+  the other; keep them independent, and don't be surprised if a test for "debounce blocks an
+  immediate bounce-back" can't actually observe the debounce doing anything under correct spawn
+  placement — that means the spawn math is right, not that the test is wrong.
 - `autoloads/game_events.gd`: add `signal area_changed(area_id: StringName)` (does not exist yet —
   confirmed by reading the file) and emit it after the swap completes, per design §12.5 step 5
-  ("this one *is* cross-scene, so it goes on the bus").
+  ("this one *is* cross-scene, so it goes on the bus"). `area_id` is the newly-loaded area's scene
+  file name without its `.tscn` extension (e.g. `"meadow"`) — not a full resource path, not a new
+  export var.
 
 **Files likely touched:** `world/areas/shared/world_area.gd`, `world/world.gd`,
-`world/areas/<second_area>.tscn` (new), `world/areas/meadow.tscn` (neighbour slot wiring),
-`autoloads/game_events.gd`.
+`world/areas/<second_area>.tscn` (new), `world/areas/meadow.tscn` (neighbour slot wiring on two
+edges), `autoloads/game_events.gd`.
 
 **Out of scope:** Slide/scroll transitions (Phase 2 — fade only). Buildings/doorway triggers using
-`shared/interactable.gd` (Phase 2, not yet written). More than the two areas needed to prove the
-mechanism.
+`shared/interactable.gd` (Phase 2, not yet written). Fixed, designer-authored spawn-point markers
+per edge-link (design §12.5's forward-looking note — Phase 1 always carries over the exit
+coordinate). More than the two areas needed to prove the mechanism on both axes.
 
-**Test plan shape:** Integration test on the opposite-edge spawn math (given an exit `y` and the
-new area's bounds, the computed entry position matches design §12.5's table, clamped and inset
-correctly). e2e visual scenario: walk off the meadow's linked edge, confirm the screen fades,
-confirm the player appears at the opposite edge of the new area at the matching offset, confirm
-the fade clears and `GameState` returns to `PLAYING`.
+**Test plan shape:** Integration tests on the opposite-edge spawn math (given an exit coordinate,
+edge, and the new area's bounds, the computed entry position matches design §12.5 — carried-over
+coordinate, correct one-tile inward offset per axis, clamped only when needed, never inside a
+corner dead zone) and on the corner-dead-zone/debounce geometry itself. e2e visual scenarios on
+*both* an east/west and a north/south link: walk off the meadow's linked edge, confirm the screen
+fades, confirm the player appears at the opposite edge of the new area at the matching offset,
+confirm walking along the edge near a corner does not trigger a transition, confirm walking back
+toward the just-entered edge before the debounce distance is satisfied does not immediately send
+the player back, confirm the fade clears and `GameState` returns to `PLAYING`.
 
 **Dependencies:** Slice 9 (perimeter-wall logic is what this slice replaces on open edges) and
 slice 8 (the shell/area split and `Transition` `CanvasLayer` placeholder). This is intentionally

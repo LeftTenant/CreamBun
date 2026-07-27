@@ -288,12 +288,36 @@ func test_perimeter_wall_exists_on_each_edge() -> void:
 	if not (area is WorldArea):
 		fail_test("the instanced ActiveArea child must be a WorldArea instance to call get_bounds_px() on it — found a %s" % [area.get_class()])
 		return
+	var world_area: WorldArea = area as WorldArea
 
-	var bounds: Rect2 = (area as WorldArea).get_bounds_px()
+	var bounds: Rect2 = world_area.get_bounds_px()
 	var candidates: Array[StaticBody2D] = []
 	_collect_non_prop_static_bodies(area, candidates)
 
-	for edge in ["north", "east", "south", "west"]:
+	# UPDATED for Slice 10 (design.md §12.4): meadow.tscn now declares
+	# neighbour_east/neighbour_south (wired to world/areas/orchard.tscn), so
+	# those two edges correctly get an open-edge Area2D TRIGGER instead of a
+	# wall (see test_edge_triggers.gd's
+	# test_linked_east/south_edge_gets_an_interactable_area2d_not_a_wall).
+	# This test's real invariant was always "an edge with NO declared
+	# neighbour gets a wall" — originally every edge qualified because no
+	# neighbour_* slot was filled yet (this suite's own header note: "this
+	# slice only covers the 'no neighbour -> invisible wall' case, since
+	# meadow.tscn declares no neighbour_* scenes yet"). That precondition no
+	# longer holds for east/south, so the loop below is restricted to
+	# edges whose neighbour_* slot is still empty, rather than a hard-coded
+	# four-edge list — preserving the same check for north/west while
+	# dropping the now-inapplicable assertion for east/south (covered
+	# instead by test_edge_triggers.gd).
+	var unlinked_edges: Dictionary = {
+		"north": world_area.neighbour_north.is_empty(),
+		"east": world_area.neighbour_east.is_empty(),
+		"south": world_area.neighbour_south.is_empty(),
+		"west": world_area.neighbour_west.is_empty(),
+	}
+	for edge in unlinked_edges:
+		if not unlinked_edges[edge]:
+			continue
 		var intervals: Array = _matching_intervals_for_edge(candidates, bounds, edge)
 		assert_gt(intervals.size(), 0,
 				(
@@ -345,11 +369,25 @@ func test_perimeter_walls_cover_full_edge_length_with_no_mid_edge_gaps() -> void
 		fail_test("the instanced ActiveArea child must be a WorldArea instance to call get_bounds_px() on it — found a %s" % [area.get_class()])
 		return
 
-	var bounds: Rect2 = (area as WorldArea).get_bounds_px()
+	var world_area: WorldArea = area as WorldArea
+	var bounds: Rect2 = world_area.get_bounds_px()
 	var candidates: Array[StaticBody2D] = []
 	_collect_non_prop_static_bodies(area, candidates)
 
-	for edge in ["north", "south"]:
+	# UPDATED for Slice 10 (design.md §12.4): "no mid-edge gap" is only a
+	# meaningful StaticBody2D-coverage check for edges that are actually
+	# walled — meadow.tscn's south/east are now linked (Area2D triggers, not
+	# walls), so they no longer have anything for _matching_intervals_for_edge
+	# (which only looks at StaticBody2D) to find. Restricted to unlinked
+	# edges, same rationale as test_perimeter_wall_exists_on_each_edge()
+	# above.
+	var unlinked_horizontal: Dictionary = {
+		"north": world_area.neighbour_north.is_empty(),
+		"south": world_area.neighbour_south.is_empty(),
+	}
+	for edge in unlinked_horizontal:
+		if not unlinked_horizontal[edge]:
+			continue
 		var intervals: Array = _matching_intervals_for_edge(candidates, bounds, edge)
 		assert_true(_covers_full_span(intervals, bounds.position.x, bounds.end.x),
 				(
@@ -357,7 +395,13 @@ func test_perimeter_walls_cover_full_edge_length_with_no_mid_edge_gaps() -> void
 				+ "than %.1fpx — a gap here is a spot mid-edge a player could slip through."
 				) % [edge, bounds.position.x, bounds.end.x, EDGE_GAP_TOLERANCE_PX])
 
-	for edge in ["east", "west"]:
+	var unlinked_vertical: Dictionary = {
+		"east": world_area.neighbour_east.is_empty(),
+		"west": world_area.neighbour_west.is_empty(),
+	}
+	for edge in unlinked_vertical:
+		if not unlinked_vertical[edge]:
+			continue
 		var intervals: Array = _matching_intervals_for_edge(candidates, bounds, edge)
 		assert_true(_covers_full_span(intervals, bounds.position.y, bounds.end.y),
 				(
@@ -429,20 +473,44 @@ func test_perimeter_walls_close_all_four_corners() -> void:
 	if not (area is WorldArea):
 		fail_test("the instanced ActiveArea child must be a WorldArea instance to call get_bounds_px() on it — found a %s" % [area.get_class()])
 		return
+	var world_area: WorldArea = area as WorldArea
 
-	var bounds: Rect2 = (area as WorldArea).get_bounds_px()
+	var bounds: Rect2 = world_area.get_bounds_px()
 	var candidates: Array[StaticBody2D] = []
 	_collect_non_prop_static_bodies(area, candidates)
 
 	var inset: float = WorldArea.NORTH_WALL_HEADROOM_INSET_PX
+	# UPDATED for Slice 10 (design.md §12.4): a corner's "no gap between two
+	# walls" concern only applies when BOTH edges meeting there are
+	# unlinked (solid StaticBody2D walls). meadow.tscn now links east/south
+	# to orchard.tscn, so NE/SW/SE each have at least one open (Area2D
+	# trigger, not solid) side — there is no wall-vs-wall gap to close
+	# there, since the player is meant to be able to cross through the
+	# linked side entirely. Only NW (north+west, both still unlinked)
+	# remains a meaningful check for this fixture; the guard below keeps
+	# this test generically correct (rather than meadow-specific) by
+	# skipping any corner where either adjacent edge has a neighbour set.
+	# The corners this narrows away (NE/SW/SE) are NOT left uncovered by this
+	# suite overall — tests/integration/world/test_edge_triggers.gd's corner-
+	# dead-zone tests (test_player_near_east_edge_corner_does_not_trigger_
+	# edge_reached and its south-edge sibling) cover linked-corner containment
+	# instead, since a linked corner's "wall" is a stub/trigger/stub split
+	# this file's plain-StaticBody2D scan wasn't written to reason about.
 	var corners: Dictionary = {
-		"NW": Vector2(bounds.position.x - 1.0, bounds.position.y + inset + 1.0),
-		"NE": Vector2(bounds.end.x + 1.0, bounds.position.y + inset + 1.0),
-		"SW": Vector2(bounds.position.x - 1.0, bounds.end.y + 1.0),
-		"SE": Vector2(bounds.end.x + 1.0, bounds.end.y + 1.0),
+		"NW": [Vector2(bounds.position.x - 1.0, bounds.position.y + inset + 1.0),
+				world_area.neighbour_north.is_empty() and world_area.neighbour_west.is_empty()],
+		"NE": [Vector2(bounds.end.x + 1.0, bounds.position.y + inset + 1.0),
+				world_area.neighbour_north.is_empty() and world_area.neighbour_east.is_empty()],
+		"SW": [Vector2(bounds.position.x - 1.0, bounds.end.y + 1.0),
+				world_area.neighbour_south.is_empty() and world_area.neighbour_west.is_empty()],
+		"SE": [Vector2(bounds.end.x + 1.0, bounds.end.y + 1.0),
+				world_area.neighbour_south.is_empty() and world_area.neighbour_east.is_empty()],
 	}
 	for corner_name in corners:
-		var point: Vector2 = corners[corner_name]
+		var point: Vector2 = corners[corner_name][0]
+		var both_edges_unlinked: bool = corners[corner_name][1]
+		if not both_edges_unlinked:
+			continue
 		assert_true(_some_wall_contains(candidates, point),
 				(
 				"no perimeter wall covers the %s corner's test point %s — a player could slip "
@@ -520,110 +588,26 @@ func test_player_is_blocked_by_north_perimeter_wall() -> void:
 
 
 func test_player_is_blocked_by_south_perimeter_wall() -> void:
-	var world: Node = _instantiate_world()
-	if world == null:
-		return
-	var area: Node = _get_instanced_area(world)
-	if area == null:
-		return
-	if not (area is WorldArea):
-		fail_test("the instanced ActiveArea child must be a WorldArea instance to call get_bounds_px() on it — found a %s" % [area.get_class()])
-		return
-	var bounds: Rect2 = (area as WorldArea).get_bounds_px()
-
-	var player: CharacterBody2D = world.find_child("Player", true, false) as CharacterBody2D
-	assert_not_null(player, "world.tscn's instantiated tree should contain a CharacterBody2D named 'Player'")
-	if player == null:
-		return
-
-	await wait_physics_frames(2)
-
-	var start: Vector2 = Vector2(
-			bounds.position.x + CLEAR_X_FOR_NORTH_SOUTH_DRIVE,
-			(bounds.position.y + bounds.end.y) / 2.0)
-	player.global_position = start
-	player.velocity = Vector2.ZERO
-
-	_drive_player(player, "move_down", DRIVE_TICKS)
-
-	var speed: float = player.get("speed")
-	var unobstructed_travel: float = speed * DRIVE_TICKS / float(Engine.physics_ticks_per_second)
-	var actual_travel: float = player.global_position.y - start.y
-
-	assert_lt(player.global_position.y, bounds.end.y + 1.0,
-			(
-			"player must not cross south of get_bounds_px()'s bottom edge (y=%.1f) — found "
-			+ "y=%.1f. A missing/incomplete south perimeter wall would let the player walk "
-			+ "straight off the map."
-			) % [bounds.end.y, player.global_position.y])
-	assert_lt(actual_travel, unobstructed_travel * 0.9,
-			(
-			"player travelled %.1fpx of an unobstructed %.1fpx toward the south edge — it "
-			+ "should have been stopped well short of that by a perimeter wall."
-			) % [actual_travel, unobstructed_travel])
-	# Lower bound — see the north test's identical assertion for why this
-	# matters. The south wall is unaffected by the north wall's camera-
-	# headroom inset, so this keeps the ~155px figure measured before that
-	# fix.
-	assert_gt(actual_travel, 100.0,
-			(
-			"player travelled only %.1fpx toward the south edge — expected clearly more than "
-			+ "that (a genuinely-moving, wall-stopped player), not a vacuous 'blocked' reading "
-			+ "from a player that never moved."
-			) % [actual_travel])
+	# UPDATED for Slice 10 (design.md §12.4): meadow.tscn's south edge is now
+	# linked (neighbour_south -> orchard.tscn), so it is built as an open
+	# Area2D trigger, not a solid StaticBody2D wall — a "blocked by wall"
+	# check no longer applies to it (this file's own header scoped it to
+	# "the no-neighbour-wall case", a precondition that stopped holding for
+	# this edge once slice 10 wired the fixture). The south-edge transition
+	# behavior itself (frozen input, correct spawn on the far side, etc.) is
+	# covered by tests/integration/world/test_area_transition.gd and
+	# test_edge_triggers.gd instead.
+	pending("meadow's south edge is now a linked open-edge trigger (design.md §12.4) — " +
+			"see test_edge_triggers.gd / test_area_transition.gd for its actual behavior")
 
 
 func test_player_is_blocked_by_east_perimeter_wall() -> void:
-	var world: Node = _instantiate_world()
-	if world == null:
-		return
-	var area: Node = _get_instanced_area(world)
-	if area == null:
-		return
-	if not (area is WorldArea):
-		fail_test("the instanced ActiveArea child must be a WorldArea instance to call get_bounds_px() on it — found a %s" % [area.get_class()])
-		return
-	var bounds: Rect2 = (area as WorldArea).get_bounds_px()
-
-	var player: CharacterBody2D = world.find_child("Player", true, false) as CharacterBody2D
-	assert_not_null(player, "world.tscn's instantiated tree should contain a CharacterBody2D named 'Player'")
-	if player == null:
-		return
-
-	await wait_physics_frames(2)
-
-	var start: Vector2 = Vector2(
-			bounds.position.x + START_MARGIN_PX,
-			CLEAR_Y_FOR_EAST_WEST_DRIVE)
-	player.global_position = start
-	player.velocity = Vector2.ZERO
-
-	_drive_player(player, "move_right", DRIVE_TICKS)
-
-	var speed: float = player.get("speed")
-	var unobstructed_travel: float = speed * DRIVE_TICKS / float(Engine.physics_ticks_per_second)
-	var actual_travel: float = player.global_position.x - start.x
-
-	assert_lt(player.global_position.x, bounds.end.x + 1.0,
-			(
-			"player must not cross east of get_bounds_px()'s right edge (x=%.1f) — found "
-			+ "x=%.1f. A missing/incomplete east perimeter wall would let the player walk "
-			+ "straight off the map."
-			) % [bounds.end.x, player.global_position.x])
-	assert_lt(actual_travel, unobstructed_travel * 0.9,
-			(
-			"player travelled %.1fpx of an unobstructed %.1fpx toward the east edge — it "
-			+ "should have been stopped well short of that by a perimeter wall."
-			) % [actual_travel, unobstructed_travel])
-	# Lower bound — see test_player_is_blocked_by_north_perimeter_wall()'s
-	# identical assertion for why this matters. 400.0 sits comfortably below
-	# the ~486px measured for this edge and comfortably above zero.
-	assert_gt(actual_travel, 400.0,
-			(
-			"player travelled only %.1fpx toward the east edge — expected clearly more than "
-			+ "that (a genuinely-moving, wall-stopped player), not a vacuous 'blocked' reading "
-			+ "from a player that never moved."
-			) % [actual_travel])
+	# UPDATED for Slice 10 (design.md §12.4): meadow.tscn's east edge is now
+	# linked (neighbour_east -> orchard.tscn), so it is built as an open
+	# Area2D trigger, not a solid StaticBody2D wall — see
+	# test_player_is_blocked_by_south_perimeter_wall()'s identical note.
+	pending("meadow's east edge is now a linked open-edge trigger (design.md §12.4) — " +
+			"see test_edge_triggers.gd / test_area_transition.gd for its actual behavior")
 
 
 func test_player_is_blocked_by_west_perimeter_wall() -> void:
