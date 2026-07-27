@@ -518,13 +518,26 @@ extends Node2D
 
 const TILE_SIZE := Vector2i(32, 16)   # §4
 
-## The scenes reached by walking off each edge. An empty slot is a hard boundary
-## (a wall, not a doorway). These are genuine new information — you cannot derive
-## which area lies north — so, unlike the bounds, they are declared by hand.
-@export var neighbour_north: PackedScene
-@export var neighbour_east: PackedScene
-@export var neighbour_south: PackedScene
-@export var neighbour_west: PackedScene
+## The scenes reached by walking off each edge, as a `.tscn` path — an empty
+## string is a hard boundary (a wall, not a doorway). These are genuine new
+## information — you cannot derive which area lies north — so, unlike the
+## bounds, they are declared by hand.
+##
+## A **file path `String`, not a `PackedScene` resource reference.** Two areas
+## that link back to each other (the normal case — see §12.2) would each embed
+## an `ext_resource` pointing at the other if this were `PackedScene`, and
+## Godot's loader deadlocks on that cycle at parse time (confirmed empirically
+## while building slice 10's two-area test fixture — this is a real engine
+## limitation, not a hypothetical). A path string has no such reference for the
+## loader to eagerly resolve; the scene is `load()`-ed on demand, at transition
+## time (§12.5), not held live. `@export_file("*.tscn")` still gives designers
+## an Inspector file-picker button for the slot — nearly as simple as dragging
+## a `PackedScene` in, without the resource-cycle cost.
+## https://docs.godotengine.org/en/stable/classes/class_resourceloader.html#class-resourceloader-method-load
+@export_file("*.tscn") var neighbour_north: String
+@export_file("*.tscn") var neighbour_east: String
+@export_file("*.tscn") var neighbour_south: String
+@export_file("*.tscn") var neighbour_west: String
 
 @onready var _ground: TileMapLayer = $Ground
 
@@ -538,10 +551,10 @@ func get_bounds_px() -> Rect2:
 			Vector2(cells.size) * Vector2(TILE_SIZE))
 ```
 
-**Neighbours are declared per edge.** Four `PackedScene` exports on the area root: a filled slot
-is a doorway to that scene, an empty slot is a hard edge. That single fact drives both the walls
-and the transitions in §12.4 — the designer links areas by dropping a scene into a slot, and
-everything else follows.
+**Neighbours are declared per edge.** Four `.tscn` file-path exports on the area root: a filled
+slot is a doorway to that scene, an empty slot is a hard edge. That single fact drives both the
+walls and the transitions in §12.4 — the designer picks a scene file for a slot in the Inspector,
+and everything else follows.
 
 ### 12.3 The camera: centred, with two tiles of slack, locked at the edges
 
@@ -599,12 +612,15 @@ the *one* sanctioned place collision is not authored on an asset — and it is e
 §16 already carves out: the map boundary has no art to hang collision on.
 
 For each of the four edges, `world.gd` (or a small helper on `WorldArea`) does one of two things
-along that edge of `get_bounds_px()`:
+along that edge of `get_bounds_px()`. **This applies identically on all four edges** — east/west
+and north/south are the same mechanism, not a mechanism-plus-a-variant; any east/west example
+elsewhere in this doc is illustrative, not a scope restriction (the one genuine asymmetry, the
+north headroom inset below, is called out explicitly as the sole exception).
 
 - **No neighbour → an invisible wall.** A `StaticBody2D` on the `world` layer spanning that edge.
   The player simply cannot leave.
-- **A neighbour → an open edge with a trigger.** An `Area2D` on the `interactable` layer, one
-  tile deep, spanning that edge. When the player's body enters it, the area emits a local signal:
+- **A neighbour → an open edge with a trigger.** An `Area2D` on the `interactable` layer, spanning
+  that edge, emitting a local signal when the player's body enters it:
 
 ```gdscript
 # WorldArea
@@ -615,22 +631,70 @@ signal edge_reached(direction: Edge)   # Edge: an enum NORTH / EAST / SOUTH / WE
 signal, not `GameEvents`: the area is a direct child of the world scene, so a signal-bus hop would
 be ceremony (the bus rule in `CLAUDE.md` is for *cross-scene* events).
 
-**North-edge headroom inset — a permanent per-area consequence.** The north perimeter wall's
-player-facing surface is not flush with the true painted north edge like the other three walls
-are — it sits one sprite-height south of it (`NORTH_WALL_HEADROOM_INSET_PX`,
-`world/areas/shared/world_area.gd`). This exists because `limit_top` (§12.3) clamps the camera's
-view rect to that exact edge, while the player's sprite is feet-anchored (§10): a wall flush with
-the edge would let the player stop with their whole sprite above the clamped view — invisible.
-Insetting the wall guarantees the camera always keeps a full sprite-height of headroom above the
-player, no matter how far north they walk.
+**The trigger sits flush at the true edge, not a tile back from it.** The open-edge trigger
+occupies the *exact same rect* a wall would have occupied on that edge — the same geometry
+`build_perimeter_walls()` already computes (including the north inset, below), just built as a
+sensor (`Area2D`) instead of a solid (`StaticBody2D`). This matters because it makes "the trigger
+fires" and "the player collides with the edge" the same event: the player must walk all the way to
+where a wall would have stopped them before anything happens, not merely step onto the outermost
+painted tile. A trigger that instead spanned a full tile *back* from the true edge would fire the
+instant the player enters that tile — noticeably earlier than the boundary itself, and
+inconsistent with how every unlinked edge already behaves (walking into a wall).
+
+**Corner dead zones — no transition ever starts from a corner.** Each of the four corners of
+`get_bounds_px()` carves out a 32×32px square where no edge's trigger is active, so travel between
+areas is never ambiguous about which edge (and therefore which neighbour) the player meant to
+cross. Concretely:
+
+- A **horizontal** edge's trigger (north or south) is inset **1 tile (32px)** from each of its
+  west/east ends.
+- A **vertical** edge's trigger (east or west) is inset **2 tiles (32px)** from each of its
+  north/south ends — measured from that end's *playable-facing boundary*, not always the raw
+  painted edge. This coincides with the raw edge at the south end (flush, like every non-north
+  edge), but not at the north end: the north wall/trigger's playable boundary is already
+  `NORTH_WALL_HEADROOM_INSET_PX` (32px) in from the true edge (below), so the north-end exclusion
+  actually sits 64px from the raw painted edge, not 32px. Measuring from the raw edge there (an
+  early version of this implementation did exactly this) leaves the NE/NW corners with *zero*
+  effective exclusion, since the naive 32px lands entirely inside ground the north inset already
+  made non-walkable — the corner rule would silently not hold at those two corners while appearing
+  to at the other two. Use the same playable-boundary lookup the wall/spawn-math logic already
+  needs (§12.5) rather than re-deriving this per edge.
+
+One tile horizontally and two tiles vertically are *the same 32px*, because tiles are 2:1 (§4) —
+so both edges meeting at a corner carve back from exactly the same square region (measured from
+each edge's own playable boundary), regardless of which edge's trigger you look at it from. The
+excluded corner squares are otherwise ordinary walkable/paintable ground; a player standing in one
+simply cannot trigger a transition until they
+step out of it and into an active stretch of the edge.
+
+**A debounce prevents an immediate bounce-back after arriving.** Because the trigger sits flush at
+the true edge (above) and the player spawns only about one tile inside it (§12.5), the edge the
+player just arrived through — which leads back the way they came — must not be able to re-fire
+before they've actually moved away from it. On arrival, that edge's trigger is inert until the
+player's distance from it exceeds **0.5 tile measured along the axis they crossed it on** (16px
+for an east/west edge, 8px for a north/south edge). This is a plain distance check, not a timer —
+it re-arms the moment the player has walked far enough in, and stays inert indefinitely if they
+never do (e.g. if they immediately turn back toward the edge without crossing that distance first).
+
+**North-edge headroom inset — a permanent per-area consequence.** The north perimeter wall's (or,
+on a linked edge, trigger's) player-facing surface is not flush with the true painted north edge
+like the other three edges are — it sits one sprite-height south of it
+(`NORTH_WALL_HEADROOM_INSET_PX`, `world/areas/shared/world_area.gd`). This exists because
+`limit_top` (§12.3) clamps the camera's view rect to that exact edge, while the player's sprite is
+feet-anchored (§10): stopping flush with the edge would let the player stand with their whole
+sprite above the clamped view — invisible. Insetting guarantees the camera always keeps a full
+sprite-height of headroom above the player, no matter how far north they walk. This inset applies
+to the north edge whether it is a wall or a trigger — a north neighbour link does not remove it.
 
 The consequence for every area, present and future: **the topmost ~2 tile rows of painted `Ground`
-are a non-walkable decorative backdrop** — visible behind the invisible wall, but never reachable,
-since the player is stopped short of it. A designer laying out a new area should paint that strip
-as normal ground (it still needs to look right on screen) but should expect the player can never
-actually stand on it. Only the north edge needs this: south already leaves headroom below the
-player, and east/west only clip a few px of the sprite's transparent side padding (see
-`world_area.gd`'s `build_perimeter_walls()` doc comment for the full reasoning).
+are a non-walkable decorative backdrop** — visible behind the invisible boundary, but never
+reachable, since the player is stopped/redirected short of it. A designer laying out a new area
+should paint that strip as normal ground (it still needs to look right on screen) but should expect
+the player can never actually stand on it, and — if that edge is linked — that the opposite-edge
+spawn math (§12.5) never needs to place a player there either. Only the north edge needs this:
+south already leaves headroom below the player, and east/west only clip a few px of the sprite's
+transparent side padding (see `world_area.gd`'s `build_perimeter_walls()` doc comment for the full
+reasoning).
 
 ### 12.5 The transition and the opposite-edge spawn
 
@@ -642,11 +706,19 @@ When `world.gd` hears `edge_reached(dir)`:
    adding one mirrors the notebook design's removal of `PAUSED`: prefer fewer states.)
 2. **Cover.** Fade the `Transition` overlay to opaque — a `Tween` on a full-screen `ColorRect`.
    This is the "space for an animation": while the screen is covered, the swap happens unseen.
-3. **Swap.** Free the old `WorldArea`, instance `neighbour_<dir>`, add it under `ActiveArea`,
-   reparent the player in (§12.1), rebuild the perimeter (§12.4), and set the camera limits
+3. **Swap.** `load(neighbour_<dir>)` as a `PackedScene` and instance it **first** — the path is only
+   resolved now, at transition time (see §12.2's note on why it is a path, not a held `PackedScene`
+   reference) — and only once that succeeds and yields a valid `WorldArea`, free the old one. This
+   order matters: validating before destroying means a bad/renamed neighbour path fails safely (the
+   player stays in the area they were already in) instead of leaving them behind a stuck fade with
+   no area in the tree at all — a real bug hit and fixed during this feature's implementation. Then
+   add the new area under `ActiveArea`, reparent the player in (§12.1),
+   rebuild the perimeter (§12.4), and set the camera limits
    (§12.3).
 4. **Place on the opposite edge.** The player exits one edge and enters from the *opposite* edge
-   of the new area, so a continuous walk stays continuous:
+   of the new area, so a continuous walk stays continuous. This table, and everything below it, is
+   symmetric across both axes — north/south transitions work identically to east/west, not as a
+   separate case:
 
    | Exit edge | Enter edge of new area |
    | --- | --- |
@@ -655,19 +727,63 @@ When `world.gd` hears `edge_reached(dir)`:
    | North | South |
    | South | North |
 
-   The perpendicular offset is preserved: leaving the east edge at some `y`, the player enters the
-   west edge at that same `y` (clamped to the new area's vertical bounds), inset ~1 tile from the
-   edge so they land fully on-screen and walking *inward*.
+   The player's exact perpendicular world coordinate at exit is carried over verbatim — leaving
+   the west edge at `(X=0px, Y=128px)` enters the new area's east edge at `Y=128px` — offset
+   **one tile inward** along the axis just crossed (32px for an east/west entry, 16px for a
+   north/south entry) so the player lands clearly inside the new area, walking inward rather than
+   standing on the boundary. If the new area is smaller than the one departed and the carried-over
+   coordinate would fall outside it, clamp it into the new area's valid range on that axis — but
+   keep it outside the corner dead zones (§12.4), since a corner is never a legitimate spawn point
+   either. In practice this rarely triggers: because both edges meeting a corner already exclude
+   that corner from their trigger area (§12.4), the coordinate the player *exited* at can never
+   itself have been inside a corner, so the carried-over value is corner-safe by construction
+   unless clamping is what pushes it there — clamp toward the edge's midpoint if that would
+   otherwise happen.
+
+   **The "one tile inward" offset is measured from the edge's playable-facing boundary, not
+   always from the raw painted edge — this matters for north.** For south/east/west, those
+   coincide (the wall/trigger sits flush on the true edge, §12.4), so "one tile in from the true
+   edge" and "one tile in from where a wall would stop you" are the same point. For north they do
+   not coincide: the true edge is `bounds.position.y`, but the playable-facing boundary is
+   `bounds.position.y + NORTH_WALL_HEADROOM_INSET_PX` (32px further in), and the north trigger's
+   own zone spans that entire 32px gap (§12.4). Spawning a north entry only 16px in from the *true*
+   edge — the naive reading of "one tile inward" — would land the player 16px into a 32px-deep
+   trigger zone: still inside it, and the debounce (§12.4, 8px for a north/south crossing) would
+   already read as satisfied at that distance, so nothing would stop an immediate involuntary
+   bounce back the way they came. The fix is uniform, not a north-specific special case in the
+   code: always measure "one tile inward" from the playable-facing boundary of the edge just
+   entered (which the perimeter-build step already knows, since it is the same boundary a wall on
+   that edge would have used) — this automatically lands a north entry at
+   `bounds.position.y + NORTH_WALL_HEADROOM_INSET_PX + 16px`, safely past that edge's own trigger
+   zone, with no edge-specific conditional needed in the spawn-math implementation itself.
+
+   The edge the player just entered through leads back the way they came, so it is subject to the
+   arrival debounce described in §12.4 — it won't re-fire until the player has walked the required
+   0.5-tile distance away from it. Because the spawn offset above is now always measured to clear
+   that edge's own trigger zone entirely (including north's wider one), the debounce should never
+   actually be load-bearing under correct geometry — it exists as a safety margin against physics
+   timing/reparenting jitter on the transition frame, not as the mechanism the spawn math relies on
+   to avoid landing inside a trigger. Don't tune the two against each other; keep them independent.
 5. **Reveal & resume.** Fade the overlay back to transparent, then set
    `GameState.current_state = PLAYING`. Emit `GameEvents.area_changed(area_id)` for any
    cross-system listener (autosave, a future minimap) — this one *is* cross-scene, so it goes on
-   the bus.
+   the bus. `area_id` is the newly-loaded area's scene file name without its `.tscn` extension
+   (e.g. `"meadow"` for `world/areas/meadow.tscn`) — a simple, already-unique value with nothing
+   new to author or keep in sync.
 
 **Phase 1 uses a fade.** It is cozy, cheap, and completely hides the swap. The architecture
 leaves room for a fancier **slide/scroll** transition (both areas briefly on-screen, sliding
 across) behind the same `edge_reached` → transition seam; that is Phase 2 (§15), and it needs a
 small art gutter beyond each open edge so the outgoing area has something to show as it slides
 away.
+
+**Phase 1 also uses carried-over-coordinate spawn placement, not authored spawn points.** Step 4's
+"carry the exit coordinate over" rule is deliberately the simplest thing that works, not a
+permanent design commitment. A future pass may replace it with fixed, designer-placed spawn points
+per edge-link (e.g. a marker node in the destination area, independent of where the player happened
+to exit) — useful once areas on either side of a link are meaningfully different shapes/sizes and
+"same coordinate, clamped" stops feeling natural. That is out of scope here; this section describes
+only the Phase 1 mechanism.
 
 ---
 

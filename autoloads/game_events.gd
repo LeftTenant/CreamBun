@@ -35,6 +35,13 @@ signal inventory_full(item: Variant)
 signal destination_visited(id: StringName)
 signal fast_travel_requested(id: StringName)
 
+# World areas
+# Emitted by world.gd once an edge transition's freeze/fade/swap/spawn/reveal
+# sequence has fully completed (design doc §12.5 step 5) — cross-scene, so it
+# goes on the bus rather than a direct node signal. `area_id` is the newly-
+# loaded area's scene file name without its `.tscn` extension (e.g. "meadow").
+signal area_changed(area_id: StringName)
+
 # Quests
 signal quest_added(id: StringName)
 signal quest_updated(id: StringName)

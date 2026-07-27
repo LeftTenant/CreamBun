@@ -40,7 +40,19 @@ invisible in a green suite:
    nonzero-but-limited number; the collider-removed variant must print the full unobstructed
    distance.
 
+**Same family: `assert_signal_not_emitted()` as a stand-in for containment.** A test whose
+thesis is "standing here must NOT trigger X" is satisfied *both* by "the player was blocked
+before reaching the trigger" and by "the player walked clean through the hole where the trigger
+isn't and off the map." Proven by mutation on `world_area.gd`: deleting the linked-edge corner
+stubs (reopening the exact escape bug slice 10 shipped a fix for) leaves
+`test_player_near_east_edge_corner_does_not_trigger_edge_reached` **green** — only the separate
+*geometric* rect assertions in `test_edge_triggers.gd` catch it. Pair every
+`assert_signal_not_emitted` containment test with an explicit position bound
+(`assert_lt(player.global_position.x, bounds.end.x + slack)`) so the behavioural symptom, not
+just the geometry that causes it, is regression-guarded.
+
 ## Related
 
 [[testing-conventions]] — the "clear corridor must span the whole travel window" rule for
 map-driven movement tests; same family of silent-pass failure.
+[[gotcha-open-edge-trigger-corner-gaps]] — the corner geometry those trigger tests cover.

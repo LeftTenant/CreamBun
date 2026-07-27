@@ -5,7 +5,7 @@
 ##
 ## WorldArea is the base class every concrete area scene (meadow.tscn, and
 ## later market.tscn, …) uses as its root. This slice's designer-facing
-## surface is small: four neighbour_* PackedScene export slots (declared now,
+## surface is small: four neighbour_* file-path export slots (declared now,
 ## wired up in slice 10 — design doc §12.2) and get_bounds_px(), which
 ## derives the area's pixel extent from whatever the level designer has
 ## already painted onto its Ground TileMapLayer child, rather than making
@@ -134,16 +134,20 @@ func test_get_bounds_px_scales_used_rect_by_tile_size() -> void:
 func test_neighbour_slots_are_unset_by_default() -> void:
 	# Design doc §12.2: an empty neighbour slot means a hard boundary wall,
 	# and filling one in is genuinely new information a designer declares by
-	# hand per edge — it is never derived. Slice 8 only declares these four
-	# export slots; nothing populates them until slice 10's edge-linking
-	# work, so a fresh area must expose all four as unset (null).
+	# hand per edge — it is never derived.
+	#
+	# UPDATED for Slice 10: neighbour_* changed from @export PackedScene to
+	# @export_file("*.tscn") String (design doc §12.2) — two areas linking
+	# back to each other deadlock Godot's loader if both hold a live
+	# PackedScene ext_resource pointing at one another. "Unset" is now an
+	# empty string rather than null.
 	var area: WorldArea = _make_area()
 
-	assert_null(area.neighbour_north,
-			"neighbour_north should be unset (null) by default — slice 10 wires edge-linking, not this slice")
-	assert_null(area.neighbour_east,
-			"neighbour_east should be unset (null) by default — slice 10 wires edge-linking, not this slice")
-	assert_null(area.neighbour_south,
-			"neighbour_south should be unset (null) by default — slice 10 wires edge-linking, not this slice")
-	assert_null(area.neighbour_west,
-			"neighbour_west should be unset (null) by default — slice 10 wires edge-linking, not this slice")
+	assert_true(area.neighbour_north.is_empty(),
+			"neighbour_north should be unset (empty string) by default")
+	assert_true(area.neighbour_east.is_empty(),
+			"neighbour_east should be unset (empty string) by default")
+	assert_true(area.neighbour_south.is_empty(),
+			"neighbour_south should be unset (empty string) by default")
+	assert_true(area.neighbour_west.is_empty(),
+			"neighbour_west should be unset (empty string) by default")
