@@ -600,10 +600,11 @@ above the clamped view. §12.4 covers the fix (an inset north wall) and the resu
 backdrop strip it leaves along every area's north edge; read that note before laying out a new
 area's `Ground` extent.
 
-**Areas must be at least one viewport in each dimension** (≥ 320×180px — roughly ≥ 10 wide × 11
-tall in tiles). If an area is smaller than the viewport on an axis, Godot cannot both keep the
-player on-screen and honour the limits; it centres the small area and the dead zone stops
-mattering. This is a constraint on how maps are drawn, not a code case to handle.
+**Areas must be at least one viewport in each dimension** (≥ 320×180px — at least **10 wide × 12
+tall in tiles**; 11 tall is only 176px, 4px short). If an area is smaller than the viewport on an
+axis, Godot cannot both keep the player on-screen and honour the limits; it centres the small area
+and the dead zone stops mattering. This is a constraint on how maps are drawn, not a code case to
+handle.
 
 ### 12.4 Walking off the edge: open edges vs. walls
 

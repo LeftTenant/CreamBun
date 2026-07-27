@@ -6,7 +6,8 @@ metadata:
 ---
 
 Two things to check whenever a diff touches `TileSet.tile_size`, `texture_region_size`, or the
-`sources/N` keys in `world/world.tscn`.
+`sources/N` keys in an area scene's embedded TileSet (`world/areas/*.tscn`; formerly
+`world/world.tscn`).
 
 ## 1. `sources/N` keys are values, not positions — never renumber them
 

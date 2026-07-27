@@ -17,6 +17,7 @@
 - [Corner-gap wall test is inert](gotcha_perimeter_corner_gap_test_inert.md) — widened-span checks can't detect a missing corner extension on a wall ring; mutate the source to prove a test's catch
 - [get_bounds_px() coordinate space](gotcha_worldarea_bounds_coordinate_space.md) — Ground-local rect consumed as both WorldArea-local (walls) and global (camera limits)
 - [Open-edge trigger corner gaps](gotcha_open_edge_trigger_corner_gaps.md) — linked edge = stub/trigger/stub; a vertical edge's north stub is 64px on purpose (headroom inset), measured NE band ≈33px
+- [World-area authoring facts](reference_world_area_authoring_facts.md) — TileSets are per-scene embedded sub-resources; min area is 10×**12** tiles; bounds are a bounding box
 - [Destroy-before-acquire soft-lock](gotcha_destroy_before_acquire_soft_lock.md) — validate the replacement scene BEFORE reparent/remove_child/queue_free; a late null-guard fires into an empty tree
 
 Per-developer profile memories live in `.claude/agent-memory-local/code-reviewer/` (gitignored). Check there for any local context before reviewing.
