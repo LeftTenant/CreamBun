@@ -72,25 +72,43 @@ const DRIVE_TICKS: int = 300
 # APPROACH_OFFSET_PX idea, generalized to four edges here).
 const START_MARGIN_PX: float = 48.0
 
-# Clear-lane coordinates, chosen to avoid every existing obstacle painted or
-# placed in meadow.tscn as of this writing:
-#   - Boulder (world/props/boulder.tscn) sits at (288, 240); its 1x1
-#     footprint collider spans y in [224, 240].
-#   - TreeOak (world/props/tree_oak.tscn) sits at (208, 176); its 1x1
-#     footprint collider spans y in [160, 176].
-#   - The two painted Solids tiles sit at tile (11, 11) and (12, 11), i.e.
-#     pixel x in [352, 416], y in [176, 192].
-# So: x=48 (near the west edge) has nothing else painted or placed at any y,
-# making it a safe column for the north/south drive tests. y=300 sits south
-# of every one of the above y-ranges, making it a safe row for the east/west
-# drive tests across the full width of the map.
-const CLEAR_X_FOR_NORTH_SOUTH_DRIVE: float = 48.0
-const CLEAR_Y_FOR_EAST_WEST_DRIVE: float = 300.0
+# Clear lanes for the drive tests are no longer hard-coded. They used to be:
+# two constants picked by hand to dodge "every obstacle painted or placed in
+# meadow.tscn as of this writing", with a comment enumerating the boulder, the
+# tree, and the two Solids tiles. That enumeration went stale the moment the
+# meadow's Ground layer gained collidable edge tiles (design doc §6.1) — the
+# east/west lane at y=300 now runs straight through a painted fence, and the
+# test failed for a reason with nothing to do with perimeter walls.
+#
+# CollisionProbe finds a lane from the area's real collision instead, so these
+# tests keep testing walls no matter what a designer paints next.
+const CollisionProbe := preload("res://tests/integration/world/shared/collision_probe.gd")
 
 
 # ---------------------------------------------------------------------------
 # Setup / teardown
 # ---------------------------------------------------------------------------
+
+## The north headroom inset the world will actually build with, derived from
+## the project's real player scene (WorldArea.north_headroom_inset()).
+##
+## Instantiated standalone rather than read off a constant: there is no longer
+## a constant to read. Kept as a helper on each suite that needs it rather than
+## hoisted somewhere shared, matching this project's convention of
+## self-contained test files.
+func _derive_headroom_inset() -> float:
+	var packed: PackedScene = load("res://player/player.tscn")
+	if packed == null:
+		fail_test("player/player.tscn should load as a PackedScene")
+		return 0.0
+	var player: CharacterBody2D = packed.instantiate() as CharacterBody2D
+	if player == null:
+		fail_test("player.tscn's root must be a CharacterBody2D")
+		return 0.0
+	autofree(player)
+	return WorldArea.north_headroom_inset(
+			player.get_visual_extent(), player.get_collider_extent())
+
 
 func before_each() -> void:
 	# Player movement is gated on GameState.current_state == PLAYING
@@ -479,7 +497,7 @@ func test_perimeter_walls_close_all_four_corners() -> void:
 	var candidates: Array[StaticBody2D] = []
 	_collect_non_prop_static_bodies(area, candidates)
 
-	var inset: float = WorldArea.NORTH_WALL_HEADROOM_INSET_PX
+	var inset: float = _derive_headroom_inset()
 	# UPDATED for Slice 10 (design.md §12.4): a corner's "no gap between two
 	# walls" concern only applies when BOTH edges meeting there are
 	# unlinked (solid StaticBody2D walls). meadow.tscn now links east/south
@@ -524,6 +542,34 @@ func test_perimeter_walls_close_all_four_corners() -> void:
 # through")
 # ---------------------------------------------------------------------------
 
+## A player-origin X the player can walk the full height of the map along
+## without hitting anything but the perimeter itself. Fails the test (and
+## returns NAN) if the meadow has been painted so densely that no such column
+## exists — that would make every vertical drive test below meaningless, so it
+## must be loud rather than skipped.
+func _clear_column_for_vertical_drive(area: WorldArea, player: CharacterBody2D, bounds: Rect2) -> float:
+	var collider: Rect2 = CollisionProbe.player_collider_extent(player)
+	var column: float = CollisionProbe.find_clear_column(
+			area, collider,
+			bounds.position.y, bounds.end.y,
+			bounds.position.x + START_MARGIN_PX, bounds.end.x - START_MARGIN_PX)
+	if is_nan(column):
+		fail_test("no obstacle-free column exists across the meadow's full height — a vertical drive test cannot attribute a stop to a perimeter wall without one. Check what was painted onto Ground/Solids.")
+	return column
+
+
+## The horizontal mirror of _clear_column_for_vertical_drive().
+func _clear_row_for_horizontal_drive(area: WorldArea, player: CharacterBody2D, bounds: Rect2) -> float:
+	var collider: Rect2 = CollisionProbe.player_collider_extent(player)
+	var row: float = CollisionProbe.find_clear_row(
+			area, collider,
+			bounds.position.x, bounds.end.x,
+			bounds.position.y + START_MARGIN_PX, bounds.end.y - START_MARGIN_PX)
+	if is_nan(row):
+		fail_test("no obstacle-free row exists across the meadow's full width — a horizontal drive test cannot attribute a stop to a perimeter wall without one. Check what was painted onto Ground/Solids.")
+	return row
+
+
 func test_player_is_blocked_by_north_perimeter_wall() -> void:
 	var world: Node = _instantiate_world()
 	if world == null:
@@ -547,8 +593,12 @@ func test_player_is_blocked_by_north_perimeter_wall() -> void:
 	# test_solids_collision.gd's collision-response tests.
 	await wait_physics_frames(2)
 
+	var clear_x: float = _clear_column_for_vertical_drive(area as WorldArea, player, bounds)
+	if is_nan(clear_x):
+		return
+
 	var start: Vector2 = Vector2(
-			bounds.position.x + CLEAR_X_FOR_NORTH_SOUTH_DRIVE,
+			clear_x,
 			(bounds.position.y + bounds.end.y) / 2.0)
 	player.global_position = start
 	player.velocity = Vector2.ZERO
@@ -629,9 +679,13 @@ func test_player_is_blocked_by_west_perimeter_wall() -> void:
 
 	await wait_physics_frames(2)
 
+	var clear_y: float = _clear_row_for_horizontal_drive(area as WorldArea, player, bounds)
+	if is_nan(clear_y):
+		return
+
 	var start: Vector2 = Vector2(
 			bounds.end.x - START_MARGIN_PX,
-			CLEAR_Y_FOR_EAST_WEST_DRIVE)
+			clear_y)
 	player.global_position = start
 	player.velocity = Vector2.ZERO
 

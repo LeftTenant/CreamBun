@@ -91,9 +91,24 @@ const ENTRY_OFFSET_NORTH_SOUTH_PX: float = 16.0  # one tile inward, N/S entry
 ## (bounds.position.y + this inset), not the raw painted edge — because the
 ## north edge's playable boundary itself sits this far in from the true
 ## edge (§12.4's headroom fix for the feet-anchored player under
-## Camera2D.limit_top). Mirrored from WorldArea.NORTH_WALL_HEADROOM_INSET_PX
-## per this file's own "mirror the constant, don't read it" convention above.
-const NORTH_WALL_HEADROOM_INSET_PX: float = 32.0
+## Camera2D.limit_top).
+##
+## No longer mirrors a WorldArea constant — there isn't one any more. The inset
+## is now derived per build from the player's real geometry
+## (WorldArea.north_headroom_inset()), and compute_entry_position() takes it as
+## an argument. This file therefore passes an inset IN rather than matching one:
+## 16.0 is what the project's current player works out to, and the tests below
+## check that compute_entry_position() honours whatever it is handed. The
+## derivation itself is checked separately, against the live player scene, by
+## tests/integration/world/test_collision_geometry_invariants.gd.
+const HEADROOM_INSET_PX: float = 16.0
+
+## How far above the player's origin their collider's top edge sits, in px —
+## CollisionShape2D.position.y (-9) minus the capsule's 5px radius, from
+## player/player.tscn (design.md §10). Mirrored here, same convention as
+## above, purely so the north-entry clearance test below can be written as
+## real arithmetic instead of a magic number.
+const PLAYER_COLLIDER_TOP_OFFSET_PX: float = 14.0
 
 
 # ---------------------------------------------------------------------------
@@ -191,7 +206,7 @@ func test_entry_position_east_west_preserves_coordinate_when_already_in_range() 
 	# land on the opposite (WEST) edge, offset one tile (32px) inward from
 	# the new area's own west edge.
 	var new_bounds := Rect2(Vector2(0.0, 0.0), Vector2(448.0, 256.0))  # e.g. orchard.tscn's bounds
-	var entry: Vector2 = WorldArea.compute_entry_position(200.0, WorldArea.Edge.EAST, new_bounds)
+	var entry: Vector2 = WorldArea.compute_entry_position(200.0, WorldArea.Edge.EAST, new_bounds, HEADROOM_INSET_PX)
 
 	assert_eq(entry.y, 200.0,
 			"the exit Y coordinate must be carried over verbatim when it already fits the new area's range")
@@ -203,15 +218,46 @@ func test_entry_position_north_south_preserves_coordinate_when_already_in_range(
 	# Exiting a SOUTH edge at X=200 must carry X over verbatim and land on
 	# the opposite (NORTH) edge, offset one tile (16px) inward.
 	var new_bounds := Rect2(Vector2(0.0, 0.0), Vector2(448.0, 256.0))
-	var entry: Vector2 = WorldArea.compute_entry_position(200.0, WorldArea.Edge.SOUTH, new_bounds)
+	var entry: Vector2 = WorldArea.compute_entry_position(200.0, WorldArea.Edge.SOUTH, new_bounds, HEADROOM_INSET_PX)
 
 	assert_eq(entry.x, 200.0,
 			"the exit X coordinate must be carried over verbatim when it already fits the new area's range")
-	assert_eq(entry.y, new_bounds.position.y + NORTH_WALL_HEADROOM_INSET_PX + ENTRY_OFFSET_NORTH_SOUTH_PX,
+	assert_eq(entry.y, new_bounds.position.y + HEADROOM_INSET_PX + ENTRY_OFFSET_NORTH_SOUTH_PX,
 			("entering from the NORTH edge must sit exactly one tile (16px) inward from the north edge's " +
 			"PLAYABLE-FACING boundary, which itself sits %.0fpx south of the true painted edge (design.md " +
 			"§12.5's fix for the naive 16px-only reading that landed the player inside the north trigger " +
-			"zone) — bounds.position.y + %.0fpx") % [NORTH_WALL_HEADROOM_INSET_PX, NORTH_WALL_HEADROOM_INSET_PX + ENTRY_OFFSET_NORTH_SOUTH_PX])
+			"zone) — bounds.position.y + %.0fpx") % [HEADROOM_INSET_PX, HEADROOM_INSET_PX + ENTRY_OFFSET_NORTH_SOUTH_PX])
+
+
+func test_north_entry_lands_clear_of_the_north_triggers_own_zone() -> void:
+	# The tightest margin in the whole transition system, written down as an
+	# assertion so it can't quietly close up (design.md §12.5's margin note).
+	#
+	# A north entry must not merely land at the right coordinate — the
+	# player's COLLIDER must end up entirely south of the north trigger's
+	# inner face, or the trigger they just arrived through re-fires and bounces
+	# them straight back. The two are different points now that the collider
+	# sits above the origin rather than straddling it (design.md §10):
+	#
+	#   trigger's inner face   = bounds.position.y + HEADROOM_INSET_PX
+	#   player's collider top  = entry.y - PLAYER_COLLIDER_TOP_OFFSET_PX
+	#
+	# With today's numbers that clears by 2px (16 + 16 - 14 vs 16). Raising the
+	# collider further, or shrinking the inset, eats those 2px directly — and
+	# this test is what says so before a playtest does.
+	var new_bounds := Rect2(Vector2(0.0, 0.0), Vector2(448.0, 256.0))
+	var entry: Vector2 = WorldArea.compute_entry_position(200.0, WorldArea.Edge.SOUTH, new_bounds, HEADROOM_INSET_PX)
+
+	var trigger_inner_face: float = new_bounds.position.y + HEADROOM_INSET_PX
+	var collider_top: float = entry.y - PLAYER_COLLIDER_TOP_OFFSET_PX
+
+	assert_gt(collider_top, trigger_inner_face,
+			("a north-entering player's collider top (y=%.1f) must sit strictly SOUTH of the north " +
+			"trigger's inner face (y=%.1f) — landing on or inside it means the just-crossed edge " +
+			"re-fires and bounces the player back the way they came (design.md §12.5). If this " +
+			"fails, either the headroom inset shrank or the player's collider moved further up " +
+			"its own origin; re-derive both, don't nudge one.")
+					% [collider_top, trigger_inner_face])
 
 
 func test_entry_position_west_exit_enters_on_the_east_edge() -> void:
@@ -221,7 +267,7 @@ func test_entry_position_west_exit_enters_on_the_east_edge() -> void:
 	# inward from the new area's own east edge (south has no headroom inset,
 	# and neither does east, so this is a plain boundary-minus-offset case).
 	var new_bounds := Rect2(Vector2(0.0, 0.0), Vector2(448.0, 256.0))
-	var entry: Vector2 = WorldArea.compute_entry_position(150.0, WorldArea.Edge.WEST, new_bounds)
+	var entry: Vector2 = WorldArea.compute_entry_position(150.0, WorldArea.Edge.WEST, new_bounds, HEADROOM_INSET_PX)
 
 	assert_eq(entry.y, 150.0,
 			"the exit Y coordinate must be carried over verbatim when it already fits the new area's range")
@@ -235,7 +281,7 @@ func test_entry_position_north_exit_enters_on_the_south_edge() -> void:
 	# offset one tile (16px) inward. South has no headroom inset, so this is
 	# a plain boundary-minus-offset case, unlike the NORTH-entry test above.
 	var new_bounds := Rect2(Vector2(0.0, 0.0), Vector2(448.0, 256.0))
-	var entry: Vector2 = WorldArea.compute_entry_position(200.0, WorldArea.Edge.NORTH, new_bounds)
+	var entry: Vector2 = WorldArea.compute_entry_position(200.0, WorldArea.Edge.NORTH, new_bounds, HEADROOM_INSET_PX)
 
 	assert_eq(entry.x, 200.0,
 			"the exit X coordinate must be carried over verbatim when it already fits the new area's range")
@@ -250,7 +296,7 @@ func test_entry_position_clamps_when_new_area_is_smaller_on_the_crossed_axis() -
 	# dead zones." A synthetic small new_bounds (150px tall) makes an exit Y
 	# of 300px clearly out of range on purpose.
 	var new_bounds := Rect2(Vector2(0.0, 0.0), Vector2(200.0, 150.0))
-	var entry: Vector2 = WorldArea.compute_entry_position(300.0, WorldArea.Edge.EAST, new_bounds)
+	var entry: Vector2 = WorldArea.compute_entry_position(300.0, WorldArea.Edge.EAST, new_bounds, HEADROOM_INSET_PX)
 
 	assert_eq(entry.x, new_bounds.position.x + ENTRY_OFFSET_EAST_WEST_PX,
 			"the fixed (crossed-axis) coordinate must still be exactly one tile inward regardless of clamping " +

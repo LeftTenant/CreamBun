@@ -92,6 +92,8 @@ const GROUND_CELLS_CSV: String = (
 const APPROACH_OFFSET_PX: float = 48.0
 const SIMULATION_TICKS: int = 60
 
+const CollisionProbe := preload("res://tests/integration/world/shared/collision_probe.gd")
+
 
 func before_each() -> void:
 	# Player movement is gated on GameState.current_state == PLAYING
@@ -180,9 +182,9 @@ func _find_cell_with_collision_polygon(layer: TileMapLayer) -> Variant:
 ## `travel_px` must match however far the caller is actually going to drive
 ## the player past this check — it defaults to APPROACH_OFFSET_PX (the
 ## blocked-case corridor, from the start position up to the target itself),
-## but _find_ground_only_cell() below passes the full unobstructed travel
-## distance instead, since that test drives the player well past the target
-## cell, not just up to it.
+## and every caller left uses that default. (The collision-free-cell search
+## below needs a full-drive-distance sweep instead, and gets it from
+## CollisionProbe rather than from this function.)
 ##
 ## Collision polygons in this project are always the full-tile rectangle
 ## (-16,-8, 16,-8, 16,8, -16,8) in tile-local coordinates (see the
@@ -254,39 +256,46 @@ func _find_collision_cell_with_clear_approach(layer: TileMapLayer) -> Variant:
 	return null
 
 
-## Find a cell painted on `ground` but not on `solids` — a tile with no
-## collision, for the "walks straight across" contrast test. Also rejects
-## any candidate whose approach corridor (_is_approach_corridor_clear()) is
-## contaminated by a Solids tile, so the "crosses uninterrupted" test isn't
-## driven at a Ground-only tile that happens to sit right next to an
-## unrelated collidable tile.
+## Find a `ground` cell the player can drive across without being stopped by
+## anything at all, for the "walks straight across" contrast test.
 ##
-## Unlike the blocked-case caller (_find_collision_cell_with_clear_approach()),
-## this test drives the player the FULL unobstructed distance past the
-## target (speed * SIMULATION_TICKS physics ticks), not just up to it — so
-## the corridor check here must cover that same full distance, or a Solids
-## tile sitting past the target but still within the drive could block the
-## player without the check ever noticing. `player` is only used to read its
-## "speed" property (matching _drive_player_right_toward()'s own math) — it
-## is never moved by this function.
-func _find_ground_only_cell(ground: TileMapLayer, solids: TileMapLayer, player: CharacterBody2D) -> Variant:
+## REPLACES _find_ground_only_cell(ground, solids, player), which defined its
+## candidates as "painted on Ground but not on Solids" and checked their
+## approach corridor against the Solids layer only. That definition rested on
+## an assumption that no longer holds: that the Ground layer never collides.
+## It does now — meadow.tscn's grass atlas carries edge variants whose polygons
+## fence off regions of otherwise-walkable ground (design doc §6.1) — so the
+## old search happily returned cells whose corridor ran straight through a
+## fence, and the test failed reporting "something is unexpectedly blocking
+## movement" about terrain that was blocking movement entirely on purpose.
+##
+## The replacement asks the real question directly: is the swept path the
+## player is about to be driven along free of EVERY collidable thing in the
+## area — either tile layer, and props? CollisionProbe answers that from the
+## area's actual collision geometry rather than from a layer-name heuristic.
+##
+## Note this test drives the player the FULL unobstructed distance PAST the
+## target (speed * SIMULATION_TICKS ticks), not just up to it, so the swept
+## path checked here covers that whole distance. `player` supplies its speed
+## and its collider extent; it is never moved by this function.
+func _find_collision_free_cell(ground: TileMapLayer, area: Node2D, player: CharacterBody2D) -> Variant:
 	# Matches the "unobstructed_px" math in _drive_player_right_toward() —
 	# the actual distance the player will be driven for this test.
 	var speed: float = player.get("speed")
 	var travel_px: float = speed * SIMULATION_TICKS / float(Engine.physics_ticks_per_second)
 
-	var solid_cells: Dictionary = _as_cell_set(solids.get_used_cells())
-	for cell in ground.get_used_cells():
-		if solid_cells.has(cell):
-			continue
+	var collider: Rect2 = CollisionProbe.player_collider_extent(player)
+	var obstacles: Array[PackedVector2Array] = CollisionProbe.obstacle_polygons(area)
 
+	for cell in ground.get_used_cells():
 		var target_global: Vector2 = _cell_to_global(ground, cell)
-		if _is_approach_corridor_clear(solids, target_global, null, travel_px):
+		# _drive_player_right_toward() starts APPROACH_OFFSET_PX west of the
+		# target and drives east for travel_px, so that is the span to clear.
+		var start_x: float = target_global.x - APPROACH_OFFSET_PX
+		var sweep_start := Vector2(start_x, target_global.y)
+		var sweep_end := Vector2(start_x + travel_px, target_global.y)
+		if CollisionProbe.is_path_clear(collider, sweep_start, sweep_end, obstacles):
 			return cell
-		# else: a Solids tile with collision sits in this candidate's
-		# approach corridor — skip it and keep looking, so a genuine
-		# "blocked early" bug can't be confused with an unrelated tile
-		# getting in the way.
 
 	return null
 
@@ -504,7 +513,8 @@ func test_at_least_one_solids_tile_has_a_collision_polygon() -> void:
 
 
 # ---------------------------------------------------------------------------
-# Collision response: Solids blocks, Ground-only does not (design doc §6, §9)
+# Collision response: a collidable tile blocks on EITHER layer; a tile with no
+# collision near it does not (design doc §6, §6.1, §9)
 # ---------------------------------------------------------------------------
 
 func test_player_stops_at_a_solids_tile_with_collision() -> void:
@@ -562,51 +572,139 @@ func test_player_stops_at_a_solids_tile_with_collision() -> void:
 			) % [player.global_position.x, result.target_x])
 
 
-func test_player_crosses_a_ground_only_tile_uninterrupted() -> void:
+func test_at_least_one_ground_tile_has_a_collision_polygon() -> void:
+	# The Ground layer is no longer collision-free. meadow.tscn's grass atlas
+	# carries eight edge variants whose polygons are thin strips along one or
+	# two tile borders (design doc §6.1's "flat boundary on the unsorted
+	# layer" case), painted to fence off regions of otherwise-walkable grass.
+	#
+	# This asserts the pattern is actually in use, which is what makes the
+	# blocked-by-Ground test below meaningful rather than vacuous.
 	var world: Node = _instantiate_world()
 	if world == null:
 		return
 
 	var ground: TileMapLayer = world.find_child("Ground", true, false) as TileMapLayer
-	var solids: TileMapLayer = world.find_child("Solids", true, false) as TileMapLayer
-	var player: CharacterBody2D = world.find_child("Player", true, false) as CharacterBody2D
 	assert_not_null(ground, "world.tscn's instantiated tree should contain a TileMapLayer named 'Ground' (post-Slice-8 this lives on the instanced meadow WorldArea, not world.tscn's own root)")
-	assert_not_null(solids, "world.tscn's instantiated tree should contain a TileMapLayer named 'Solids' (post-Slice-8 this lives on the instanced meadow WorldArea, not world.tscn's own root)")
-	assert_not_null(player, "world.tscn must have a child node named 'Player'")
-	if ground == null or solids == null or player == null:
+	if ground == null:
 		return
 
-	var ground_only_cell: Variant = _find_ground_only_cell(ground, solids, player)
-	assert_not_null(ground_only_cell,
+	var collidable_cell: Variant = _find_cell_with_collision_polygon(ground)
+	assert_not_null(collidable_cell,
 			(
-			"Ground needs at least one cell that is not also painted on "
-			+ "Solids, with a clear 48px approach corridor to its west, for "
-			+ "this contrast test — if a Ground-only cell exists but this "
-			+ "still fails, every candidate's approach is contaminated by a "
-			+ "nearby Solids tile (see _is_approach_corridor_clear())."
+			"at least one tile painted on Ground should have a TileData "
+			+ "collision polygon on physics layer 0 — the meadow's fenced "
+			+ "regions are built from the grass atlas's edge variants "
+			+ "(design doc §6.1). None of Ground's painted cells reported one."
 			))
-	if ground_only_cell == null:
+
+
+func test_player_stops_at_a_ground_edge_tile_with_collision() -> void:
+	# The Ground-layer twin of test_player_stops_at_a_solids_tile_with_collision()
+	# above. Collision is a property of the TILE, not of the layer it happens to
+	# be painted on (design doc §6.1) — so a collidable Ground tile must stop
+	# the player exactly as a Solids one does. Nothing in the engine guarantees
+	# that for us; the two layers differ in y_sort_enabled, and it would be easy
+	# to end up with a layer whose collision was disabled outright.
+	var world: Node = _instantiate_world()
+	if world == null:
+		return
+
+	var ground: TileMapLayer = world.find_child("Ground", true, false) as TileMapLayer
+	var player: CharacterBody2D = world.find_child("Player", true, false) as CharacterBody2D
+	assert_not_null(ground, "world.tscn's instantiated tree should contain a TileMapLayer named 'Ground'")
+	assert_not_null(player, "world.tscn must have a child node named 'Player'")
+	if ground == null or player == null:
+		return
+
+	var edge_cell: Variant = _find_collision_cell_with_clear_approach(ground)
+	assert_not_null(edge_cell,
+			(
+			"Ground needs at least one tile with a collision polygon AND a "
+			+ "clear 48px approach corridor to its west for this test to drive "
+			+ "the player toward (see _is_approach_corridor_clear())."
+			))
+	if edge_cell == null:
 		return
 
 	await wait_physics_frames(2)
 
-	var target_global: Vector2 = _cell_to_global(ground, ground_only_cell)
+	var target_global: Vector2 = _cell_to_global(ground, edge_cell)
 	var result: Dictionary = _drive_player_right_toward(player, target_global)
 
-	# For contrast with the blocked case above: the player should cover
+	assert_lt(result.traveled_px, result.unobstructed_px * 0.5,
+			(
+			"player should be blocked well short of the unobstructed distance "
+			+ "by a Ground tile with collision (travelled %.1fpx of an "
+			+ "unobstructed %.1fpx) — a collidable tile blocks movement on "
+			+ "whichever layer it is painted on, Ground included."
+			) % [result.traveled_px, result.unobstructed_px])
+
+	# "Travelled less than half" on its own would also be satisfied by a player
+	# stopped by something unrelated much earlier in the run — which is exactly
+	# the failure mode that made the old hard-coded lanes in this suite go bad.
+	# Pinning the stop to within a tile of the target cell is what attributes
+	# the block to the tile the player was actually driven at.
+	var distance_to_target: float = absf(player.global_position.x - result.target_x)
+	assert_lt(distance_to_target, 32.0,
+			(
+			"player stopped %.1fpx from the target Ground tile's centre "
+			+ "(x=%.1f vs %.1f) — further than one tile width, so something "
+			+ "other than that tile stopped them and this test would be "
+			+ "asserting the wrong thing."
+			) % [distance_to_target, player.global_position.x, result.target_x])
+
+
+func test_player_crosses_a_collision_free_tile_uninterrupted() -> void:
+	# RENAMED from test_player_crosses_a_ground_only_tile_uninterrupted().
+	# "Ground-only" was the old shorthand for "has no collision", which stopped
+	# being true when the Ground layer gained collidable edge tiles — see
+	# _find_collision_free_cell() for the full note. The behaviour under test is
+	# unchanged: somewhere with nothing solid in it, the player walks straight
+	# across, in contrast to the two blocked cases above.
+	var world: Node = _instantiate_world()
+	if world == null:
+		return
+
+	var area: Node2D = world.get_node_or_null("ActiveArea").get_child(0) as Node2D
+	var ground: TileMapLayer = world.find_child("Ground", true, false) as TileMapLayer
+	var player: CharacterBody2D = world.find_child("Player", true, false) as CharacterBody2D
+	assert_not_null(area, "world.tscn should have an instanced WorldArea under ActiveArea")
+	assert_not_null(ground, "world.tscn's instantiated tree should contain a TileMapLayer named 'Ground' (post-Slice-8 this lives on the instanced meadow WorldArea, not world.tscn's own root)")
+	assert_not_null(player, "world.tscn must have a child node named 'Player'")
+	if area == null or ground == null or player == null:
+		return
+
+	var clear_cell: Variant = _find_collision_free_cell(ground, area, player)
+	assert_not_null(clear_cell,
+			(
+			"the meadow needs at least one painted cell the player can be "
+			+ "driven fully across without meeting any collision at all — "
+			+ "neither tile layer nor a prop — for this contrast test. If this "
+			+ "fails, the map has been painted too densely to contain one."
+			))
+	if clear_cell == null:
+		return
+
+	await wait_physics_frames(2)
+
+	var target_global: Vector2 = _cell_to_global(ground, clear_cell)
+	var result: Dictionary = _drive_player_right_toward(player, target_global)
+
+	# For contrast with the blocked cases above: the player should cover
 	# essentially the full unobstructed distance and end up past the
 	# tile's centre — nothing stopped it.
 	assert_gt(result.traveled_px, result.unobstructed_px * 0.9,
 			(
 			"player should travel close to the unobstructed distance across "
-			+ "a Ground-only tile (travelled %.1fpx of an unobstructed "
+			+ "a collision-free tile (travelled %.1fpx of an unobstructed "
 			+ "%.1fpx) — if this fails, something is unexpectedly blocking "
-			+ "movement over a tile with no Solids collision."
+			+ "movement over a tile with no collision anywhere near it."
 			) % [result.traveled_px, result.unobstructed_px])
 
 	assert_gt(player.global_position.x, result.target_x,
 			(
 			"player's final x position (%.1f) should be greater than the "
-			+ "Ground-only tile's centre x (%.1f) — the player should "
+			+ "collision-free tile's centre x (%.1f) — the player should "
 			+ "advance onto AND across it, not stop at or before it."
 			) % [player.global_position.x, result.target_x])

@@ -87,7 +87,16 @@ const CORNER_DEAD_ZONE_PX: float = 32.0
 ## _linked_edge_rects()'s doc comment in world_area.gd for why (round 2 of
 ## code review on this slice found the un-inset version left the NE/NW
 ## corners with zero px of actual exclusion).
-const NORTH_WALL_HEADROOM_INSET_PX: float = 32.0
+##
+## Derived, not mirrored: the inset is now a function of the player's real
+## geometry (WorldArea.north_headroom_inset()), so a test that hard-coded it
+## would fail with a confusing "expected 48 got 64" the moment the art changed,
+## instead of pointing at the collider that moved. These tests check that the
+## SYSTEM is self-consistent; whether the derivation itself is right is checked
+## against the live player scene by test_collision_geometry_invariants.gd.
+var NORTH_WALL_HEADROOM_INSET_PX: float = 0.0
+
+const CollisionProbe := preload("res://tests/integration/world/shared/collision_probe.gd")
 
 ## Minimum viewport size an area must cover, design.md §12.3's "at least one
 ## viewport in each dimension" floor — restated here rather than referenced
@@ -108,6 +117,29 @@ const DRIVE_TICKS: int = 300
 
 func before_each() -> void:
 	GameState.change_state(GameState.State.PLAYING)
+	NORTH_WALL_HEADROOM_INSET_PX = _derive_headroom_inset()
+
+
+## The north headroom inset the world will actually build with, derived from
+## the project's real player scene (WorldArea.north_headroom_inset()).
+##
+## Instantiated standalone rather than read off a constant: there is no longer
+## a constant to read. Kept as a helper on each suite that needs it rather than
+## hoisted somewhere shared, matching this project's convention of
+## self-contained test files.
+func _derive_headroom_inset() -> float:
+	var packed: PackedScene = load("res://player/player.tscn")
+	if packed == null:
+		fail_test("player/player.tscn should load as a PackedScene")
+		return 0.0
+	var player: CharacterBody2D = packed.instantiate() as CharacterBody2D
+	if player == null:
+		fail_test("player.tscn's root must be a CharacterBody2D")
+		return 0.0
+	autofree(player)
+	return WorldArea.north_headroom_inset(
+			player.get_visual_extent(), player.get_collider_extent())
+
 
 
 func after_each() -> void:
@@ -562,6 +594,53 @@ func test_player_near_south_edge_corner_does_not_trigger_edge_reached() -> void:
 # edge_reached fires exactly once, clear of any corner, on both axes
 # ---------------------------------------------------------------------------
 
+## A player-origin Y inside the EAST edge's active (non-corner) stretch, along
+## which the player can walk the last `approach_px` up to that edge without
+## being stopped by painted terrain or a prop first.
+##
+## Previously both "clear middle of the edge" tests just used the edge's exact
+## tangential midpoint. That is clear of the corner dead zones by construction,
+## but says nothing about what has been painted in between — and once the
+## meadow's Ground layer gained collidable edge tiles (design doc §6.1), the
+## south edge's midpoint column ran into one, so the player never reached the
+## trigger and the test failed for an unrelated reason. CollisionProbe searches
+## outward from that same midpoint, so the lane is still as central as the map
+## allows; it just no longer assumes central means empty.
+func _clear_approach_row_for_east_edge(area: WorldArea, player: CharacterBody2D,
+		bounds: Rect2, approach_px: float) -> float:
+	var collider: Rect2 = CollisionProbe.player_collider_extent(player)
+	var row: float = CollisionProbe.find_clear_row(
+			area, collider,
+			bounds.end.x - approach_px, bounds.end.x,
+			_playable_north_boundary(bounds) + CORNER_DEAD_ZONE_PX,
+			bounds.end.y - CORNER_DEAD_ZONE_PX)
+	if is_nan(row):
+		fail_test("no obstacle-free approach row exists in the east edge's active (non-corner) stretch — the player cannot reach the trigger to test it. Check what was painted onto Ground/Solids near that edge.")
+	return row
+
+
+## The vertical mirror of _clear_approach_row_for_east_edge(), for the SOUTH
+## edge's active stretch.
+func _clear_approach_column_for_south_edge(area: WorldArea, player: CharacterBody2D,
+		bounds: Rect2, approach_px: float) -> float:
+	var collider: Rect2 = CollisionProbe.player_collider_extent(player)
+	var column: float = CollisionProbe.find_clear_column(
+			area, collider,
+			bounds.end.y - approach_px, bounds.end.y,
+			bounds.position.x + CORNER_DEAD_ZONE_PX,
+			bounds.end.x - CORNER_DEAD_ZONE_PX)
+	if is_nan(column):
+		fail_test("no obstacle-free approach column exists in the south edge's active (non-corner) stretch — the player cannot reach the trigger to test it. Check what was painted onto Ground/Solids near that edge.")
+	return column
+
+
+## The north edge's playable-facing boundary — the same inset boundary
+## world_area.gd's _playable_boundary() computes, restated here per this
+## suite's "mirror the constant, don't read it" convention.
+func _playable_north_boundary(bounds: Rect2) -> float:
+	return bounds.position.y + NORTH_WALL_HEADROOM_INSET_PX
+
+
 func test_edge_reached_emitted_once_crossing_the_clear_middle_of_east_edge() -> void:
 	var world: Node = _instantiate_world()
 	if world == null:
@@ -579,9 +658,13 @@ func test_edge_reached_emitted_once_crossing_the_clear_middle_of_east_edge() -> 
 	await wait_physics_frames(2)
 	watch_signals(area)
 
-	# Clear of both corners: dead-centre of the east edge's tangential (Y)
-	# span.
-	var start: Vector2 = Vector2(bounds.end.x - 96.0, (bounds.position.y + bounds.end.y) / 2.0)
+	# Clear of both corners AND of anything painted in the approach: as close to
+	# the centre of the east edge's tangential (Y) span as the map allows.
+	var clear_y: float = _clear_approach_row_for_east_edge(area, player, bounds, 96.0)
+	if is_nan(clear_y):
+		return
+
+	var start: Vector2 = Vector2(bounds.end.x - 96.0, clear_y)
 	player.global_position = start
 	player.velocity = Vector2.ZERO
 
@@ -615,7 +698,11 @@ func test_edge_reached_emitted_once_crossing_the_clear_middle_of_south_edge() ->
 	await wait_physics_frames(2)
 	watch_signals(area)
 
-	var start: Vector2 = Vector2((bounds.position.x + bounds.end.x) / 2.0, bounds.end.y - 96.0)
+	var clear_x: float = _clear_approach_column_for_south_edge(area, player, bounds, 96.0)
+	if is_nan(clear_x):
+		return
+
+	var start: Vector2 = Vector2(clear_x, bounds.end.y - 96.0)
 	player.global_position = start
 	player.velocity = Vector2.ZERO
 

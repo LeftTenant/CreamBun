@@ -33,9 +33,10 @@ class_name TestTerrainTileDimensions
 extends GutTest
 
 
-# The Slice 2 tile size (design doc §4). Both terrain textures must match
-# this exactly — a TileSetAtlasSource slices its texture assuming every tile
-# cell is this size, so a mismatched source image misaligns the whole atlas.
+# The Slice 2 tile size (design doc §4). A TileSetAtlasSource slices its
+# texture into cells of exactly this size starting at (0, 0), so a terrain
+# texture whose dimensions aren't a whole multiple of it misaligns every tile
+# in the atlas after the first.
 const EXPECTED_SIZE: Vector2i = Vector2i(32, 16)
 
 const GRASS_PATH: String = "res://resources/sprites/terrain/grass.png"
@@ -64,16 +65,34 @@ func _load_texture_size(path: String) -> Vector2i:
 # Tests
 # ---------------------------------------------------------------------------
 
-func test_grass_png_is_32x16() -> void:
-	# Rescaled from 64×32 to 32×16 to match the new TILE_SIZE (design doc
-	# §4.1). Fails until the art file itself is resized on disk.
+func test_grass_png_tiles_cleanly_at_32x16() -> void:
+	# RENAMED from test_grass_png_is_32x16(). grass.png is no longer a single
+	# tile: it is now a horizontal strip of a plain grass tile plus eight
+	# boundary-edge variants (atlas coords 1:0-8:0 in meadow.tscn's TileSet),
+	# each carrying a thin collision polygon along one or two of its borders
+	# (design doc §6.1). The invariant worth guarding was never "this file is
+	# exactly one tile" — it is "this file slices into whole 32x16 cells", so
+	# that is what is asserted now. Asserting the old exact size would fail
+	# every time an artist adds a variant, which is not a defect.
 	var size: Vector2i = _load_texture_size(GRASS_PATH)
-	assert_eq(size, EXPECTED_SIZE,
-			"grass.png should be 32×16 after the Slice 2 tile-size rescale (got %s)" % size)
+	if size == Vector2i.ZERO:
+		return
+
+	assert_eq(size.y, EXPECTED_SIZE.y,
+			"grass.png must be exactly %dpx tall — it is a single-row atlas strip, so a taller image would make the second row's cells silently unreachable (got %s)"
+					% [EXPECTED_SIZE.y, size])
+	assert_eq(size.x % EXPECTED_SIZE.x, 0,
+			"grass.png's width (%dpx) must be a whole multiple of the %dpx tile width — a partial trailing cell misaligns nothing on its own but leaves an unusable sliver tile in the atlas"
+					% [size.x, EXPECTED_SIZE.x])
+	assert_gt(size.x, 0,
+			"grass.png must contain at least one 32x16 tile")
 
 
 func test_flower_grass_png_is_32x16() -> void:
-	# Same rescale as grass.png — see design doc §4.1.
+	# Unlike grass.png above, this one is still a single tile (plus an
+	# alternative tile, which lives in the TileSet rather than the texture) —
+	# so the exact-size assertion still describes the real invariant here.
+	# See design doc §4.1.
 	var size: Vector2i = _load_texture_size(FLOWER_GRASS_PATH)
 	assert_eq(size, EXPECTED_SIZE,
 			"'flower grass.png' should be 32×16 after the Slice 2 tile-size rescale (got %s)" % size)
