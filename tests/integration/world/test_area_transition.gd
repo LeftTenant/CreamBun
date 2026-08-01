@@ -70,6 +70,26 @@ const TRANSITION_TIMEOUT_TICKS: int = 300  # ~5s at 60Hz
 ## tick count (see that test for why the hardcoded version was wrong).
 const DEBOUNCE_EAST_WEST_PX: float = 16.0
 
+## design.md §12.4's north headroom inset and §12.5's "one tile inward" spawn
+## offset, mirrored here per this suite's "mirror the constant, don't read it"
+## convention. A north-entering player lands at the sum of the two below the
+## destination area's true painted north edge.
+##
+## The inset was retuned from 32 to 16 when the player's collider was raised
+## off the origin (design.md §10). These are spelled as named constants rather
+## than a literal `+ 32.0 + 16.0` precisely because that literal is what had to
+## be hunted down and changed when it moved.
+## Derived, not mirrored: the inset is now a function of the player's real
+## geometry (WorldArea.north_headroom_inset()), so a test that hard-coded it
+## would fail with a confusing "expected 48 got 64" the moment the art changed,
+## instead of pointing at the collider that moved. These tests check that the
+## SYSTEM is self-consistent; whether the derivation itself is right is checked
+## against the live player scene by test_collision_geometry_invariants.gd.
+var NORTH_WALL_HEADROOM_INSET_PX: float = 0.0
+const ENTRY_OFFSET_NORTH_SOUTH_PX: float = 16.0
+
+const CollisionProbe := preload("res://tests/integration/world/shared/collision_probe.gd")
+
 
 # ---------------------------------------------------------------------------
 # Setup / teardown
@@ -77,6 +97,29 @@ const DEBOUNCE_EAST_WEST_PX: float = 16.0
 
 func before_each() -> void:
 	GameState.change_state(GameState.State.PLAYING)
+	NORTH_WALL_HEADROOM_INSET_PX = _derive_headroom_inset()
+
+
+## The north headroom inset the world will actually build with, derived from
+## the project's real player scene (WorldArea.north_headroom_inset()).
+##
+## Instantiated standalone rather than read off a constant: there is no longer
+## a constant to read. Kept as a helper on each suite that needs it rather than
+## hoisted somewhere shared, matching this project's convention of
+## self-contained test files.
+func _derive_headroom_inset() -> float:
+	var packed: PackedScene = load("res://player/player.tscn")
+	if packed == null:
+		fail_test("player/player.tscn should load as a PackedScene")
+		return 0.0
+	var player: CharacterBody2D = packed.instantiate() as CharacterBody2D
+	if player == null:
+		fail_test("player.tscn's root must be a CharacterBody2D")
+		return 0.0
+	autofree(player)
+	return WorldArea.north_headroom_inset(
+			player.get_visual_extent(), player.get_collider_extent())
+
 
 
 func after_each() -> void:
@@ -771,7 +814,20 @@ func test_north_south_link_transitions_meadow_south_to_orchard_north() -> void:
 		return
 
 	var bounds: Rect2 = area.get_bounds_px()
-	var exit_x: float = (bounds.position.x + bounds.end.x) / 2.0
+	# As central as the map allows, but derived from what is actually painted:
+	# the meadow's Ground layer now carries collidable edge tiles (design.md
+	# §6.1), and one of them sits in the south edge's exact midpoint column —
+	# the player would be fenced in before ever reaching the trigger. See
+	# test_edge_triggers.gd's identical helper for the fuller note.
+	var collider: Rect2 = CollisionProbe.player_collider_extent(player)
+	var exit_x: float = CollisionProbe.find_clear_column(
+			area, collider,
+			bounds.end.y - 96.0, bounds.end.y,
+			bounds.position.x + 32.0, bounds.end.x - 32.0)
+	if is_nan(exit_x):
+		fail_test("no obstacle-free approach column exists in meadow's south edge active stretch — the player cannot reach the trigger to test the north/south link")
+		return
+
 	player.global_position = Vector2(exit_x, bounds.end.y - 96.0)
 	player.velocity = Vector2.ZERO
 	await wait_physics_frames(2)
@@ -798,12 +854,16 @@ func test_north_south_link_transitions_meadow_south_to_orchard_north() -> void:
 			"the player's X on arrival should match the X they exited meadow's south edge at, carried over verbatim")
 	# design.md §12.5's correction: "one tile inward" on a NORTH entry is
 	# measured from the north edge's PLAYABLE-FACING boundary
-	# (bounds.position.y + NORTH_WALL_HEADROOM_INSET_PX, 32px), not the raw
-	# painted edge — landing only 16px in from the true edge (the naive
-	# reading) would leave the player still inside the north trigger's own
-	# 32px-deep zone, an immediate involuntary bounce back the way they came.
-	assert_almost_eq(player.global_position.y, new_bounds.position.y + 32.0 + 16.0, 2.0,
-			"the player's Y on arrival should sit exactly one tile (16px) inward from orchard's north edge's playable-facing boundary (32px south of the true painted edge, design.md §12.5) — i.e. bounds.position.y + 48px")
+	# (bounds.position.y + NORTH_WALL_HEADROOM_INSET_PX), not the raw painted
+	# edge — landing one tile in from the TRUE edge (the naive reading) would
+	# leave the player on the north trigger's own inner face, an immediate
+	# involuntary bounce back the way they came.
+	var expected_entry_y: float = (
+			new_bounds.position.y + NORTH_WALL_HEADROOM_INSET_PX + ENTRY_OFFSET_NORTH_SOUTH_PX)
+	assert_almost_eq(player.global_position.y, expected_entry_y, 2.0,
+			("the player's Y on arrival should sit exactly one tile (%.0fpx) inward from orchard's north edge's playable-facing boundary (%.0fpx south of the true painted edge, design.md §12.5) — i.e. bounds.position.y + %.0fpx")
+					% [ENTRY_OFFSET_NORTH_SOUTH_PX, NORTH_WALL_HEADROOM_INSET_PX,
+							NORTH_WALL_HEADROOM_INSET_PX + ENTRY_OFFSET_NORTH_SOUTH_PX])
 
 
 # ---------------------------------------------------------------------------

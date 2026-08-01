@@ -71,19 +71,16 @@ const INTERACTABLE_LAYER_BIT: int = 4
 ## Thickness (px) of an auto-built perimeter wall or edge trigger (design doc
 ## §12.4). Not derived from TILE_SIZE — a wall isn't a tile, it just needs to
 ## be thick enough to reliably stop/detect the player (whose collider is a
-## 20x10 RectangleShape2D, player/player.tscn) and thin enough not to
+## 22x10 CapsuleShape2D, player/player.tscn) and thin enough not to
 ## visually eat into the playable area from outside the map's painted edge,
 ## where it sits.
 const PERIMETER_WALL_THICKNESS_PX: float = 32.0
 
-## How far south of the painted floor's true north edge the north wall's (or
-## trigger's) player-facing surface sits, in px — see _edge_rect()'s doc
-## comment for why only the north edge is inset like this. Chosen as one
-## sprite-height (matching the AnimatedSprite2D's 32px frame height,
-## player/player.tscn) so the camera always has a full sprite-height of
-## headroom above the player's feet, even when they are stopped flush
-## against the edge.
-const NORTH_WALL_HEADROOM_INSET_PX: float = 32.0
+## NOTE — NORTH_WALL_HEADROOM_INSET_PX used to live here as a hand-maintained
+## constant (32, then 16). It is now DERIVED, per area build, from the player's
+## real geometry: see north_headroom_inset() below. It was removed rather than
+## kept alongside the derivation so there is exactly one answer to "how far in
+## does the north edge sit", and it cannot drift from the art it describes.
 
 ## Corner exclusion (design doc §12.4): a horizontal edge (north/south) is
 ## inset 1 tile (32px, TILE_SIZE.x) from each end; a vertical edge
@@ -155,6 +152,14 @@ var _walls_built: bool = false
 var _debounce_edge: int = -1
 var _debounce_armed: bool = true
 
+## The north headroom inset this area's perimeter was actually built with, in
+## px (north_headroom_inset(), passed in by world.gd at build time). Stored
+## because _physics_process()'s debounce check needs the same playable boundary
+## the walls were placed against, and it has no other way to reach the player's
+## geometry. Zero until build_perimeter_walls() has run — harmless, since the
+## debounce only ever runs on an area whose perimeter is already built.
+var _headroom_inset_px: float = 0.0
+
 
 # ---------------------------------------------------------------------------
 # Built-in overrides
@@ -183,7 +188,7 @@ func _physics_process(_delta: float) -> void:
 
 	var bounds: Rect2 = get_bounds_px()
 	var edge: Edge = _debounce_edge as Edge
-	var boundary: float = _playable_boundary(edge, bounds)
+	var boundary: float = _playable_boundary(edge, bounds, _headroom_inset_px)
 	var distance: float
 	if edge == Edge.EAST or edge == Edge.WEST:
 		distance = absf(player.global_position.x - boundary)
@@ -240,18 +245,19 @@ func get_bounds_px() -> Rect2:
 ## Called once by world.gd right after an area is instanced and added under
 ## ActiveArea — both for the starting area and for every area entered via a
 ## transition.
-func build_perimeter_walls() -> void:
+func build_perimeter_walls(headroom_inset_px: float) -> void:
 	if _walls_built:
 		# Already built — guards area-transition reloads against duplicating
 		# wall/trigger nodes under auto-renamed names.
 		return
 
+	_headroom_inset_px = headroom_inset_px
 	var bounds: Rect2 = get_bounds_px()
 
-	_build_edge("PerimeterWallNorth", "EdgeTriggerNorth", Edge.NORTH, neighbour_north, bounds)
-	_build_edge("PerimeterWallEast", "EdgeTriggerEast", Edge.EAST, neighbour_east, bounds)
-	_build_edge("PerimeterWallSouth", "EdgeTriggerSouth", Edge.SOUTH, neighbour_south, bounds)
-	_build_edge("PerimeterWallWest", "EdgeTriggerWest", Edge.WEST, neighbour_west, bounds)
+	_build_edge("PerimeterWallNorth", "EdgeTriggerNorth", Edge.NORTH, neighbour_north, bounds, headroom_inset_px)
+	_build_edge("PerimeterWallEast", "EdgeTriggerEast", Edge.EAST, neighbour_east, bounds, headroom_inset_px)
+	_build_edge("PerimeterWallSouth", "EdgeTriggerSouth", Edge.SOUTH, neighbour_south, bounds, headroom_inset_px)
+	_build_edge("PerimeterWallWest", "EdgeTriggerWest", Edge.WEST, neighbour_west, bounds, headroom_inset_px)
 
 	_walls_built = true
 
@@ -291,6 +297,41 @@ func begin_entry_debounce(edge: Edge) -> void:
 # test_world_area_edge_transition.gd). WorldArea is the natural owner: every
 # one of them operates purely on Edge/geometry concepts this class already
 # owns (TILE_SIZE, get_bounds_px(), Edge/edge_reached above).
+
+## How far south of a painted floor's true north edge that edge's wall (or
+## trigger) must sit, in px, for a player with this geometry — design doc
+## §12.4's headroom rule, as arithmetic rather than a maintained constant.
+##
+## Both arguments are relative to the player's node origin, as published by
+## player.gd's get_visual_extent() / get_collider_extent(). Only their Y
+## components matter here.
+##
+## The reasoning (see _edge_rect() for WHY the north edge is special at all):
+## Camera2D.limit_top clamps the camera's VIEW RECT to the painted north edge,
+## and the player is feet-anchored, so the drawn character sits ENTIRELY above
+## their own origin. Stopped flush against a boundary at y = B, the player's
+## origin is pushed to `B - collider.position.y` (their collider's top edge is
+## what touches), and the character's top pixel therefore lands at
+##
+##     B - collider.position.y + visual.position.y
+##
+## i.e. `collider.position.y - visual.position.y` px ABOVE B. Inset the
+## boundary by at least that much and the whole character stays inside the
+## clamped view; inset by less and the top of Cream Bun is cut off at the north
+## edge of every map.
+##
+## Rounded UP to a whole tile row so the resulting non-walkable backdrop strip
+## (§12.4) is an exact number of tiles — a designer can see and count it.
+##
+## Deliberately a pure static taking plain Rect2s rather than a method reaching
+## for the player: it keeps this testable with arbitrary geometry, keeps
+## WorldArea free of any dependency on the player scene, and leaves the
+## orchestrator (world.gd) responsible for connecting the two, per CLAUDE.md's
+## dependency-injection rule.
+static func north_headroom_inset(visual_extent: Rect2, collider_extent: Rect2) -> float:
+	var needed: float = collider_extent.position.y - visual_extent.position.y
+	return ceilf(maxf(needed, 0.0) / float(TILE_SIZE.y)) * float(TILE_SIZE.y)
+
 
 ## design doc §12.5's exit-edge -> entry-edge table.
 static func opposite_edge(edge: Edge) -> Edge:
@@ -342,9 +383,10 @@ static func is_debounce_armed(edge: Edge, distance_from_edge_px: float) -> bool:
 ## valid range when it doesn't already fit (e.g. a smaller destination area),
 ## kept clear of that area's own corner dead zones (design doc §12.5's
 ## clamp-toward-midpoint note).
-static func compute_entry_position(exit_coordinate: float, exit_edge: Edge, new_bounds: Rect2) -> Vector2:
+static func compute_entry_position(exit_coordinate: float, exit_edge: Edge, new_bounds: Rect2,
+		headroom_inset_px: float) -> Vector2:
 	var entry_edge: Edge = opposite_edge(exit_edge)
-	var boundary: float = _playable_boundary(entry_edge, new_bounds)
+	var boundary: float = _playable_boundary(entry_edge, new_bounds, headroom_inset_px)
 
 	# Two actual shapes, not four per-edge branches: the crossed axis gets the
 	# playable boundary plus/minus the "one tile inward" offset (sign points
@@ -378,10 +420,10 @@ static func compute_entry_position(exit_coordinate: float, exit_edge: Edge, new_
 ## trigger placement) and compute_entry_position() (spawn placement) so both
 ## agree on where each edge's "real" boundary is without duplicating the
 ## north special-case in two places.
-static func _playable_boundary(edge: Edge, bounds: Rect2) -> float:
+static func _playable_boundary(edge: Edge, bounds: Rect2, headroom_inset_px: float) -> float:
 	match edge:
 		Edge.NORTH:
-			return bounds.position.y + NORTH_WALL_HEADROOM_INSET_PX
+			return bounds.position.y + headroom_inset_px
 		Edge.SOUTH:
 			return bounds.end.y
 		Edge.WEST:
@@ -405,26 +447,27 @@ static func _playable_boundary(edge: Edge, bounds: Rect2) -> float:
 ## The north rect carries a SECOND, unrelated asymmetry: its player-facing
 ## surface is inset NORTH_WALL_HEADROOM_INSET_PX south of the true painted
 ## edge, rather than sitting flush on it like the other three do. This
-## exists because the player is feet-anchored
-## (AnimatedSprite2D.offset = Vector2(0, -16), player/player.tscn) while
-## Camera2D.limit_top (world.gd's _set_camera_limits()) clamps the camera's
-## VIEW RECT — not the camera node — to the exact same bounds.position.y.
-## With a wall/trigger flush against that edge, stopping the player there
-## put their entire sprite above the clamped view rect: zero pixels of the
-## character visible (confirmed empirically). Insetting gives the camera a
-## permanent sprite-height of headroom above the player no matter how far
-## north they walk. The strip of painted ground between the true edge and
-## the inset boundary becomes a visual-only backdrop the player can see but
-## never stand on — a common convention in three-quarter/isometric views.
+## exists because the player is feet-anchored (the drawn character sits
+## entirely ABOVE the origin — AnimatedSprite2D.offset = Vector2(0, -16),
+## player/player.tscn) while Camera2D.limit_top (world.gd's
+## _set_camera_limits()) clamps the camera's VIEW RECT — not the camera node
+## — to the exact same bounds.position.y. With a wall/trigger flush against
+## that edge, stopping the player there put their entire sprite above the
+## clamped view rect: zero pixels of the character visible (confirmed
+## empirically). Insetting keeps the whole drawn character on screen no
+## matter how far north they walk — see NORTH_WALL_HEADROOM_INSET_PX for the
+## arithmetic that fixes its size. The strip of painted ground between the
+## true edge and the inset boundary becomes a visual-only backdrop the player
+## can see but never stand on — a common convention in three-quarter views.
 ## South/east/west don't have this problem (south already leaves headroom
 ## below the player; east/west only clip a few px of the sprite's
 ## transparent side padding), so only north gets the inset.
-static func _edge_rect(edge: Edge, bounds: Rect2) -> Rect2:
+static func _edge_rect(edge: Edge, bounds: Rect2, headroom_inset_px: float) -> Rect2:
 	match edge:
 		Edge.NORTH:
 			return Rect2(
 					bounds.position.x - PERIMETER_WALL_THICKNESS_PX,
-					bounds.position.y - PERIMETER_WALL_THICKNESS_PX + NORTH_WALL_HEADROOM_INSET_PX,
+					bounds.position.y - PERIMETER_WALL_THICKNESS_PX + headroom_inset_px,
 					bounds.size.x + PERIMETER_WALL_THICKNESS_PX * 2.0,
 					PERIMETER_WALL_THICKNESS_PX)
 		Edge.SOUTH:
@@ -469,8 +512,8 @@ static func _edge_rect(edge: Edge, bounds: Rect2) -> Rect2:
 ## bounds.position.x/end.x ± CORNER_DEAD_ZONE_PX. For east/west, the full rect
 ## already runs flush with bounds' top/bottom (those two edges are never
 ## corner-extended), so both stubs sit entirely inside it.
-static func _linked_edge_rects(edge: Edge, bounds: Rect2) -> Array[Rect2]:
-	var full: Rect2 = _edge_rect(edge, bounds)
+static func _linked_edge_rects(edge: Edge, bounds: Rect2, headroom_inset_px: float) -> Array[Rect2]:
+	var full: Rect2 = _edge_rect(edge, bounds, headroom_inset_px)
 	if edge == Edge.NORTH or edge == Edge.SOUTH:
 		var west_end: float = bounds.position.x + CORNER_DEAD_ZONE_PX
 		var east_end: float = bounds.end.x - CORNER_DEAD_ZONE_PX
@@ -490,7 +533,7 @@ static func _linked_edge_rects(edge: Edge, bounds: Rect2) -> Array[Rect2]:
 		# leaving the NE/NW corners with zero px of actual exclusion (a
 		# transition could start right at those corners). South has no such
 		# inset, so south_end is still measured from the raw bounds.end.y.
-		var north_end: float = _playable_boundary(Edge.NORTH, bounds) + CORNER_DEAD_ZONE_PX
+		var north_end: float = _playable_boundary(Edge.NORTH, bounds, headroom_inset_px) + CORNER_DEAD_ZONE_PX
 		var south_end: float = bounds.end.y - CORNER_DEAD_ZONE_PX
 		var north_stub := Rect2(full.position.x, full.position.y, full.size.x, north_end - full.position.y)
 		var middle := Rect2(full.position.x, north_end, full.size.x, south_end - north_end)
@@ -500,12 +543,13 @@ static func _linked_edge_rects(edge: Edge, bounds: Rect2) -> Array[Rect2]:
 
 ## Build whichever of a wall or a stub/trigger/stub split `edge` needs, based
 ## on whether `neighbour_path` is set.
-func _build_edge(wall_name: String, trigger_name: String, edge: Edge, neighbour_path: String, bounds: Rect2) -> void:
+func _build_edge(wall_name: String, trigger_name: String, edge: Edge, neighbour_path: String,
+		bounds: Rect2, headroom_inset_px: float) -> void:
 	if neighbour_path.is_empty():
-		_add_perimeter_wall(wall_name, _edge_rect(edge, bounds))
+		_add_perimeter_wall(wall_name, _edge_rect(edge, bounds, headroom_inset_px))
 		return
 
-	var rects: Array[Rect2] = _linked_edge_rects(edge, bounds)
+	var rects: Array[Rect2] = _linked_edge_rects(edge, bounds, headroom_inset_px)
 	_add_perimeter_wall(wall_name + "CornerA", rects[0])
 	_add_edge_trigger(trigger_name, rects[1], edge)
 	_add_perimeter_wall(wall_name + "CornerB", rects[2])

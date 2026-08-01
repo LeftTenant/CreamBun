@@ -26,11 +26,11 @@ of that tile within the same area is solid automatically.
    `TileMapLayer` node.
 2. Open the **TileSet** bottom panel. Click the TileSet resource in the Inspector to edit it.
 3. If the TileSet doesn't have a physics layer yet, add one: in the TileSet inspector, find
-   **Physics Layers**, add an entry, and tick the **world** checkbox under Collision Layer (the
-   named checkboxes — `world` / `player` / `interactable` — come from `project.godot`'s
-   `[layer_names]` section, already set up project-wide; you don't need to touch raw layer
-   numbers). Leave Collision Mask empty — terrain doesn't need to detect anything, only to be
-   detected.
+   **Physics Layers**, add an entry, open the expanded menu (⋮ button) and tick the **world**
+   checkbox under Collision Layer (the named checkboxes — `world` / `player` / `interactable` — 
+   come from `project.godot`'s `[layer_names]` section, already set up project-wide; you don't 
+   need to touch raw layer numbers). Leave Collision Mask empty — terrain doesn't need to detect 
+   anything, only to be detected.
 4. Switch to the **Tiles** tab, select the atlas tile (or **alternative tile**, if you're reusing
    one texture with a solid and non-solid variant — see the note below), then open its **Physics
    Layer 0** section and use the polygon tool to draw the collision shape. For a plain solid tile,
@@ -42,10 +42,26 @@ of that tile within the same area is solid automatically.
 
 **Important — collision belongs to the tile, not the layer.** `Ground` and `Solids` *within one
 area scene* share one `TileSet` resource, and physics is a property of a tile *in that resource*.
-If you accidentally paint a collidable tile onto `Ground`, it will still block movement there —
-the layer names (`Ground`/`Solids`) are an organizational convention for Y-sorting (§2 below), not
-a collision boundary. Keep solid tiles visually distinct from walkable ones so nobody paints one by
-accident.
+A collidable tile blocks movement wherever you paint it — `Ground` included. The layer names
+(`Ground`/`Solids`) are an organizational convention for Y-sorting (§2 below), not a collision
+boundary. Keep solid tiles visually distinct from walkable ones so nobody paints one by accident.
+
+**Which layer should a collidable tile go on?** Ask "does it need to draw *in front of* the
+player?", not "is it solid":
+
+- **`Solids`** — anything with height the player can walk behind: a cliff face, a wall, a water
+  edge with a raised lip. `Solids` is Y-sorted, which is what makes that work.
+- **`Ground`** — flat, ground-level boundaries the player walks up to but never behind: the edge
+  of a raised bank, a fence line, the lip of a path. `meadow.tscn` does this — the `grass` atlas
+  has eight **edge variants** (atlas coords `1:0` through `8:0`) whose polygons are thin strips
+  along one or two of the tile's borders rather than the full cell. Paint a run of them and you
+  fence off a region while the tiles still read as ordinary walkable grass. There's nothing to
+  sort against, so they belong on the unsorted layer.
+
+**Edge-strip polygons don't need to line up perfectly between tiles.** Adjacent edge variants
+often meet with a pixel or two of stagger — the player's collider is a capsule precisely so it
+slides along a run like that instead of catching on every step (see the Quick reference table and
+design doc §10). Draw the strips to look right; don't chase pixel-exact continuity.
 
 **The TileSet is embedded per area scene, not shared project-wide.** There's no standalone
 `.tres` TileSet file — each area scene (`meadow.tscn`, `orchard.tscn`, …) has its own embedded
@@ -119,13 +135,18 @@ cell, not the actual painted silhouette. If you paint an L-shape (or leave gaps)
 around *that* rectangle — leaving the parts of it you didn't paint as unwalled void a player can
 wander into. Keep `Ground` a solid rectangle so the computed bounds match what you actually see.
 
-**The north edge always eats a couple of rows.** The topmost ~2 tile rows of whatever `Ground` you
+**The north edge always eats a couple of rows.** The topmost tile rows of whatever `Ground` you
 paint are a **visual-only backdrop** — they render, but the player can never actually stand there.
-A built-in 32px inset (`NORTH_WALL_HEADROOM_INSET_PX` in `world_area.gd`) keeps the north wall (or
-trigger) that far south of the true painted edge, so the camera always has a full sprite-height of
-headroom above the player's feet even when they're stopped at the boundary. Paint that strip as
-normal ground for visual continuity — just don't expect the player to walk into it. (South,
-east, and west don't have this problem and sit flush with the true edge.)
+An automatic inset keeps the north wall (or trigger) that far south of the true painted edge, so
+the camera still shows all of Cream Bun even when they're stopped at the boundary. Paint that
+strip as normal ground for visual continuity — just don't expect the player to walk into it.
+(South, east, and west don't have this problem and sit flush with the true edge.)
+
+You don't set the inset, and there's no constant to look up: it's computed from the player
+sprite's own measurements every time an area loads (`WorldArea.north_headroom_inset()`), so it
+follows the art. At the time of writing it works out to **32px — two tile rows**. If the player
+art changes, this number changes with it and every area's backdrop strip grows or shrinks
+automatically; nothing per-area needs editing.
 
 **Nothing else needs manual wiring.** The camera's two-tile dead zone and edge-lock limits, and
 the perimeter walls/triggers, are all built automatically from `Ground`'s painted extent the first
@@ -212,8 +233,9 @@ but which explain what you'll see when testing a new link:
   ambiguous about which of two edges meeting at a corner you meant to cross. You can stand there;
   you just won't be teleported from there.
 - **The north edge's own headroom inset (§2) applies here too.** A north-south link still carries
-  the same ~2-row non-walkable backdrop strip on its north side; a north neighbour doesn't remove
-  it.
+  the same non-walkable backdrop strip on its north side; a north neighbour doesn't remove
+  it. It also shifts where a north-entering player lands: they spawn one tile in from the *inset*
+  boundary, not one tile in from the true painted edge.
 - **Reusing one area on two different edges is fine.** `orchard.tscn` links back to `meadow.tscn`
   on both its north and west edges — a single second area can stand in for multiple neighbours
   while you're prototyping, with no special handling needed.
@@ -241,9 +263,11 @@ Design rationale: `docs/features/world-collision/design.md` §12.2, §12.4, §12
 - **Props nested under a sub-node** (e.g. a "Props" grouping node) instead of being direct
   children of the area root. This silently breaks per-object Y-sort — the whole group sorts as one
   block against the player rather than prop-by-prop.
-- **Painting a solid tile onto `Ground`.** Collision lives on the tile in the TileSet, not on
-  whichever layer you happened to paint it on (§1) — a collidable tile blocks movement wherever
-  it's painted, `Ground` included.
+- **Painting a solid tile onto `Ground` by accident.** Collision lives on the tile in the TileSet,
+  not on whichever layer you happened to paint it on (§1) — a collidable tile blocks movement
+  wherever it's painted, `Ground` included. Painting one there *on purpose* is a supported pattern
+  for flat boundaries (§1's layer-choice note); the mistake is doing it without meaning to, since
+  the tile can look identical to its walkable neighbours.
 - **Setting only one side of a `neighbour_*` link.** Each slot is one-directional; a real two-way
   doorway needs the reverse slot filled in on the other area too (§4).
 
@@ -255,10 +279,10 @@ Design rationale: `docs/features/world-collision/design.md` §12.2, §12.4, §12
 | --- | --- | --- |
 | Tile size | 32×16 px | `world_area.gd`, `world_prop.gd` — `TILE_SIZE` |
 | Minimum area size | 320×180 px (10 wide × 12 tall tiles) | one full viewport |
-| North-edge headroom inset | 32 px (one sprite height) | `NORTH_WALL_HEADROOM_INSET_PX` |
+| North-edge headroom inset | derived from the player sprite; currently 32 px (two tile rows) | `WorldArea.north_headroom_inset()` |
 | Corner dead zone (linked edges) | 32×32 px | `CORNER_DEAD_ZONE_PX` |
 | Physics layers | `world` (terrain + props), `player`, `interactable` (edge triggers) | `project.godot` `[layer_names]` |
-| Player collider | `RectangleShape2D`, size `(20, 10)`, centred on origin | `player/player.tscn` |
+| Player collider | `CapsuleShape2D`, 22×10 px (radius 5, height 22, rotated 90°), at `(0, -9)` | `player/player.tscn` |
 | Player sprite offset | `(0, -16)` | `player/player.tscn` |
 
 Full design rationale for all of the above: `docs/features/world-collision/design.md`.

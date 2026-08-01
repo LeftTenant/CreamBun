@@ -85,9 +85,27 @@ func _load_starting_area() -> void:
 func _activate_area(area: WorldArea) -> void:
 	_active_area.add_child(area)
 	_player.reparent(area)
-	area.build_perimeter_walls()
+	area.build_perimeter_walls(_north_headroom_inset())
 	_set_camera_limits(area)
 	area.edge_reached.connect(_on_edge_reached.bind(area))
+
+
+## How far in from a map's true north edge that edge's wall/trigger must sit,
+## for the player currently in the world (design doc §12.4).
+##
+## This is the one place the player's geometry and the world's boundary
+## geometry are connected, and it is deliberately here rather than inside
+## WorldArea: this scene is the orchestrator, so reading from one node to
+## configure another is its job, while WorldArea stays a pure function of the
+## numbers it is handed (CLAUDE.md's dependency-injection rule).
+##
+## Recomputed per activation rather than cached, so it stays correct if the
+## player scene is ever swapped mid-game (a different playable character, a
+## temporary vehicle/mount). player.gd caches the underlying measurements, so
+## the repeat cost is a subtraction.
+func _north_headroom_inset() -> float:
+	return WorldArea.north_headroom_inset(
+			_player.get_visual_extent(), _player.get_collider_extent())
 
 
 ## Build the Transition overlay's fade visual: a full-screen ColorRect,
@@ -175,7 +193,8 @@ func _on_edge_reached(direction: WorldArea.Edge, area: WorldArea) -> void:
 	_activate_area(new_area)
 
 	var new_bounds: Rect2 = new_area.get_bounds_px()
-	_player.global_position = WorldArea.compute_entry_position(exit_coordinate, direction, new_bounds)
+	_player.global_position = WorldArea.compute_entry_position(
+			exit_coordinate, direction, new_bounds, _north_headroom_inset())
 	new_area.begin_entry_debounce(WorldArea.opposite_edge(direction))
 
 	# design doc §12.5 step 5: the reveal fade and PLAYING restoration happen

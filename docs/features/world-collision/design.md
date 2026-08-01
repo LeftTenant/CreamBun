@@ -186,10 +186,27 @@ the persistent shell that swaps areas in and out; the tile layers and props belo
 
 ```
 WorldArea (Node2D, y_sort_enabled = true)                 # the area's Y-sort scope
-├── Ground        (TileMapLayer, y_sort_enabled = false)  # grass, paths, dirt — never solid
+├── Ground        (TileMapLayer, y_sort_enabled = false)  # grass, paths, dirt; may carry
+│                                                         #   flat boundary collision (below)
 ├── Solids        (TileMapLayer, y_sort_enabled = true)   # cliff faces, water edges, walls
 └── (props placed here directly: Boulder, TreeOak, …)     # WorldProp instances
 ```
+
+**Which layer does a solid tile go on?** Not "is it solid" — both layers use the same TileSet and
+both generate colliders from it. The question is **does it need to draw in front of the player?**
+
+- **`Solids`** — anything with height the player can walk *behind*: a cliff face, a wall, a water
+  edge with a raised lip. These must sort against the player, which is what `Solids` being
+  Y-sorted buys.
+- **`Ground`** — flat, ground-level boundaries the player walks *up to* but never behind: the
+  edge of a raised bank, a fence line, the lip of a path. `meadow.tscn` uses this: the `grass`
+  atlas carries eight edge variants (`1:0`–`8:0`) whose polygons are thin strips along one or two
+  of the tile's borders, so a run of them fences off a region while the tiles themselves still
+  read and draw as ordinary walkable grass. There is nothing to sort — the collision is a line on
+  the floor, not an object — so it belongs on the un-Y-sorted layer.
+
+Putting a flat boundary on `Solids` would work but costs a pointless per-tile sort; putting a
+cliff face on `Ground` would draw it under the player and look broken. That is the whole rule.
 
 At runtime the player is reparented into this root (§12.1) so it shares the area's Y-sort scope.
 Props are placed as **direct children of the area root**, not under a nested `Props` node: Y-sort
@@ -197,7 +214,8 @@ only interleaves a node's *direct* children, so a props sub-node would sort as o
 the player instead of tile-by-tile, prop-by-prop (§9).
 
 **Why `Ground` is not Y-sorted:** it is the floor. It always draws underneath everything and has
-no depth relationship to resolve. Leaving Y-sort off keeps it cheap and keeps it from
+no depth relationship to resolve — including where it carries boundary collision, since a flat
+edge strip has no height to sort by. Leaving Y-sort off keeps it cheap and keeps it from
 participating in a sort it can only get wrong.
 
 **Why `Solids` is Y-sorted:** a cliff face is an *object* — the player can stand in front of it
@@ -391,18 +409,20 @@ The rules that make it work:
 6. **The player is reparented into the area root on load** (§12.1), so it shares one Y-sort scope
    with that area's tiles and props.
 
-**Known limitation, accepted.** Props anchor at their footprint's *front edge*; the player
-anchors at the *centre* of their small ground patch (§10 — a body that moves freely off-grid has
-no meaningful front edge). The mismatch is half the player's collider depth, ~5px against a 16px
-tile depth. This is the conventional setup and is not visible in practice. If a deep-footprint
-prop ever sorts wrong against the player, this is the knob — but do not pre-emptively fix it.
+**Known limitation, accepted.** Props anchor at their footprint's *front edge*, so their collider
+sits entirely behind the anchor. The player's anchor is the ground contact point under the drawn
+character, and their collider sits slightly *above* it (§10 — a body that moves freely off-grid
+has no meaningful front edge, and the collider is traced from the art instead). The mismatch is
+under half a tile depth. This is the conventional setup and is not visible in practice. If a
+deep-footprint prop ever sorts wrong against the player, this is the knob — but do not
+pre-emptively fix it.
 
 ---
 
 ## 10. The player collider
 
-`player/player.tscn` currently has a `CircleShape2D` with `radius = 16`, centred on the node
-origin, with the sprite also centred on the origin. Both are wrong:
+`player/player.tscn` originally had a `CircleShape2D` with `radius = 16`, centred on the node
+origin, with the sprite also centred on the origin. Both were wrong:
 
 - **A 32px-diameter circle centred on the body** means the player collides using their whole
   body, including their head. Solid things are on the *ground*; the player should collide with
@@ -410,28 +430,51 @@ origin, with the sprite also centred on the origin. Both are wrong:
 - **The origin is at the body centre**, so Y-sort keys off the player's midriff instead of their
   feet, which will produce visibly wrong sorting against props.
 
-The fix:
+The current shape:
 
 ```gdscript
 # player/player.tscn — node configuration, not code
 #
 # Player (CharacterBody2D)          origin at the FEET (ground contact point)
-# ├── CollisionShape2D              RectangleShape2D, size (20, 10), position (0, 0)
+# ├── CollisionShape2D              CapsuleShape2D, radius 5, height 22,
+# │                                 rotation 90°, position (0, -9)
+# │                                 → a 22 x 10 horizontal capsule spanning
+# │                                   x ∈ [-11, 11], y ∈ [-14, -4]
 # ├── AnimatedSprite2D              offset (0, -16)  — 32x32 frames sit above the origin
 # └── Camera2D                      drag margins for the two-tile dead zone (§12.3);
 #                                   limits set per-area by world.gd on load
 ```
 
-**Why (20, 10):** a little under one tile wide (32) and one tile deep (16), in the same 2:1
-ratio as the foreshortened ground. Slightly sub-tile so the player can slip through a one-tile
-gap without pixel-perfect alignment — a cozy game should not punish precision.
+**Why those numbers — the collider is traced from the art, not guessed.** Every frame of
+`resources/sprites/player/*.png` is a 32x32 cell carrying 5px of transparent padding on all four
+sides, so the drawn character occupies a 22x22 box. With `AnimatedSprite2D.offset = (0, -16)`
+placing that cell at y ∈ [-32, 0] relative to the origin, the *visible* character sits at
+x ∈ [-11, 11], y ∈ [-27, -5]. The collider's 22px width is therefore exactly the character's
+drawn width, and its 10px depth hugs the bottom of the drawn body: what you see is what collides.
 
-**Why centred on the origin, not offset like props:** the player moves freely rather than
-snapping to the grid, so "the front edge of their footprint" is not a meaningful anchor. The
-centre of their ground patch is. See §9 for the accepted consequence.
+**Why it is offset to (0, -9) rather than centred on the origin.** The origin stays the ground
+anchor — Y-sort and camera framing both key off it — but the *collider* is lifted to sit against
+the bottom of the drawn character (y ∈ [-14, -4]) instead of straddling the origin. A collider
+centred on the origin sat visibly below Cream Bun's feet because of the sprite's 5px bottom
+padding: the player would stop with a gap between themselves and the wall they were pressed
+against. Lifting it closes that gap without touching the anchor.
 
-`player.gd` needs no changes — it already uses `move_and_slide()`, which will simply start
-colliding once there is something to collide with.
+**Why a capsule and not a rectangle.** A rectangle's four sharp corners catch on the corners of
+tile collision polygons. Terrain edges are authored per-tile (§7) and adjacent tiles' polygons do
+not always line up to the pixel — a boundary that reads as one continuous fence on screen is
+actually a run of slightly staggered polygons. Sliding a rectangle along that run snags on every
+step. A capsule's rounded ends let `move_and_slide()` deflect off those sub-pixel steps and keep
+going, which is the difference between "walks along the fence" and "gets stuck on nothing
+visible." This is the same reason the collider stays slightly sub-tile: a cozy game should not
+punish precision.
+
+**Trade-off, accepted:** because the collider no longer straddles the origin, the player's feet
+can overlap a solid tile's polygon by up to 4px before contact registers. At a 16px tile depth
+that is a quarter tile and is not noticeable in play; it is the price of aligning collision to
+the drawn body rather than to the anchor point. See §9 for the related Y-sort consequence.
+
+`player.gd` needs no changes — it already uses `move_and_slide()`, which simply started colliding
+once there was something to collide with.
 
 ---
 
@@ -652,9 +695,9 @@ cross. Concretely:
 - A **vertical** edge's trigger (east or west) is inset **2 tiles (32px)** from each of its
   north/south ends — measured from that end's *playable-facing boundary*, not always the raw
   painted edge. This coincides with the raw edge at the south end (flush, like every non-north
-  edge), but not at the north end: the north wall/trigger's playable boundary is already
-  `NORTH_WALL_HEADROOM_INSET_PX` (32px) in from the true edge (below), so the north-end exclusion
-  actually sits 64px from the raw painted edge, not 32px. Measuring from the raw edge there (an
+  edge), but not at the north end: the north wall/trigger's playable boundary is already the
+  derived headroom inset (below) in from the true edge, so the north-end exclusion actually sits
+  that much further from the raw painted edge than 32px. Measuring from the raw edge there (an
   early version of this implementation did exactly this) leaves the NE/NW corners with *zero*
   effective exclusion, since the naive 32px lands entirely inside ground the north inset already
   made non-walkable — the corner rule would silently not hold at those two corners while appearing
@@ -679,15 +722,39 @@ never do (e.g. if they immediately turn back toward the edge without crossing th
 
 **North-edge headroom inset — a permanent per-area consequence.** The north perimeter wall's (or,
 on a linked edge, trigger's) player-facing surface is not flush with the true painted north edge
-like the other three edges are — it sits one sprite-height south of it
-(`NORTH_WALL_HEADROOM_INSET_PX`, `world/areas/shared/world_area.gd`). This exists because
-`limit_top` (§12.3) clamps the camera's view rect to that exact edge, while the player's sprite is
+like the other three edges are — it sits some distance south of it. This exists because `limit_top`
+(§12.3) clamps the camera's view rect to that exact edge, while the player's sprite is
 feet-anchored (§10): stopping flush with the edge would let the player stand with their whole
-sprite above the clamped view — invisible. Insetting guarantees the camera always keeps a full
-sprite-height of headroom above the player, no matter how far north they walk. This inset applies
-to the north edge whether it is a wall or a trigger — a north neighbour link does not remove it.
+sprite above the clamped view — invisible. Insetting guarantees the whole drawn character stays on
+screen, no matter how far north they walk. This inset applies to the north edge whether it is a
+wall or a trigger — a north neighbour link does not remove it.
 
-The consequence for every area, present and future: **the topmost ~2 tile rows of painted `Ground`
+**The inset is computed, not configured.** There is no `NORTH_WALL_HEADROOM_INSET_PX` constant to
+maintain. `WorldArea.north_headroom_inset(visual_extent, collider_extent)` derives it, and
+`world.gd` feeds it the player's own published geometry (`Player.get_visual_extent()` /
+`get_collider_extent()`) each time it activates an area. The arithmetic:
+
+- Stopped flush against a boundary at `y = B`, the player's origin is pushed to
+  `B - collider.position.y` — their collider's top edge is what makes contact.
+- The drawn character extends `visual.position.y` above that origin, so its topmost pixel lands
+  `collider.position.y - visual.position.y` px **above** `B`.
+- The inset must be at least that, or the top of Cream Bun is cut off at the north edge of every
+  map. It is then rounded up to a whole tile row so the resulting backdrop strip is a number of
+  tiles a designer can see and count.
+
+For the current player that works out to **32px (two tile rows)**: the collider's top edge is 14px
+above the origin, and the drawn character reaches 31px above it, needing 17px — rounded up to 32.
+
+> **Open question — the sprite sheet's padding is uneven.** That 31px comes from the *tallest*
+> frame across every animation. `idle` frame 0 has 5px of transparent padding above the character,
+> but the walk frames have only 1px, so measuring the idle pose alone gives 27px and an inset of
+> just 16. Today only `idle` is ever drawn (`player.gd` has no animation switching yet), so 16
+> would in fact be correct right now — but it would silently start clipping a pixel off Cream
+> Bun's antenna the moment walk animations are wired up. Deriving from the union of all frames
+> costs a tile row per map today and is safe forever; evening the padding out in the art would
+> make 16 correct forever and is probably the better fix. Not yet decided.
+
+The consequence for every area, present and future: **the topmost rows of painted `Ground`
 are a non-walkable decorative backdrop** — visible behind the invisible boundary, but never
 reachable, since the player is stopped/redirected short of it. A designer laying out a new area
 should paint that strip as normal ground (it still needs to look right on screen) but should expect
@@ -746,17 +813,26 @@ When `world.gd` hears `edge_reached(dir)`:
    coincide (the wall/trigger sits flush on the true edge, §12.4), so "one tile in from the true
    edge" and "one tile in from where a wall would stop you" are the same point. For north they do
    not coincide: the true edge is `bounds.position.y`, but the playable-facing boundary is
-   `bounds.position.y + NORTH_WALL_HEADROOM_INSET_PX` (32px further in), and the north trigger's
-   own zone spans that entire 32px gap (§12.4). Spawning a north entry only 16px in from the *true*
-   edge — the naive reading of "one tile inward" — would land the player 16px into a 32px-deep
-   trigger zone: still inside it, and the debounce (§12.4, 8px for a north/south crossing) would
-   already read as satisfied at that distance, so nothing would stop an immediate involuntary
-   bounce back the way they came. The fix is uniform, not a north-specific special case in the
-   code: always measure "one tile inward" from the playable-facing boundary of the edge just
-   entered (which the perimeter-build step already knows, since it is the same boundary a wall on
-   that edge would have used) — this automatically lands a north entry at
-   `bounds.position.y + NORTH_WALL_HEADROOM_INSET_PX + 16px`, safely past that edge's own trigger
-   zone, with no edge-specific conditional needed in the spawn-math implementation itself.
+   `bounds.position.y +` the derived headroom inset (§12.4), and the north trigger's
+   own zone reaches that far in. Spawning a north entry 16px in from the *true* edge — the
+   naive reading of "one tile inward" — would land the player exactly on the trigger's inner face
+   rather than clear of it, and the debounce (§12.4, 8px for a north/south crossing) would already
+   read as satisfied at that distance, so nothing would stop an immediate involuntary bounce back
+   the way they came. The fix is uniform, not a north-specific special case in the code: always
+   measure "one tile inward" from the playable-facing boundary of the edge just entered (which the
+   perimeter-build step already knows, since it is the same boundary a wall on that edge would have
+   used) — this automatically lands a north entry at
+   `bounds.position.y + headroom_inset + 16px`, past that edge's own trigger zone,
+   with no edge-specific conditional needed in the spawn-math implementation itself.
+
+   **Margin note.** With the current collider (§10) that north entry clears the trigger's inner
+   face by only **2px**: the collider's top edge sits 14px above the origin, so a player spawned
+   one tile (16px) inside the boundary has 2px of collider to spare. Note this margin does *not*
+   change with the headroom inset — both the spawn point and the trigger's inner face move with
+   it — so it is purely a function of the collider vs. the 16px entry offset. It is the tightest
+   margin in the transition system: raise the collider further above the origin and it closes,
+   reintroducing the bounce-back bug.
+   `test_north_entry_lands_clear_of_the_north_triggers_own_zone` asserts it.
 
    The edge the player just entered through leads back the way they came, so it is subject to the
    arrival debounce described in §12.4 — it won't re-fire until the player has walked the required

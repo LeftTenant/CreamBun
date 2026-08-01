@@ -1,4 +1,4 @@
-[gd_scene format=4 uid="uid://chsym4sjohvg4"]
+[gd_scene format=3 uid="uid://chsym4sjohvg4"]
 
 [ext_resource type="Script" uid="uid://dy4kvsd5hfqoq" path="res://world/world.gd" id="1_world"]
 [ext_resource type="PackedScene" uid="uid://beaja7keolaqd" path="res://player/player.tscn" id="2_player"]
@@ -8,13 +8,13 @@
 y_sort_enabled = true
 script = ExtResource("1_world")
 
-[node name="ActiveArea" type="Node2D" parent="."]
+[node name="ActiveArea" type="Node2D" parent="." unique_id=230048990]
 
 [node name="Player" parent="." unique_id=1307239076 instance=ExtResource("2_player")]
 position = Vector2(288, 176)
 
 [node name="Notebook" parent="." unique_id=1312945757 instance=ExtResource("3_notebook")]
 
-[node name="Transition" type="CanvasLayer" parent="."]
+[node name="Transition" type="CanvasLayer" parent="." unique_id=716881582]
 process_mode = 3
 layer = 200
