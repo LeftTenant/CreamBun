@@ -52,3 +52,61 @@ The 16-tile grid is for the game world. The notebook, for example, is designed a
 - **Changing the tile size** — 16 px is the project standard. If a future system needs tiles
   that divide 180 evenly (e.g. 12 px or 9 px), that is a project-level decision, not an art
   guideline change. Raise it with the team rather than quietly authoring at a different size.
+
+---
+
+## Optional tooling — pixel-plugin (Aseprite)
+
+The `.aseprite` sources in this folder can be driven from Claude Code by
+[pixel-plugin](https://github.com/willibrandon/pixel-plugin), which creates, animates, and exports
+pixel art through natural language. It is **entirely optional** — nothing in the game, the build,
+or the test suite depends on it, and you only want it if you actually edit sprites.
+
+It is deliberately *not* vendored into this repo (unlike `plugins/godot-testing/`, which ships a
+GDScript file the project needs at runtime and so has to live here). pixel-plugin is a third-party
+tool with its own upstream, so we install it per-developer and let it update itself.
+
+### Prerequisites
+
+**Aseprite must already be installed**, and the plugin drives your local copy. It is a paid app —
+buy it at [aseprite.org](https://www.aseprite.org/) or build it from source. Without it the plugin
+loads but can't do anything.
+
+### Install
+
+Either run the slash command:
+
+```
+/plugin marketplace add willibrandon/pixel-plugin
+/plugin install pixel-plugin@pixel-plugin
+```
+
+…or add this to your **`.claude/settings.local.json`** (per-developer, gitignored — do not put it
+in the tracked `.claude/settings.json`, which would enable it for teammates who may not own
+Aseprite):
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "pixel-plugin": {
+      "source": { "source": "github", "repo": "willibrandon/pixel-plugin" }
+    }
+  },
+  "enabledPlugins": {
+    "pixel-plugin@pixel-plugin": true
+  }
+}
+```
+
+Merge those keys alongside whatever is already in the file — don't replace it. Add `"ref": "v0.5.0"`
+(or any tag) inside `source` if you'd rather pin a version than track the default branch.
+
+### Working with it
+
+Anything it generates still has to obey the rules above — **multiples of 16 px for world sprites**,
+raw pixels for UI. The plugin does not know this project's conventions, so state the size you want
+explicitly rather than accepting whatever it picks.
+
+Keep authoring `.aseprite` sources in `art/` and exporting the derived PNG into `resources/` — the
+plugin doesn't change that split, and game code must still never reference `art/` (see the top of
+this file).
