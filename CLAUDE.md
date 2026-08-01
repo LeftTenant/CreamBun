@@ -8,7 +8,9 @@ See `README.md` in the root project folder for more details on project requireme
 
 ## Development
 
-There is no build CLI or automated test suite — all iteration and testing happens in the Godot editor. Scripts can be edited externally; Godot hot-reloads them.
+There is no build CLI — iteration happens in the Godot editor, and scripts can be edited externally since Godot hot-reloads them. Tests run through GUT via the `godot-testing` plugin (`plugins/godot-testing/`), which is vendored here and enabled for everyone in the tracked `.claude/settings.json`.
+
+**Optional per-developer tooling:** [pixel-plugin](https://github.com/willibrandon/pixel-plugin) drives Aseprite for sprite work. It is *not* vendored and *not* enabled project-wide — it requires a paid Aseprite install and nothing depends on it, so each developer opts in via their own gitignored `.claude/settings.local.json`. Install instructions are in `art/README.md`.
 
 This is a beginner project, so always keep things as simple as possible. Favor easy to read and understand code over efficiency unless implementing code in critical sections of the game loop that demand performance. Document code well and explain why code is written as it is, not just what is implemented. Include links to documentation in comments whenever new APIs are used.
 
