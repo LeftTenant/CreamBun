@@ -34,7 +34,18 @@ save fills them in, producing a churn diff, and until then every reference to th
 path-only (renames break silently). Same applies to Godot 4.6's per-node `unique_id=`
 attributes.
 
+**`;` comments in a `.tscn` do not survive a re-save.** Verified in Godot 4.6.2: round-tripping a
+scene through `ResourceLoader.load` → `ResourceSaver.save` (what the editor does on Ctrl+S) keeps
+every real property — including `resource_local_to_scene = true` on a `[sub_resource]` — but
+**silently drops every `;` comment line**. So a rationale comment written into a `.tscn` has a
+lifetime of "until a designer next opens the scene", and template scenes designers are explicitly
+meant to open are the worst place to keep one. Flag it: rationale for a non-obvious `.tscn`
+property belongs in the attached script's docblock (durable, and where a reader looks anyway),
+with at most a pointer left in the scene.
+
 ## Related
 
 [[testing-conventions]] — scene-instantiation tests under GUT.
+[[gotcha-test-subresource-mutation-leak]] — the `resource_local_to_scene` flag whose rationale
+this affects.
 [[CreamBun Code Patterns]] — general `.tscn` review notes.

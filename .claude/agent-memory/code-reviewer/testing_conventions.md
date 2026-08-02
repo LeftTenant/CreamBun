@@ -129,6 +129,14 @@ cell through the same GUT helpers, run it with `-gselect=`, and delete it.
   ever added.
 - **`DisplayServer.window_get_size()` returns `(0, 0)` in headless mode.** Tests that need
   a real window readback call `pending()` when `DisplayServer.get_name() == "headless"`.
+- **An `area_entered` overlap test only exercises ONE side's `collision_mask`.** Detection
+  fires when the *detector's* mask intersects the *detectee's* layer. If the detectee's own
+  mask is `0` (as `Player/ThresholdBounds` is — it is detected, never detects), the detector's
+  `collision_layer` is behaviourally inert: verified that zeroing a `Threshold`'s
+  `collision_layer` still emits `area_entered` from the player's bounds. So a physics
+  integration test proves the mask pairing and nothing about the layer value; the layer needs
+  a separate scene-as-data assertion, and a failure message naming both bits misleads whoever
+  debugs it.
 
 ## Related
 

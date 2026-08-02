@@ -1,10 +1,10 @@
 ---
 name: gotcha-gut-helper-silent-passes
-description: Three ways a GUT test silently passes — a fetch helper returning a failed cast without asserting, a "+" concatenated assert message whose % binds to the wrong literal, and a sentinel return value that a scene could legitimately hold
+description: Four ways a GUT test silently passes — a fetch helper returning a failed cast without asserting, a "+" concatenated assert message whose % binds to the wrong literal, a sentinel return value that a scene could legitimately hold, and a parse error that drops the whole script while the run still reports "All tests passed!"
 type: project
 ---
 
-Three recurring hazards in this repo's GUT test helpers. All produce a test that looks green (or
+Four recurring hazards in this repo's GUT test helpers. All produce a test that looks green (or
 loudly red for the wrong reason) without exercising the behaviour it names.
 
 ## 1. `return node as T` in a fetch helper swallows the real failure
@@ -57,6 +57,28 @@ tests with several passing assertions — harder to spot than the zero-assertion
 **How to apply:** when a helper returns a sentinel, ask whether the sentinel is reachable through
 normal authoring. If it is, the guard must be an assertion (`assert_ne(rect.size, Vector2.ZERO,
 ...)`) rather than a bare `return`, or the helper should signal failure out-of-band.
+
+## 4. A parse error deletes the whole test script and the run still says "All tests passed!"
+
+Verified in Godot 4.6.2 / GUT 9.6.0: a test script that fails to parse (e.g. it type-hints
+against a `class_name` that no longer exists) is logged as a warning, **dropped from the run**,
+and the summary still prints `---- All tests passed! ----` with **exit code 0**. Only a
+`Warnings  1` line in the totals hints at it. So "the test would fail to compile" is *not* a
+safety net — it is a silent deletion of coverage.
+
+This has a sharp consequence for **guard tests that prove an identifier exists**. A test asserting
+`class_name Foo` is registered must live in a script that never writes `Foo` as a type — including
+indirectly, via a helper in the same file typed `-> Foo`. Otherwise removing `class_name Foo`
+makes the guard *vanish* rather than fail, which is exactly the circularity the guard exists to
+prevent. Typing helpers against a project `class_name` is otherwise good (a removed `@export`
+then surfaces as a loud GUT `Unexpected Errors: Invalid access to property...` failure, not a
+silent `null` from `.get()`) — so the resolution is to isolate the class-resolution test in its
+own script, not to untype everything.
+
+**How to apply:** when a diff retypes a test helper from a built-in (`Node`, `Area2D`) to a
+project `class_name`, check (a) the cast isn't swallowed — see pattern 1 — and (b) no test in
+that file is *about* the existence of that `class_name`. To prove a guard test still catches its
+regression, mutate the source and re-run; do not reason about it.
 
 ## Related
 
