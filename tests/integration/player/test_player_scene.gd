@@ -79,9 +79,10 @@ const EXPECTED_CAPSULE_HEIGHT: float = 22.0
 const EXPECTED_COLLIDER_ROTATION_RAD: float = PI / 2.0
 
 # The collider does NOT straddle the origin. It is lifted to sit against the
-# bottom of the DRAWN character: the sprite frames carry 5px of transparent
-# padding, so a collider centred on the origin sat visibly below Cream Bun's
-# feet and left a gap between them and whatever they were pressed against.
+# bottom of the DRAWN character: the art does not reach the bottom of the
+# frame (the lowest opaque row sits ~4px above it), so a collider centred on
+# the origin sat visibly below Cream Bun's feet and left a gap between them
+# and whatever they were pressed against.
 const EXPECTED_COLLIDER_POSITION: Vector2 = Vector2(0.0, -9.0)
 
 # The collider's resulting extent relative to the player's origin:
@@ -91,13 +92,6 @@ const EXPECTED_COLLIDER_POSITION: Vector2 = Vector2(0.0, -9.0)
 # so a future edit that trades radius/height/rotation/position around while
 # preserving each property in isolation still can't drift the actual footprint.
 const EXPECTED_COLLIDER_EXTENT: Rect2 = Rect2(-11.0, -14.0, 22.0, 10.0)
-
-# The player sprite's 32x32 frames carry 5px of fully-transparent padding on
-# every side, so the drawn character is 22px wide — exactly the capsule's
-# 22px length. This is the tie between the collider and the art it was
-# traced from (design.md §10, "what you see is what collides").
-const SPRITE_FRAME_SIZE_PX: int = 32
-const SPRITE_TRANSPARENT_PADDING_PX: int = 5
 
 # The AnimatedSprite2D's 32x32 frame must be offset upward so it sits above
 # the origin instead of straddling it (design.md §10 — "origin at the FEET").
@@ -117,6 +111,25 @@ const EXPECTED_SPRITE_OFFSET: Vector2 = Vector2(0.0, -16.0)
 # (design.md §11's collision layer/mask table).
 const WORLD_LAYER_BIT: int = 1
 const PLAYER_LAYER_BIT: int = 2
+
+# "player_bounds" physics layer bit value, per project.godot's
+# [layer_names] section: 2d_physics/layer_4="player_bounds" -> bit 3 ->
+# value 8 (world-thresholds design.md §6). ThresholdBounds's own layer/mask —
+# see the section near the bottom of this file.
+const PLAYER_BOUNDS_LAYER_BIT: int = 8
+
+# ThresholdBounds's authored rect (world-thresholds design.md §6): a
+# CollisionShape2D on a RectangleShape2D sized (26, 27) at (0, -17.5) — the
+# union of opaque pixels across every frame of every animation, x in
+# [-13, 13], y in [-31, -4] relative to the player's origin. Mirrored (not
+# derived) because the AUTHORED numbers are what's under test here — the
+# "does the authored rect still cover the art" relationship is checked
+# separately, in test_collision_geometry_invariants.gd's
+# test_threshold_bounds_rect_contains_the_drawn_character_union(), which is
+# the one ThresholdBounds test that belongs in that file rather than this one
+# (it needs that file's _drawn_character_extent() helper).
+const EXPECTED_THRESHOLD_BOUNDS_SIZE: Vector2 = Vector2(26.0, 27.0)
+const EXPECTED_THRESHOLD_BOUNDS_POSITION: Vector2 = Vector2(0.0, -17.5)
 
 # Instantiated fresh in before_each() so every test gets an isolated player
 # node, matching GUT's per-test isolation convention.
@@ -264,9 +277,12 @@ func test_collision_shape_is_a_capsule() -> void:
 		capsule.height,
 		EXPECTED_CAPSULE_HEIGHT,
 		(
-			"player.tscn's CapsuleShape2D.height must be %.1f — the drawn "
-			+ "character's exact width (a 32px frame less 5px of transparent "
-			+ "padding each side), design.md §10."
+			"player.tscn's CapsuleShape2D.height must be %.1f — the movement "
+			+ "collider's authored length (design.md §10). This is deliberately "
+			+ "independent of the drawn character's exact width (26px, not "
+			+ "22px) — 'what you see is what collides' is not a rule this "
+			+ "project holds for the movement capsule; see "
+			+ "world-thresholds/slices.md Slice 1's ruling."
 		) % [EXPECTED_CAPSULE_HEIGHT]
 	)
 
@@ -302,11 +318,12 @@ func test_collision_shape_sits_against_the_bottom_of_the_drawn_character() -> vo
 	#
 	# The origin is still the ground anchor — Y-sort and the camera both key
 	# off it, and that has not changed. What changed is that the COLLIDER no
-	# longer straddles it. The sprite frames carry 5px of transparent padding
-	# below the character, so a collider centred on the origin sat visibly
-	# below Cream Bun's feet: the player stopped with a gap between themselves
-	# and the wall they were pressed against. Lifting the collider to (0, -9)
-	# closes that gap without moving the anchor (design.md §10).
+	# longer straddles it. The art does not reach the bottom of the frame —
+	# the lowest opaque row sits ~4px above it — so a collider centred on the
+	# origin sat visibly below Cream Bun's feet: the player stopped with a gap
+	# between themselves and the wall they were pressed against. Lifting the
+	# collider to (0, -9) closes that gap without moving the anchor
+	# (design.md §10).
 	if _player == null:
 		return
 
@@ -366,43 +383,6 @@ func test_collider_extent_relative_to_the_player_origin() -> void:
 			+ "north-entry spawn margin are derived from; moving it means "
 			+ "re-deriving both."
 		) % [EXPECTED_COLLIDER_EXTENT, extent]
-	)
-
-
-func test_collider_width_matches_the_drawn_character_width() -> void:
-	# Ties the collider back to the art it was traced from, so "what you see is
-	# what collides" (design.md §10) is a checked claim rather than a comment.
-	# The sprite frames are 32x32 with 5px of fully-transparent padding on every
-	# side, leaving a 22px-wide character — which is exactly the capsule's
-	# length. If an artist reworks the sprite with different padding, this fails
-	# and points at the collider that now needs re-tracing.
-	if _player == null:
-		return
-
-	var collision: CollisionShape2D = _get_collision_shape_node()
-	if collision == null:
-		return
-	var capsule: CapsuleShape2D = collision.shape as CapsuleShape2D
-	if capsule == null:
-		return
-
-	var drawn_width: int = (
-		SPRITE_FRAME_SIZE_PX - SPRITE_TRANSPARENT_PADDING_PX * 2
-	)
-	assert_eq(
-		capsule.height,
-		float(drawn_width),
-		(
-			"the capsule's %.1fpx length must equal the drawn character's "
-			+ "%dpx width (a %dpx frame less %dpx of transparent padding on "
-			+ "each side) — design.md §10 traces the collider from the art, so "
-			+ "the two must not drift apart."
-		) % [
-			capsule.height,
-			drawn_width,
-			SPRITE_FRAME_SIZE_PX,
-			SPRITE_TRANSPARENT_PADDING_PX,
-		]
 	)
 
 
@@ -470,3 +450,144 @@ func test_collision_mask_is_world_only() -> void:
 			+ "collides with solid terrain and props and nothing else."
 		) % [WORLD_LAYER_BIT]
 	)
+
+
+# ---------------------------------------------------------------------------
+# ThresholdBounds — the player's second collider (world-thresholds
+# design.md §6, Slice 1)
+# ---------------------------------------------------------------------------
+#
+# These four tests were moved here from
+# tests/integration/world/test_collision_geometry_invariants.gd, which exists
+# specifically to relate independently-authored facts and rejects mirroring a
+# constant for exactly that reason (see that file's header). These tests do
+# the opposite on purpose — they restate ThresholdBounds's authored numbers,
+# which is correct here: they are plain scene-as-data properties of
+# player.tscn, the same kind of check every other test in this file makes.
+# The one ThresholdBounds test that genuinely relates two independently-
+# authored facts (the authored rect vs. the measured union of opaque pixels
+# across the sprite) stays in test_collision_geometry_invariants.gd, since it
+# needs that file's _drawn_character_extent() helper.
+
+## `_player`'s ThresholdBounds child, typed and existence-checked, or null
+## with the failure already recorded. Shared by the tests below so a missing
+## node produces one clear failure per test rather than a chain of null
+## derefs.
+func _get_threshold_bounds() -> Area2D:
+	var node: Node = _player.get_node_or_null("ThresholdBounds")
+	assert_not_null(node,
+			("player.tscn must have a child named 'ThresholdBounds' — the player's second " +
+			"collider, used only for Threshold detection (world-thresholds design.md §6)."))
+	if node == null:
+		return null
+
+	assert_true(node is Area2D,
+			("player.tscn's ThresholdBounds must be an Area2D (found %s) — " +
+			"world-thresholds design.md §6.") % [node.get_class()])
+	if not (node is Area2D):
+		return null
+
+	return node as Area2D
+
+
+## ThresholdBounds's authored rect, in the player's local space — derived
+## from its CollisionShape2D.position and RectangleShape2D.size, with the "is
+## it actually a RectangleShape2D" preamble collapsed into one place. Returns
+## an empty Rect2 (size == Vector2.ZERO) with the failure already recorded on
+## any lookup or type failure.
+func _get_threshold_bounds_rect() -> Rect2:
+	var bounds: Area2D = _get_threshold_bounds()
+	if bounds == null:
+		return Rect2()
+
+	var collision: CollisionShape2D = (
+		bounds.get_node_or_null("CollisionShape2D") as CollisionShape2D
+	)
+	assert_not_null(collision,
+			"ThresholdBounds must have a CollisionShape2D child (world-thresholds design.md §6)")
+	if collision == null:
+		return Rect2()
+
+	var shape: RectangleShape2D = collision.shape as RectangleShape2D
+	assert_not_null(shape,
+			("ThresholdBounds's CollisionShape2D.shape must be a RectangleShape2D " +
+			"(found %s) — world-thresholds design.md §6.") % [collision.shape])
+	if shape == null:
+		return Rect2()
+
+	# A zero-size shape is itself a failure worth asserting on, not just a
+	# "helper couldn't find anything" signal — callers use Vector2.ZERO as
+	# exactly that signal (see their own guards), so an authored (0, 0) rect
+	# would otherwise look identical to a lookup failure and let every
+	# assertion downstream pass vacuously on a ThresholdBounds that could
+	# never detect anything.
+	assert_ne(shape.size, Vector2.ZERO,
+			"ThresholdBounds's RectangleShape2D.size must not be zero — a zeroed rect would never overlap a Threshold, silently disabling every future transition.")
+
+	return Rect2(collision.position - shape.size / 2.0, shape.size)
+
+
+func test_threshold_bounds_is_an_area2d_child_of_player() -> void:
+	# The existence + type half of the slice-1 test plan's first Integration
+	# bullet. The shape/position half is its own test below, so a shape
+	# regression doesn't also fail this one for an unrelated reason.
+	if _player == null:
+		return
+
+	_get_threshold_bounds()
+
+
+func test_threshold_bounds_collision_shape_matches_the_authored_rect() -> void:
+	# The shape/position half of the same bullet: a literal check against the
+	# AUTHORED rect (design.md §6's exact numbers), not a derived one — the
+	# derived "does it still cover the art" check is
+	# test_threshold_bounds_rect_contains_the_drawn_character_union() in
+	# test_collision_geometry_invariants.gd.
+	#
+	# Asserted via _get_threshold_bounds_rect() rather than reading
+	# CollisionShape2D.position and RectangleShape2D.size directly: since a
+	# RectangleShape2D's rect is centred on its CollisionShape2D's position,
+	# Rect2.get_center() recovers that position exactly and Rect2.size
+	# recovers the shape's size exactly, so this still pins both properties
+	# individually — it just gets there through the shared helper instead of
+	# repeating its RectangleShape2D-or-fail preamble inline.
+	if _player == null:
+		return
+
+	var rect: Rect2 = _get_threshold_bounds_rect()
+	if rect.size == Vector2.ZERO:
+		return
+
+	assert_eq(rect.get_center(), EXPECTED_THRESHOLD_BOUNDS_POSITION,
+			("ThresholdBounds's CollisionShape2D.position must be %s — the authored rect " +
+			"from world-thresholds design.md §6.") % [EXPECTED_THRESHOLD_BOUNDS_POSITION])
+	assert_eq(rect.size, EXPECTED_THRESHOLD_BOUNDS_SIZE,
+			("ThresholdBounds's RectangleShape2D.size must be %s — the authored union bbox " +
+			"from world-thresholds design.md §6.") % [EXPECTED_THRESHOLD_BOUNDS_SIZE])
+
+
+func test_threshold_bounds_collision_layer_is_player_bounds_only() -> void:
+	if _player == null:
+		return
+
+	var bounds: Area2D = _get_threshold_bounds()
+	if bounds == null:
+		return
+
+	assert_eq(bounds.collision_layer, PLAYER_BOUNDS_LAYER_BIT,
+			("ThresholdBounds.collision_layer must be exactly the 'player_bounds' layer " +
+			"(value %d, project.godot's 2d_physics/layer_4) — world-thresholds design.md §6.")
+					% [PLAYER_BOUNDS_LAYER_BIT])
+
+
+func test_threshold_bounds_collision_mask_is_zero() -> void:
+	if _player == null:
+		return
+
+	var bounds: Area2D = _get_threshold_bounds()
+	if bounds == null:
+		return
+
+	assert_eq(bounds.collision_mask, 0,
+			("ThresholdBounds.collision_mask must be 0 — it detects nothing itself " +
+			"(world-thresholds design.md §6); Thresholds will mask it in a later slice."))

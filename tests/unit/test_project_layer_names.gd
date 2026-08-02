@@ -12,6 +12,16 @@
 ##                                           built yet, per §11, so the layer
 ##                                           number isn't silently claimed later
 ##
+## world-thresholds Slice 1 (design doc docs/features/world-thresholds/
+## design.md §6) adds a fourth:
+##   2d_physics/layer_4 = "player_bounds"  — the player's ThresholdBounds
+##                                           Area2D, used only for Threshold
+##                                           detection (§6: "reusing 'player'
+##                                           would work ... but that makes
+##                                           correctness depend on which
+##                                           signal is connected rather than
+##                                           on what the layers say")
+##
 ## WHY ProjectSettings AND NOT raw file text: the on-disk [layer_names]
 ## section stores keys without the "layer_names/" prefix (the section header
 ## supplies it) — e.g. `2d_physics/layer_1="world"` — whereas the effective
@@ -65,4 +75,17 @@ func test_layer_3_is_named_interactable() -> void:
 			ProjectSettings.get_setting("layer_names/2d_physics/layer_3", ""),
 			"interactable",
 			"2d_physics/layer_3 should be named 'interactable' — design doc §11"
+	)
+
+
+func test_layer_4_is_named_player_bounds() -> void:
+	# Layer 4: the player's ThresholdBounds Area2D (world-thresholds design.md
+	# §6) — the player's whole drawn extent, used only for Threshold
+	# detection. Named rather than reusing "player" so correctness depends on
+	# what the layers say, not on which signal (area_entered vs body_entered)
+	# happens to be connected.
+	assert_eq(
+			ProjectSettings.get_setting("layer_names/2d_physics/layer_4", ""),
+			"player_bounds",
+			"2d_physics/layer_4 should be named 'player_bounds' — world-thresholds design doc §6"
 	)

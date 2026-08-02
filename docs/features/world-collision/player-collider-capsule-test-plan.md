@@ -11,9 +11,12 @@ Three related changes, made by hand in the Godot editor, that this plan covers:
 1. **The player's collider is now a capsule aligned to the drawn character.**
    `player/player.tscn`'s `CollisionShape2D` went from `RectangleShape2D(20, 10)` at `(0, 0)` to
    `CapsuleShape2D(radius 5, height 22)` rotated 90° at `(0, -9)` — a 22×10 horizontal capsule
-   spanning `x ∈ [-11, 11]`, `y ∈ [-14, -4]` relative to the origin. The width matches the drawn
-   character exactly (32×32 frames with 5px transparent padding all round), and the rounded ends
-   let `move_and_slide()` deflect off staggered tile-edge polygons instead of snagging on them.
+   spanning `x ∈ [-11, 11]`, `y ∈ [-14, -4]` relative to the origin. The 22px length is an
+   *authored* movement-collider dimension, not a claim about the drawn character's width — see
+   the struck-through row under Integration below for why "matches the art exactly" turned out
+   to be false (measured union: 26×27, not 22×22) and is no longer this project's rule for the
+   movement collider. The rounded ends let `move_and_slide()` deflect off staggered tile-edge
+   polygons instead of snagging on them, independent of the exact width chosen.
 
 2. **`meadow.tscn`'s `Ground` layer now carries collision.** The `grass` atlas gained eight edge
    variants (`1:0`–`8:0`) whose physics polygons are thin strips along one or two tile borders.
@@ -74,8 +77,15 @@ The changes interact, and two spots are tight enough to deserve their own checks
 - [x] The collider's world-space extent relative to the player origin is `x ∈ [-11, 11]`,
       `y ∈ [-14, -4]` — asserted on the derived extent, so a change to radius/height/position/
       rotation that happens to preserve the individual properties still can't drift the footprint.
-- [x] The collider's 22px width matches the drawn character's width in the sprite frames (32px
-      frame, 5px transparent padding each side), tying the collider to the art it was traced from.
+- [ ] ~~The collider's 22px width matches the drawn character's width in the sprite frames (32px
+      frame, 5px transparent padding each side), tying the collider to the art it was traced
+      from.~~ **Removed (world-thresholds Slice 1):** the test behind this row
+      (`test_collider_width_matches_the_drawn_character_width()`) was tautological — it compared
+      two hand-maintained constants that never touched the art — and its claim was false regardless:
+      the real opaque-pixel union is 26px wide with 3px of padding each side, not 22px/5px. A
+      designer is free to choose any movement-collider shape whether or not it matches the art's
+      bounds; "what you see is what collides" is not a rule this project holds for the movement
+      capsule. Do not read this row as live coverage.
 - [x] `AnimatedSprite2D.offset` is still `(0, -16)` — unchanged, but it is half of the derivation
       above, so it stays asserted.
 - [x] `collision_layer` is `player` only and `collision_mask` is `world` only (unchanged; the

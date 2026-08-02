@@ -10,6 +10,9 @@
 radius = 5.0
 height = 22.0
 
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_threshold_bounds"]
+size = Vector2(26, 27)
+
 [sub_resource type="AtlasTexture" id="AtlasTexture_g1dw6"]
 atlas = ExtResource("2_rkbax")
 region = Rect2(0, 0, 32, 32)
@@ -253,11 +256,20 @@ animations = [{
 [node name="Player" type="CharacterBody2D" unique_id=403433154]
 collision_layer = 2
 script = ExtResource("1_player")
+speed = 150.0
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=105470762]
 position = Vector2(0, -9)
 rotation = 1.5707964
 shape = SubResource("CapsuleShape2D_qjkh3")
+
+[node name="ThresholdBounds" type="Area2D" parent="." unique_id=1875037247]
+collision_layer = 8
+collision_mask = 0
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ThresholdBounds" unique_id=56525835]
+position = Vector2(0, -17.5)
+shape = SubResource("RectangleShape2D_threshold_bounds")
 
 [node name="Camera2D" type="Camera2D" parent="." unique_id=74936866]
 limit_smoothed = true

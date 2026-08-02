@@ -31,7 +31,7 @@ observable game behavior.
   section (currently ends at `layer_3="interactable"`).
 - `player/player.tscn`: add `ThresholdBounds` as a new `Area2D` child of `Player` (sibling of the
   existing `CollisionShape2D`, `Camera2D`, `AnimatedSprite2D`), with:
-  - `collision_layer = player_bounds` (bit 4, value 8), `collision_mask = 0` (design §6 — it is
+  - `collision_layer = player_bounds` (bit 3, value 8), `collision_mask = 0` (design §6 — it is
     only ever detected, never detects anything itself).
   - A child `CollisionShape2D` with a `RectangleShape2D`, `size = Vector2(26, 27)`,
     `position = Vector2(0, -17.5)` — the authored union bbox from design §6
@@ -96,7 +96,8 @@ Not yet placed anywhere real, not yet wired to `world.gd`.
   (design §4's exact snippet — a `String` path, not a `PackedScene`, for the same load-order
   reason `neighbour_*` used one, per §4's doc comment).
 - New `world/thresholds/threshold.tscn`: root `Area2D` using `threshold.gd`, `collision_layer =
-  interactable` (bit 3), `collision_mask = player_bounds` (bit 4, from slice 1), with a child
+  interactable` (bit 2, value 4), `collision_mask = player_bounds` (bit 3, value 8, from slice 1),
+  with a child
   `CollisionShape2D` (a `RectangleShape2D`, unsized/placeholder — a designer resizes it per
   placement, per §4: "an `Area2D` a designer drags into an area scene and sizes").
 
