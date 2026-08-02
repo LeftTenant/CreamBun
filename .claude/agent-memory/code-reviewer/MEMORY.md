@@ -2,7 +2,7 @@
 
 - [CreamBun Code Patterns](project_patterns.md) — durable Godot 4 / GDScript / Control / theme conventions; the "this is intentional, don't re-flag it" list
 - [Scene Migration Pattern](scene_migration_pattern.md) — notebook-tab `_ensure_pages_built()` page-extraction pattern, orphan trade-off, owner-clear, re-entrancy guards
-- [Testing Conventions](testing_conventions.md) — GUT conventions: `.uid`/`.import` companions, mirrored dirs, movement-test corridor rule, headless engine facts
+- [Testing Conventions](testing_conventions.md) — GUT conventions: `.uid`/`.import` companions, mirrored dirs, mirror-vs-relate file split, movement-test corridor rule, headless facts
 - [Game Data Conventions](game_data_conventions.md) — PlayerData/SaveManager persistence: autoload never-null guarantee, ResourceSaver/CACHE_MODE_REPLACE facts, shared-settings-by-reference, hermetic user:// test I/O
 - [Perspective Terminology](project_perspective_terminology.md) — three-quarter top-down, never "isometric"; never name the projection in identifiers; square 32×16 grid
 - [.tscn Editor Drift](gotcha_tscn_editor_drift.md) — editor writes stray root-node `position` into scene files; audit every .tscn hunk against `main`, revert rather than leave unstaged
@@ -11,8 +11,8 @@
 - [@tool _ready writes get serialized](gotcha_tool_ready_writes_serialize.md) — editor-run `_ready()` bakes instance-ROOT props into the placing .tscn; child writes never stored
 - [Vacuous "blocked" movement tests](gotcha_vacuous_blocked_movement_assertions.md) — upper-bound-only assertions pass when the probe never moves; GUT `simulate()` no-ops on scriptless bodies
 - [find_child owned flag](gotcha_find_child_owned_flag.md) — `owned=true` prunes whole subtrees under script-instanced (owner-less) nodes; reparent preserves owner
-- [GUT helper silent passes](gotcha_gut_helper_silent_passes.md) — `return node as T` swallows a failed cast; `%` binds tighter than `+` in concatenated assert messages
-- [Player Sprite Geometry](reference_player_sprite_geometry.md) — 32×32 frames have ~5px padding below the body and overhang the 20px collider ~6px per side
+- [GUT helper silent passes](gotcha_gut_helper_silent_passes.md) — `return node as T` swallows a failed cast; `%` binds tighter than `+`; sentinel returns that collide with authorable values
+- [Player Sprite Geometry](reference_player_sprite_geometry.md) — measured opaque union is 26×27 at x[-13,13] y[-31,-4]; the "5px padding on every side / 22×22" claim is false
 - [Camera edge lock vs tall sprite](gotcha_camera_edge_lock_vs_tall_sprite.md) — fixed by insetting the north wall 32px; only 5px of slack, redo the math if any constant moves
 - [Corner-gap wall test is inert](gotcha_perimeter_corner_gap_test_inert.md) — widened-span checks can't detect a missing corner extension on a wall ring; mutate the source to prove a test's catch
 - [get_bounds_px() coordinate space](gotcha_worldarea_bounds_coordinate_space.md) — Ground-local rect consumed as both WorldArea-local (walls) and global (camera limits)

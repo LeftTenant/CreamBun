@@ -1,10 +1,10 @@
 ---
 name: gotcha-gut-helper-silent-passes
-description: Two ways a GUT test silently passes — a fetch helper that returns a failed cast without asserting, and a "+" concatenated assert message whose % binds to the wrong literal
+description: Three ways a GUT test silently passes — a fetch helper returning a failed cast without asserting, a "+" concatenated assert message whose % binds to the wrong literal, and a sentinel return value that a scene could legitimately hold
 type: project
 ---
 
-Two recurring hazards in this repo's GUT test helpers. Both produce a test that looks green (or
+Three recurring hazards in this repo's GUT test helpers. All produce a test that looks green (or
 loudly red for the wrong reason) without exercising the behaviour it names.
 
 ## 1. `return node as T` in a fetch helper swallows the real failure
@@ -44,6 +44,19 @@ whole concatenation: `("a %s" + "b") % [arg]`.
 unreliable — a tokenizing scan is cheap: walk the file tracking bracket depth and string state,
 flag any `%` operator where a `+` was seen at the same depth since the last `,` or opening bracket.
 Validate the scanner on a known-buggy and known-good snippet before trusting a clean result.
+
+## 3. A sentinel return value that collides with a legitimate authored value
+
+The "return an empty value with the failure already recorded" variant of pattern 1 is safer —
+until the sentinel is also a value the scene could legitimately hold. E.g. a helper that returns
+`Rect2()` on lookup/type failure, with every caller doing `if rect.size == Vector2.ZERO: return`.
+If a designer zeroes the authored `RectangleShape2D.size`, the helper's own assertions all *pass*
+(the node exists, is the right type, has a shape), the callers return early, and GUT reports green
+tests with several passing assertions — harder to spot than the zero-assertion case.
+
+**How to apply:** when a helper returns a sentinel, ask whether the sentinel is reachable through
+normal authoring. If it is, the guard must be an assertion (`assert_ne(rect.size, Vector2.ZERO,
+...)`) rather than a bare `return`, or the helper should signal failure out-of-band.
 
 ## Related
 

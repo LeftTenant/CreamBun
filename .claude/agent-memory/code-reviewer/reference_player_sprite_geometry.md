@@ -1,47 +1,68 @@
 ---
 name: player-sprite-geometry
-description: Cream Bun's 32x32 sprite frames have ~5px of transparent padding below the body, so a -16 sprite offset leaves the feet floating above the node origin
+description: Measured opaque-pixel geometry of Cream Bun's 32x32 sprite frames — union is 26x27 at local x[-13,13] y[-31,-4]; the widely-repeated "5px padding on every side / 22x22 character" claim is false
 metadata:
   type: reference
 ---
 
-Measured geometry of `resources/sprites/player/*.png` (all 32×32 frames, horizontal strips):
+Measured from `resources/sprites/player/*.png` (four 32×32 horizontal strips: idle, walk
+forward, walk backward, walk side), with `AnimatedSprite2D.offset = (0, -16)` and
+`centered = true`, so a frame occupies player-local `x ∈ [-16, 16], y ∈ [-32, 0]`.
 
-| Sheet | Content rows (0-indexed) |
-| --- | --- |
-| `idle creambun.png` | 5 – 26 (every frame) |
-| `walk forward/backward creambun.png` | lowest row cycles 22 – 27 (hop animation) |
-| `walk side creambun.png` | lowest row cycles 20 – 26 |
+## The numbers (re-verified 2026-08, alpha > 0 bbox per frame, unioned)
 
-So the **ground-contact row is ~26–27**, leaving ~4–5 transparent rows at the bottom of the
-frame, and the walk cycle lifts the body up to ~5px during the hop.
+**Union of opaque pixels across every frame of every animation:**
 
-**Why it matters:** the world-collision design (§10) prescribes
-`AnimatedSprite2D.offset = Vector2(0, -16)` — half of the 32px frame height, which puts the
-frame's *bottom edge* on the node origin. Because the art does not fill the frame to that edge,
-Cream Bun's visible feet land ~4–5px **above** the origin (the ground anchor / collider centre),
-about a third of the 16px tile depth. That is invisible to any data-level test — only the e2e
-screenshot check catches it.
+| | player-local | size |
+| --- | --- | --- |
+| x | `[-13, 13]` | 26px |
+| y | `[-31, -4]` | 27px |
 
-**How to apply:** when reviewing feet-anchoring, Y-sort, or "player stops at the right place"
-work, remember the sprite's visual ground plane is ~4–5px above `global_position.y`. If it needs
-fixing, the choices are trimming the art or changing the offset (a design-doc decision, not a
-unilateral edit) — don't silently "correct" the documented `-16`.
+Per-side transparent padding within the 32×32 frame, at the union's tightest:
+**left/right 3px, top 1px, bottom 4px.** Padding is *not* uniform per frame — the idle pose
+has ~5px above the head while walk frames have ~1px (the walk cycle's hop raises the body),
+which is why any measurement must union across all frames, never sample the idle pose.
 
-## Horizontally: the sprite overhangs the collider by ~6px per side
+This union is exactly the authored `ThresholdBounds` rect in `player.tscn`
+(`RectangleShape2D` size `(26, 27)` at `(0, -17.5)`) — zero slack in every direction, by
+design (world-thresholds design.md §6: authored, not derived, with a test asserting
+containment).
 
-The frame is 32px wide but `player.tscn`'s `RectangleShape2D` is only 20×10, so the sprite sticks
-out ~6px on each side of the body that actually collides.
+## The false claim to watch for
 
-**Why it matters for prop review:** when judging whether a prop's *visual* lines up with its
-generated footprint collider, the player's own 6px sprite overhang closes an equal-sized gap. A
-prop visual up to ~12px narrower than its collider (e.g. a 20px-wide tree trunk on a 32px 1×1
-footprint) still reads as a flush stop on an east/west approach — the player's sprite edge meets
-the visual's edge even though their colliders are 6px apart. Do the sprite-vs-collider arithmetic
-before flagging "invisible blocking"; the naive collider-vs-visual comparison overstates it.
+Several comments and docs state the frames carry **"5px of transparent padding on every
+side, so the character occupies the middle 22×22."** That is wrong on all four sides (see
+table above), and the 22px figure is really the *movement capsule's* length, not the art's
+width. Its origin is the **idle pose specifically**: idle frames 0 and 2 measure exactly
+`(5, 5, 27, 27)`, i.e. 5px all round and 22×22 — someone measured one frame and generalised.
+It survives in at least `player.gd`'s `get_visual_extent()` docstring,
+`docs/features/world-collision/design.md` §10 (which also asserts "what you see is what
+collides" for the movement capsule — a rule world-thresholds Slice 1 explicitly overturned),
+and `docs/features/world-collision/player-collider-capsule-test-plan.md`'s "What changed"
+intro. The test that asserted it
+(`test_collider_width_matches_the_drawn_character_width`, comparing two hand-maintained
+constants and never touching the art) has been deleted.
 
-**North/south approaches have no such slack** — the collider is only 10px deep against a 32px-tall
-sprite, so vertical stop positions are dominated by the sprite's ~5px bottom padding instead.
+**How to apply:** never accept "the character is 22px wide" or "5px padding" as a premise —
+re-measure, or cite the table above. And treat the movement capsule's dimensions as a free
+design choice: this project explicitly does *not* hold "what you see is what collides" for
+the movement collider (only `ThresholdBounds` must cover the art).
+
+## Vertically: the feet float above the origin
+
+The lowest opaque row sits 4px above the frame's bottom edge, i.e. 4px above the node
+origin / ground anchor, about a quarter of the 16px tile depth. Invisible to any data-level
+test — only an e2e screenshot catches it. If it ever needs fixing the choices are trimming
+the art or changing the documented `-16` offset; both are design-doc decisions, not
+unilateral edits.
+
+## Horizontally: the sprite overhangs the movement collider by 2px per side
+
+The movement collider is a `CapsuleShape2D` laid on its side — 22×10, extent
+`x ∈ [-11, 11], y ∈ [-14, -4]`. Against the 26px-wide art that is only ~2px of overhang per
+side (an older note claiming ~6px was measured against a 20px rectangle collider that no
+longer exists). North/south approaches have far more slack: the collider is 10px deep
+against 27px of art.
 
 ## Related
 

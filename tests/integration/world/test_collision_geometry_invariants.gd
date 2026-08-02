@@ -35,6 +35,29 @@
 ##   dead zones), §12.5 (opposite-edge spawn)
 ## Test plan: docs/features/world-collision/player-collider-capsule-test-plan.md
 ##
+## Invariants 4 and 5 below are a second feature's addition to this file:
+## world-thresholds Slice 1 (docs/features/world-thresholds/design.md §6).
+##
+## Invariant 4 adds exactly ONE test — that ThresholdBounds's authored rect
+## still covers the art — because that check, and only that check, needs this
+## file's _drawn_character_extent() helper and exists for the identical
+## reason Invariant 1 does (an authored number and the art it was sized
+## against must be checked against each other, not just restated). Every
+## other fact about ThresholdBounds (that it exists, its exact shape/
+## position, its layer, its mask) is scene-as-data, not a relationship
+## between independently-authored facts — those tests live in
+## tests/integration/player/test_player_scene.gd instead, per this file's own
+## rule against mirroring.
+##
+## Invariant 5 adds one more test, unrelated to ThresholdBounds: that the
+## north perimeter wall stops the player's MOVEMENT collider exactly at its
+## own computed face. It rides along with this slice because adding
+## ThresholdBounds to the player's scene tree is what first raised the
+## question of whether a second collider could perturb the first — but the
+## invariant it protects (a wall stops movement exactly where its geometry
+## says) is a standing one, kept for its own sake, not scoped to this slice.
+## Test plan: docs/features/world-thresholds/slice-1-threshold-bounds-test-plan.md
+##
 ## Requires GUT: https://github.com/bitwes/Gut
 ##
 ## Run in the Godot editor:
@@ -656,3 +679,224 @@ func test_the_thinnest_painted_collision_strip_still_stops_the_player() -> void:
 			"walk-through gap.")
 					% [overshoot, chosen["thickness"], result["per_tick_px"],
 							result["traveled_px"], result["unobstructed_px"]])
+
+
+# ---------------------------------------------------------------------------
+# Invariant 4 — ThresholdBounds covers the player's drawn extent
+# (world-thresholds design.md §6)
+# ---------------------------------------------------------------------------
+
+## `player`'s ThresholdBounds child, typed and existence-checked, or null with
+## the failure already recorded. Shared by the tests below so a missing node
+## produces one clear failure rather than a chain of null derefs.
+func _get_threshold_bounds(player: CharacterBody2D) -> Area2D:
+	var node: Node = player.get_node_or_null("ThresholdBounds")
+	assert_not_null(node,
+			("player.tscn must have a child named 'ThresholdBounds' — the player's second " +
+			"collider, used only for Threshold detection (world-thresholds design.md §6)."))
+	if node == null:
+		return null
+
+	assert_true(node is Area2D,
+			("player.tscn's ThresholdBounds must be an Area2D (found %s) — " +
+			"world-thresholds design.md §6.") % [node.get_class()])
+	if not (node is Area2D):
+		return null
+
+	return node as Area2D
+
+
+## ThresholdBounds's CollisionShape2D child, or null with the failure already
+## recorded if it's missing.
+func _get_threshold_bounds_collision_shape(bounds: Area2D) -> CollisionShape2D:
+	var collision: CollisionShape2D = (
+			bounds.get_node_or_null("CollisionShape2D") as CollisionShape2D)
+	assert_not_null(collision,
+			"ThresholdBounds must have a CollisionShape2D child (world-thresholds design.md §6)")
+	return collision
+
+
+## `player`'s ThresholdBounds authored rect, in the player's local space —
+## derived from its CollisionShape2D.position and RectangleShape2D.size, with
+## the "is it actually a RectangleShape2D" preamble collapsed into one place.
+## Returns an empty Rect2 (size == Vector2.ZERO) with the failure already
+## recorded on any lookup or type failure.
+func _get_threshold_bounds_rect(player: CharacterBody2D) -> Rect2:
+	var bounds: Area2D = _get_threshold_bounds(player)
+	if bounds == null:
+		return Rect2()
+	var collision: CollisionShape2D = _get_threshold_bounds_collision_shape(bounds)
+	if collision == null:
+		return Rect2()
+
+	var shape: RectangleShape2D = collision.shape as RectangleShape2D
+	assert_not_null(shape,
+			("ThresholdBounds's CollisionShape2D.shape must be a RectangleShape2D " +
+			"(found %s) — world-thresholds design.md §6.") % [collision.shape])
+	if shape == null:
+		return Rect2()
+
+	# A zero-size shape is itself a failure worth asserting on, not just a
+	# "helper couldn't find anything" signal — callers use Vector2.ZERO as
+	# exactly that signal (see their own guards), so an authored (0, 0) rect
+	# would otherwise look identical to a lookup failure and let the coverage
+	# check below pass vacuously on a ThresholdBounds that could never detect
+	# anything.
+	assert_ne(shape.size, Vector2.ZERO,
+			"ThresholdBounds's RectangleShape2D.size must not be zero — a zeroed rect would never overlap a Threshold, silently disabling every future transition.")
+
+	return Rect2(collision.position - shape.size / 2.0, shape.size)
+
+
+func test_threshold_bounds_rect_contains_the_drawn_character_union() -> void:
+	# THE invariant world-thresholds design.md §6 exists for: "the size is
+	# authored, not derived — and this is deliberate ... a test asserts it
+	# still contains the art's union bbox." This is Invariant 4's counterpart
+	# to Invariant 1's north-headroom-inset check above, and follows this
+	# file's usual philosophy for the same reason: measure the art
+	# independently (_drawn_character_extent(), reused verbatim — it already
+	# unions across EVERY frame of EVERY animation) and relate it to the
+	# authored rect, rather than mirroring a constant.
+	#
+	# On failure this reports the measured bbox and exactly how far short each
+	# side of the authored rect falls, so a human knows what to type — it must
+	# NEVER recompute or auto-size the rect. Doing so would silently readmit
+	# the exact bug this feature exists to retire: sprite art quietly
+	# changing map geometry.
+	var player: CharacterBody2D = _instantiate_player()
+	if player == null:
+		return
+
+	var authored: Rect2 = _get_threshold_bounds_rect(player)
+	if authored.size == Vector2.ZERO:
+		return
+	var measured: Rect2 = _drawn_character_extent(player)
+	if measured.size == Vector2.ZERO:
+		return
+
+	# Positive only when the authored rect falls short on that side — zero
+	# when it already covers (or exceeds) the measured union there.
+	var left_shortfall: float = maxf(0.0, authored.position.x - measured.position.x)
+	var top_shortfall: float = maxf(0.0, authored.position.y - measured.position.y)
+	var right_shortfall: float = maxf(0.0, measured.end.x - authored.end.x)
+	var bottom_shortfall: float = maxf(0.0, measured.end.y - authored.end.y)
+
+	var fully_contains: bool = (
+			left_shortfall <= 0.0 and top_shortfall <= 0.0
+			and right_shortfall <= 0.0 and bottom_shortfall <= 0.0)
+
+	assert_true(fully_contains,
+			("ThresholdBounds's authored rect %s does not fully contain the measured " +
+			"opaque-pixel union %s (the union across EVERY frame of EVERY animation). " +
+			"Shortfalls — how much to grow each side of the authored RectangleShape2D in " +
+			"player.tscn to cover the art — left %.1fpx, top %.1fpx, right %.1fpx, " +
+			"bottom %.1fpx. Fix this by a human resizing ThresholdBounds's CollisionShape2D " +
+			"directly (world-thresholds design.md §6: \"the size is authored, not derived\") " +
+			"— never by deriving the rect from this measurement.")
+					% [authored, measured, left_shortfall, top_shortfall,
+							right_shortfall, bottom_shortfall])
+
+
+# ---------------------------------------------------------------------------
+# Invariant 5 — the north wall stops the player exactly where its own
+# geometry says it will
+# ---------------------------------------------------------------------------
+
+func test_player_stops_flush_against_the_north_wall_face() -> void:
+	# RENAMED from test_movement_into_a_solid_wall_is_unperturbed_by_threshold_bounds
+	# and given its own banner (was mis-filed under "Invariant 4" above, which
+	# is specifically about ThresholdBounds vs. the art — this test never
+	# touches ThresholdBounds; it drives the MOVEMENT capsule, via
+	# CollisionProbe.player_collider_extent()). The old name described a
+	# one-time migration check ("unchanged by adding ThresholdBounds"), not
+	# the standing invariant this test actually protects, and framed the
+	# value backwards for anyone reading it later.
+	#
+	# The standing invariant: driving into the meadow's north perimeter wall
+	# stops the player's leading collider edge within 1px of the wall's own
+	# player-facing surface (computed the same way
+	# test_the_built_north_boundary_actually_uses_the_derived_inset() computes
+	# it, in Invariant 1 above). That is meaningfully stronger than
+	# test_perimeter_walls.gd's loose "travelled less than 90% of the
+	# unobstructed distance" check, and worth keeping in its own right — not
+	# just as a slice-1 regression guard, which is why it isn't grouped with
+	# either ThresholdBounds invariant.
+	#
+	# It also happens to prove, empirically rather than by argument, that
+	# ThresholdBounds (an Area2D with collision_mask = 0, so by construction it
+	# can never affect move_and_slide()) doesn't perturb the movement capsule
+	# now that the player's scene tree carries a second collider — but that is
+	# a corollary of the invariant above, not what makes this test worth
+	# keeping.
+	var world: Node = _instantiate_world()
+	if world == null:
+		return
+
+	var active_area: Node = world.get_node_or_null("ActiveArea")
+	if active_area == null or active_area.get_child_count() == 0:
+		fail_test("world.tscn should have an instanced WorldArea under ActiveArea")
+		return
+	var area: WorldArea = active_area.get_child(0) as WorldArea
+	var player: CharacterBody2D = world.find_child("Player", true, false) as CharacterBody2D
+	assert_not_null(area, "the instanced area must be a WorldArea")
+	assert_not_null(player, "world.tscn's instantiated tree should contain a Player")
+	if area == null or player == null:
+		return
+
+	var wall: StaticBody2D = area.get_node_or_null("PerimeterWallNorth") as StaticBody2D
+	assert_not_null(wall,
+			("the meadow's north edge has no neighbour, so it should build a StaticBody2D " +
+			"named 'PerimeterWallNorth'"))
+	if wall == null:
+		return
+
+	var wall_collision: CollisionShape2D = null
+	for child in wall.get_children():
+		wall_collision = child as CollisionShape2D
+		if wall_collision != null:
+			break
+	assert_not_null(wall_collision, "the north perimeter wall must have a CollisionShape2D child")
+	if wall_collision == null:
+		return
+
+	var wall_shape: RectangleShape2D = wall_collision.shape as RectangleShape2D
+	if wall_shape == null:
+		fail_test("the north perimeter wall's shape should be a RectangleShape2D")
+		return
+
+	# The wall's player-facing (south) surface — same derivation as
+	# test_the_built_north_boundary_actually_uses_the_derived_inset() above.
+	var facing_surface: float = (
+			wall.position.y + wall_collision.position.y + wall_shape.size.y / 2.0)
+
+	var collider: Rect2 = CollisionProbe.player_collider_extent(player)
+	var bounds: Rect2 = area.get_bounds_px()
+
+	await wait_physics_frames(2)
+
+	# Search only the short band just south of the wall face — APPROACH_OFFSET_PX
+	# plus a little slack — rather than the area's full height: this needs a
+	# lane that's clear for a 48px approach, not a lane clear top-to-bottom,
+	# and searching the smaller band is far less likely to be defeated by
+	# unrelated clutter elsewhere on the map.
+	var clear_x: float = CollisionProbe.find_clear_column(
+			area, collider, facing_surface, facing_surface + APPROACH_OFFSET_PX + 20.0,
+			bounds.position.x + 16.0, bounds.end.x - 16.0)
+	assert_false(is_nan(clear_x),
+			("no obstacle-free column exists in the %.0fpx band south of the north wall — " +
+			"cannot attribute a stop to the wall without a clean approach to it.")
+					% [APPROACH_OFFSET_PX + 20.0])
+	if is_nan(clear_x):
+		return
+
+	var start := Vector2(clear_x, facing_surface + APPROACH_OFFSET_PX)
+	var result: Dictionary = _drive_from(player, start, "move_up")
+
+	var leading_edge: float = player.global_position.y + collider.position.y
+	assert_almost_eq(leading_edge, facing_surface, 1.0,
+			("driving north into the meadow's perimeter wall stopped the player's leading " +
+			"collider edge at y=%.2f, but the wall's own geometry says it should be y=%.2f " +
+			"(travelled %.1fpx of an unobstructed %.1fpx). A movement collider must stop " +
+			"exactly at the wall face it collides with, regardless of what else is on the " +
+			"player's scene tree.")
+					% [leading_edge, facing_surface, result["traveled_px"], result["unobstructed_px"]])

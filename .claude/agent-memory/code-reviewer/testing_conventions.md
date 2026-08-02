@@ -56,6 +56,30 @@ they only surface by comparing against sibling test files.
   coverage. Check whether a textual guard's subject moved, ask for the guard to follow it, and
   confirm non-vacuity by grepping the new target for the thing being asserted about.
 
+## Two opposing conventions — check a test is in the right file
+
+Most world/player tests follow **"mirror the constant, don't read it"**: the test restates the
+expected value so a source change fails loudly (`tests/integration/player/test_player_scene.gd`
+is the canonical example — `EXPECTED_CAPSULE_*`, `EXPECTED_COLLIDER_EXTENT`, layer/mask bits).
+
+`tests/integration/world/test_collision_geometry_invariants.gd` deliberately does **the
+opposite**, and its header says so at length: it *reads* live scenes and the real constants and
+asserts **relationships between independently-authored facts** (art alpha ↔ collider ↔ world
+geometry). Mirroring catches values that *changed*; this file catches values that changed to
+something *wrong*.
+
+**How to apply:** when a slice adds scene-as-data checks (a node exists, its shape is
+`Vector2(x, y)`, its layer bit is N), those belong in the mirroring file for that scene, not in
+the invariants file — putting literals there contradicts the host file's stated reason for
+existing and reads as two copies of one number. Only the check that *relates* two independently
+authored facts (e.g. "the authored rect still contains the measured opaque-pixel union") belongs
+in the invariants file, and only because it needs that file's `_drawn_character_extent()` helper.
+
+Also watch for tests whose *name* encodes a one-time event ("…_is_unchanged_by_X",
+"…_unperturbed_by_X"). Those read as commit messages; if the assertion is a standing invariant,
+name it for the invariant, and if it merely restates coverage another file already has, it is
+duplication (see [[no-one-time-op-tests]]).
+
 ## Style
 
 - **Multi-line call continuation uses TWO indent levels (two tabs)**, matching the GDScript
