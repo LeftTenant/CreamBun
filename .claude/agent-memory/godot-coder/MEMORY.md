@@ -26,3 +26,4 @@
 - [Test-first long hold outlives a fast implementation](gotcha_test_first_hold_duration_outlives_fast_implementation.md) — a generous DRIVE_TICKS hold can sample well after a correct, quick sequence finished (and kept moving on the still-held input)
 - [Linked-edge stub/trigger/stub split](reference_linked_edge_stub_trigger_split.md) — corner dead zones need real solid geometry, not handler-side signal suppression; south-end test trap on vertical edges
 - [e2e manual input latency floor](gotcha_e2e_manual_input_latency_floor.md) — step-by-step testing-sandbox calls have a ~1.4s/~280px travel floor per round trip; can't hit sub-tile release timing manually
+- [resource_local_to_scene for per-instance template shapes](gotcha_resource_local_to_scene_for_template_shapes.md) — designer-resizable .tscn templates need this flag or every instance shares one shape resource; test helpers must assign a fresh shape, never mutate the loaded one
