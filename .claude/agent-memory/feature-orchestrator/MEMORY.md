@@ -1,1 +1,2 @@
 - [Execution tools not available](execution-tools-not-available.md) — orchestrator is a planner; can't spawn agents or run godot MCP; produce a self-sufficient slices.md for the parent's /implement-feature flow instead of executing
+- [Replace-a-derived-mechanism slice pattern](slice_pattern_replace_derived_mechanism.md) — build the new mechanism additively against fixtures, one atomic switchover slice deletes+migrates+retires tests, docs slice last
