@@ -43,4 +43,4 @@ walkable region. Areas are expected to be painted as filled rectangles.
 
 [[gotcha-tilemap-geometry-review]] — how to decode `tile_map_data` and verify alt-tile collision.
 [[gotcha-worldarea-bounds-coordinate-space]] — which coordinate space that rect is in.
-[[gotcha-open-edge-trigger-corner-gaps]] — why a vertical edge's north corner stub is 64px.
+[[reference-threshold-arrival-placement]] — the placed Threshold/Arrival geometry that replaced derived edges.

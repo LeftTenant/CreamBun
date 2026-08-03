@@ -83,6 +83,15 @@ Watch the *visual* consequence too: an alternative of a flat ground texture used
 tile is an invisible wall, and because `Solids` is Y-sorted the player sorts *behind* it when
 standing north of the tile centre. Fine as slice scaffolding, worth flagging as a follow-up.
 
+### `get_collision_polygons_count(0)` ERRORS on a TileSet with zero physics layers
+
+It does not return `0` — it emits an engine-level `Index p_layer_id = 0 is out of bounds` error,
+once per queried cell. Any helper that walks arbitrary `TileMapLayer`s must guard with
+`layer.tile_set != null and layer.tile_set.get_physics_layers_count() > 0` first. This bites the
+moment a second area scene exists: TileSets are per-scene sub-resources, so one area can have a
+physics layer configured while another has none at all
+([[reference-world-area-authoring-facts]]).
+
 ## 4. Verify hand-spliced `.tscn` text with a ResourceSaver round trip
 
 When a coder hand-writes serialized text into a `.tscn` (to avoid regenerating `unique_id`s and

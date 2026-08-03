@@ -275,6 +275,14 @@ This replaces a code rule with a content rule, deliberately. The old inset made 
 strip to the player's sprite. Now the author decides per area, and the failure mode when they forget
 is obvious on screen rather than one pixel deep.
 
+**`meadow.tscn`'s north edge is a deliberate, accepted instance of this clipping**, not an oversight
+to "fix" later. It has none of the mitigations above — no inset terrain, no placed Threshold — so a
+player standing at the true north wall has roughly the top third of Cream Bun's sprite drawn above
+`Camera2D.limit_top`. Meadow is the starting area, so this is the most visible instance of the
+tradeoff this section describes; it is accepted anyway because the north edge is not somewhere a
+player has a reason to linger. A future contributor who notices this should not treat it as a
+regression.
+
 **A pit needs no collision.** Draw the hole, leave the floor non-solid, and put a Threshold inside
 it drawn far enough in that the player is visually over the hole when it fires. There is no
 "edge of the pit" to make solid and no geometry to line the trigger up with.

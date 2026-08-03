@@ -55,4 +55,4 @@ just the geometry that causes it, is regression-guarded.
 
 [[testing-conventions]] — the "clear corridor must span the whole travel window" rule for
 map-driven movement tests; same family of silent-pass failure.
-[[gotcha-open-edge-trigger-corner-gaps]] — the corner geometry those trigger tests cover.
+[[gotcha-perimeter-corner-gap-test-inert]] — the corner-closure check shape that actually fails when it should.

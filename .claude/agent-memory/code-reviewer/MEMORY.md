@@ -15,10 +15,10 @@
 - [Invalid TileMap source_id paints silently](gotcha_tilemap_invalid_source_id_paints_silently.md) — `set_cell` with an undefined source still fills `get_used_rect()`; first TileSet source id is 1, not 0
 - [GUT helper silent passes](gotcha_gut_helper_silent_passes.md) — `return node as T` swallows a failed cast; `%` binds tighter than `+`; sentinel returns; a parse error drops a script yet still reports "All tests passed!"
 - [Player Sprite Geometry](reference_player_sprite_geometry.md) — measured opaque union is 26×27 at x[-13,13] y[-31,-4]; the "5px padding on every side / 22×22" claim is false
-- [Camera edge lock vs tall sprite](gotcha_camera_edge_lock_vs_tall_sprite.md) — fixed by insetting the north wall 32px; only 5px of slack, redo the math if any constant moves
-- [Corner-gap wall test is inert](gotcha_perimeter_corner_gap_test_inert.md) — widened-span checks can't detect a missing corner extension on a wall ring; mutate the source to prove a test's catch
+- [Camera edge lock vs tall sprite](gotcha_camera_edge_lock_vs_tall_sprite.md) — the north headroom inset is DELETED; a flush north wall clips 17 of the sprite's 27 rows, now a per-area content decision
+- [Corner-gap wall test is inert](gotcha_perimeter_corner_gap_test_inert.md) — span-coverage can't prove corner closure on a wall ring; use the per-corner point-containment check instead
 - [get_bounds_px() coordinate space](gotcha_worldarea_bounds_coordinate_space.md) — Ground-local rect consumed as both WorldArea-local (walls) and global (camera limits)
-- [Open-edge trigger corner gaps](gotcha_open_edge_trigger_corner_gaps.md) — linked edge = stub/trigger/stub; a vertical edge's north stub is 64px on purpose (headroom inset), measured NE band ≈33px
+- [Threshold/Arrival placement](reference_threshold_arrival_placement.md) — 2px depth, 4px gap from the wall, 8px corner inset; how to prove an Arrival reproduces the retired landing math
 - [World-area authoring facts](reference_world_area_authoring_facts.md) — TileSets are per-scene embedded sub-resources; min area is 10×**12** tiles; bounds are a bounding box
 - [Destroy-before-acquire soft-lock](gotcha_destroy_before_acquire_soft_lock.md) — validate the replacement scene BEFORE reparent/remove_child/queue_free; a late null-guard fires into an empty tree
 - [Sub-resource mutation leaks](gotcha_test_subresource_mutation_leak.md) — instantiate() shares [sub_resource]s process-wide; tests must assign not mutate, template scenes need resource_local_to_scene

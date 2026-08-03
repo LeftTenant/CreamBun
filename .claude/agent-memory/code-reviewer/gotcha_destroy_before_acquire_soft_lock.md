@@ -35,5 +35,4 @@ finding.
 
 ## Related
 
-[[gotcha-open-edge-trigger-corner-gaps]] — the other recurring failure shape in this transition
-code.
+[[reference-threshold-arrival-placement]] — the placed mechanism this transition code now drives.

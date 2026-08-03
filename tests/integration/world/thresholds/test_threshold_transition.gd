@@ -95,10 +95,11 @@ const FIXTURE_PLURAL_PATH: String = FIXTURES_DIR + "fixture_plural.tscn"
 ## that fails to load().
 const BAD_DESTINATION_PATH: String = FIXTURES_DIR + "does_not_exist.tscn"
 
-## area_id_from_scene_path()'s output for each fixture (WorldArea's static
-## helper, still live this slice — it isn't removed until Slice 4), spelled
-## out by hand rather than called, matching test_area_transition.gd's own
-## convention of hardcoding the expected StringName
+## The expected area id for each fixture, spelled out by hand rather than
+## derived (the id-from-scene-path lookup this mirrors is now a private
+## one-liner in world.gd, not a callable WorldArea static — design.md §7),
+## matching test_area_transition.gd's own convention of hardcoding the
+## expected StringName
 ## (assert_signal_emitted_with_parameters(..., [StringName("orchard")])).
 const FIXTURE_A_ID: StringName = &"fixture_a"
 const FIXTURE_REENTRY_ID: StringName = &"fixture_reentry"
@@ -241,7 +242,7 @@ func _find_fade_canvas_item(transition: Node) -> CanvasItem:
 
 # ---------------------------------------------------------------------------
 # GameState sequencing (design.md §5's freeze step, mirroring the old
-## _on_edge_reached()'s guard against a residual second firing)
+# edge-derived mechanism's guard against a residual second firing)
 # ---------------------------------------------------------------------------
 
 func test_game_state_becomes_loading_immediately_on_crossing_threshold() -> void:
@@ -281,8 +282,8 @@ func test_residual_second_area_entered_while_loading_is_a_noop() -> void:
 
 	# Simulate a residual/duplicate area_entered firing a second time,
 	# immediately, while GameState is still (presumably) LOADING from the
-	# first crossing — mirrors test_area_transition.gd's identical
-	# re-emit-the-signal-directly technique for edge_reached.
+	# first crossing — the same re-emit-the-signal-directly technique the old
+	# edge-derived mechanism's equivalent test used for its own signal.
 	var bounds_area: Area2D = player.get_node_or_null("ThresholdBounds") as Area2D
 	if is_instance_valid(threshold) and bounds_area != null:
 		threshold.area_entered.emit(bounds_area)

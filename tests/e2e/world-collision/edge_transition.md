@@ -1,5 +1,14 @@
 # Scenario: Edge transition (fade) and a second area (Slice 10)
 
+> **SUPERSEDED** by `tests/e2e/world-thresholds/threshold_crossing.md`. This document describes the
+> edge-derived transition mechanism (`neighbour_*` slots, `edge_reached`, corner dead zones, the
+> arrival debounce) that World Thresholds Slice 4 deleted outright
+> (`docs/features/world-thresholds/design.md` §9) and replaced with placed `Threshold`/`Arrival`
+> nodes. `meadow.tscn`/`orchard.tscn` no longer have any of the machinery this scenario exercises —
+> do not attempt to run it. Kept for history, the same way `docs/features/world-collision/design.md`
+> §12.2/§12.4 stay in place as history in that design doc. New meadow ↔ orchard e2e coverage lives
+> entirely in `threshold_crossing.md`.
+
 Verifies Slice 10 — "Edge transition (fade) and a second area" — the parts of design doc §12.4
 (open edges vs. walls, corner dead zones, arrival debounce) and §12.5 (the freeze/fade/swap/spawn/
 reveal sequence, opposite-edge spawn maths) that a GUT test cannot confirm: whether the fade
