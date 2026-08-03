@@ -31,9 +31,20 @@
 ## tests are what make the second of any two of them fail loudly.
 ##
 ## Design reference: docs/features/world-collision/design.md §10 (player
-##   collider), §12.3 (camera limits), §12.4 (north headroom inset, corner
-##   dead zones), §12.5 (opposite-edge spawn)
+##   collider), §12.3 (camera limits) — history for §12.4/§12.5 (north
+##   headroom inset, corner dead zones, opposite-edge spawn), which World
+##   Thresholds Slice 4 deletes; see below.
 ## Test plan: docs/features/world-collision/player-collider-capsule-test-plan.md
+##
+## World Thresholds Slice 4 (docs/features/world-thresholds/design.md §7-§9)
+## deletes the north-edge camera-headroom inset and the corner dead zone
+## outright — every edge's perimeter wall is now unconditional and symmetric,
+## and a Threshold sitting inset from it is what keeps the character on
+## screen where a designer wants that (design §8). This file's Invariant 1
+## (north headroom inset) and the corner-dead-zone half of Invariant 2 are
+## removed along with the WorldArea API they measured
+## (north_headroom_inset(), CORNER_DEAD_ZONE_PX) — see the deletion notes
+## inline below for exactly what went and why what remains still stands.
 ##
 ## Invariants 4 and 5 below are a second feature's addition to this file:
 ## world-thresholds Slice 1 (docs/features/world-thresholds/design.md §6).
@@ -158,13 +169,12 @@ func _drawn_character_extent(player: CharacterBody2D) -> Rect2:
 	if frames == null:
 		return Rect2()
 
-	# The union across EVERY frame of EVERY animation, matching what
-	# player.gd's get_visual_extent() publishes. Measuring only the idle pose
-	# would be wrong and dangerously reassuring: this sprite sheet's padding is
-	# not uniform (idle frame 0 has 5px above the character, but walk frames
-	# have only 1px), so an idle-only measurement under-reports the character's
-	# real height by 4px and would bless a north inset that clips the top of
-	# Cream Bun's antenna the moment they walk into the boundary.
+	# The union across EVERY frame of EVERY animation — measuring only the
+	# idle pose would be wrong and dangerously reassuring: this sprite sheet's
+	# padding is not uniform (idle frame 0 has 5px above the character, but
+	# walk frames have only 1px), so an idle-only measurement under-reports
+	# the character's real height by 4px and would bless a ThresholdBounds
+	# rect (Invariant 4 below) that doesn't actually cover the art.
 	var union := Rect2()
 	var found_any: bool = false
 
@@ -295,191 +305,34 @@ func _drive_from(player: CharacterBody2D, start: Vector2, action: String) -> Dic
 
 
 # ---------------------------------------------------------------------------
-# Invariant 1 — the north headroom inset must actually cover the player
+# Invariant 1 — removed (World Thresholds Slice 4)
 # ---------------------------------------------------------------------------
-
-func test_north_headroom_inset_keeps_the_whole_character_on_screen() -> void:
-	# THE invariant this file was written for.
-	#
-	# Camera2D.limit_top (world.gd's _set_camera_limits()) clamps the camera's
-	# VIEW RECT to the painted north edge. Stopped flush against the north
-	# boundary the player's origin sits at `boundary - collider.position.y`,
-	# and the drawn character extends `visual.position.y` above that origin —
-	# so the top of the character lands
-	#
-	#     collider.position.y - visual.position.y
-	#
-	# ABOVE the boundary. The inset has to be at least that, or the character
-	# is drawn outside the clamped view and the player is invisible at the top
-	# of every map (a bug that was hit for real before the inset existed).
-	#
-	# Note that both inputs are negative offsets above the origin, so the
-	# subtraction reads backwards at a glance: -14 - -27 = 13.
-	var player: CharacterBody2D = _instantiate_player()
-	if player == null:
-		return
-
-	var collider: Rect2 = CollisionProbe.player_collider_extent(player)
-	var visual: Rect2 = _drawn_character_extent(player)
-	if collider.size == Vector2.ZERO or visual.size == Vector2.ZERO:
-		return
-
-	var needed: float = collider.position.y - visual.position.y
-	var inset: float = WorldArea.north_headroom_inset(visual, collider)
-
-	assert_gte(inset, needed,
-			("north_headroom_inset() returned %.1fpx but this player needs at least %.1fpx: " +
-			"their collider's top edge sits %.1fpx above their origin, while the drawn " +
-			"character reaches %.1fpx above it, so stopping flush against the north boundary " +
-			"puts %.1fpx of Cream Bun above Camera2D.limit_top.")
-					% [inset, needed, -collider.position.y, -visual.position.y, needed])
-
-
-func test_north_headroom_inset_is_the_tightest_whole_tile_row() -> void:
-	# The other side of the same invariant. Design.md §12.4 makes the inset a
-	# whole tile depth so the non-walkable backdrop strip is an exact row of
-	# tiles a designer can see and reason about — but only ONE row. An inset
-	# two rows deep would satisfy the "keeps the character on screen" check
-	# above while quietly costing every map in the game a row of ground nobody
-	# can stand on, which is the kind of waste that never shows up as a bug
-	# report.
-	var player: CharacterBody2D = _instantiate_player()
-	if player == null:
-		return
-
-	var collider: Rect2 = CollisionProbe.player_collider_extent(player)
-	var visual: Rect2 = _drawn_character_extent(player)
-	if collider.size == Vector2.ZERO or visual.size == Vector2.ZERO:
-		return
-
-	var needed: float = collider.position.y - visual.position.y
-	var tile_depth: float = float(WorldArea.TILE_SIZE.y)
-	var inset: float = WorldArea.north_headroom_inset(visual, collider)
-
-	assert_lt(inset, needed + tile_depth,
-			("north_headroom_inset() returned %.1fpx for a %.1fpx requirement — a whole extra " +
-			"%.0fpx tile row more than needed. Every map in the game pays that as ground the " +
-			"player can see but never stand on.")
-					% [inset, needed, tile_depth])
-	assert_eq(fmod(inset, tile_depth), 0.0,
-			("north_headroom_inset() returned %.1fpx, which is not a whole multiple of the " +
-			"%.0fpx tile depth — the non-walkable backdrop strip (design.md §12.4) would end " +
-			"mid-tile, which a designer cannot see or count.")
-					% [inset, tile_depth])
+#
+# This banner used to guard the north-edge camera-headroom inset:
+# test_north_headroom_inset_keeps_the_whole_character_on_screen(),
+# test_north_headroom_inset_is_the_tightest_whole_tile_row(),
+# test_north_headroom_inset_responds_to_geometry_rather_than_being_fixed(),
+# and test_the_built_north_boundary_actually_uses_the_derived_inset(), plus
+# the get_visual_extent() half of test_player_publishes_extents_matching_an_
+# independent_measurement() below. World Thresholds Slice 4
+# (docs/features/world-thresholds/design.md §7-§9) deletes
+# WorldArea.north_headroom_inset() and Player.get_visual_extent() outright —
+# the north edge may clip the character by default now (design §8), a
+# content decision a designer makes per area (paint terrain, place a
+# Threshold, or accept it), not a computed one this file needs to verify.
 
 
 func test_player_publishes_extents_matching_an_independent_measurement() -> void:
-	# player.gd's get_visual_extent()/get_collider_extent() are the numbers the
-	# whole boundary system is now derived from, so they are worth measuring a
-	# second way. This file computes both from the scene's raw contents
-	# independently of player.gd's implementation; if the two ever disagree,
-	# every inset derived downstream is suspect.
-	#
-	# This is also the test that would catch the tempting "optimisation" of
-	# measuring only the idle frame: the sheet's padding is uneven, so an
-	# idle-only union is 4px shorter than the real one.
+	# player.gd's get_collider_extent() is a number other systems (this file,
+	# CollisionProbe) read rather than re-deriving, so it's worth measuring a
+	# second way: this file computes it from the scene's raw contents
+	# independently of player.gd's implementation, and the two must agree.
 	var player: CharacterBody2D = _instantiate_player()
 	if player == null:
 		return
 
 	assert_eq(player.get_collider_extent(), CollisionProbe.player_collider_extent(player),
 			"player.gd's published collider extent must match the extent measured from its own CollisionShape2D")
-	assert_eq(player.get_visual_extent(), _drawn_character_extent(player),
-			("player.gd's published visual extent must match the opaque-pixel union measured " +
-			"independently from its SpriteFrames — if these differ, check whether one of them " +
-			"is only looking at a single animation or frame."))
-
-
-func test_north_headroom_inset_responds_to_geometry_rather_than_being_fixed() -> void:
-	# The two tests above check the derivation against ONE input — the project's
-	# current player — which a function that ignored its arguments and returned
-	# 16.0 would also satisfy. These synthetic cases pin the behaviour that
-	# makes the derivation worth having: that it MOVES.
-	var tile_depth: float = float(WorldArea.TILE_SIZE.y)
-
-	# A character drawn no higher than its own collider needs no headroom.
-	assert_eq(
-		WorldArea.north_headroom_inset(Rect2(-11, -14, 22, 10), Rect2(-11, -14, 22, 10)),
-		0.0,
-		"a character whose art doesn't rise above its collider needs no headroom inset")
-
-	# Taller art than the current player must cost more headroom, not the same.
-	var current: float = WorldArea.north_headroom_inset(Rect2(-11, -27, 22, 22), Rect2(-11, -14, 22, 10))
-	var taller: float = WorldArea.north_headroom_inset(Rect2(-11, -48, 22, 43), Rect2(-11, -14, 22, 10))
-	assert_gt(taller, current,
-			("a taller character must require a deeper inset (got %.1fpx for a 48px-tall " +
-			"character vs %.1fpx for a 27px one) — if these are equal the derivation is " +
-			"ignoring its inputs.") % [taller, current])
-
-	# A requirement landing exactly on a tile boundary must not round up a
-	# whole spare row. 16px of overhang is exactly one tile depth.
-	assert_eq(
-		WorldArea.north_headroom_inset(Rect2(-11, -30, 22, 20), Rect2(-11, -14, 22, 10)),
-		tile_depth,
-		"an overhang of exactly one tile depth must return one tile, not two")
-
-
-func test_the_built_north_boundary_actually_uses_the_derived_inset() -> void:
-	# The wiring test. Everything above checks that north_headroom_inset()
-	# computes the right number; this checks that the number reaches the
-	# geometry — that world.gd really does read the player's extents and hand
-	# them to build_perimeter_walls(), rather than the two halves of this
-	# mechanism quietly agreeing on a stale default.
-	#
-	# The meadow's north edge has no neighbour, so it builds a plain
-	# StaticBody2D. Its player-facing (south) surface is what must land on the
-	# derived boundary: _edge_rect() places the wall from
-	# `bounds.top - thickness + inset` with height `thickness`, so its bottom
-	# edge is exactly `bounds.top + inset`.
-	var world: Node = _instantiate_world()
-	if world == null:
-		return
-
-	var active_area: Node = world.get_node_or_null("ActiveArea")
-	if active_area == null or active_area.get_child_count() == 0:
-		fail_test("world.tscn should have an instanced WorldArea under ActiveArea")
-		return
-	var area: WorldArea = active_area.get_child(0) as WorldArea
-	var player: CharacterBody2D = world.find_child("Player", true, false) as CharacterBody2D
-	assert_not_null(area, "the instanced area must be a WorldArea")
-	assert_not_null(player, "world.tscn's instantiated tree should contain a Player")
-	if area == null or player == null:
-		return
-
-	var expected_inset: float = WorldArea.north_headroom_inset(
-			player.get_visual_extent(), player.get_collider_extent())
-	var bounds: Rect2 = area.get_bounds_px()
-
-	var wall: StaticBody2D = area.get_node_or_null("PerimeterWallNorth") as StaticBody2D
-	assert_not_null(wall,
-			"the meadow's north edge has no neighbour, so it should build a StaticBody2D named 'PerimeterWallNorth'")
-	if wall == null:
-		return
-
-	var collision: CollisionShape2D = null
-	for child in wall.get_children():
-		collision = child as CollisionShape2D
-		if collision != null:
-			break
-	assert_not_null(collision, "the north perimeter wall must have a CollisionShape2D child")
-	if collision == null:
-		return
-
-	var shape: RectangleShape2D = collision.shape as RectangleShape2D
-	if shape == null:
-		fail_test("the north perimeter wall's shape should be a RectangleShape2D")
-		return
-
-	# The wall's player-facing surface: its collider's southern edge.
-	var facing_surface: float = wall.position.y + collision.position.y + shape.size.y / 2.0
-
-	assert_almost_eq(facing_surface, bounds.position.y + expected_inset, 0.5,
-			("the north wall's player-facing surface sits at y=%.1f, but the player's own " +
-			"geometry says it should be at y=%.1f (bounds.top %.1f + a derived inset of " +
-			"%.1fpx). The derivation and the geometry have come apart — check that world.gd " +
-			"still passes _north_headroom_inset() into build_perimeter_walls().")
-					% [facing_surface, bounds.position.y + expected_inset,
-							bounds.position.y, expected_inset])
 
 
 # ---------------------------------------------------------------------------
@@ -514,30 +367,6 @@ func test_player_collider_fits_through_a_one_tile_gap() -> void:
 			("the player's collider is %.1fpx deep but a tile is only %dpx — they can no longer " +
 			"fit through a one-tile gap on the vertical axis (design.md §10).")
 					% [collider.size.y, WorldArea.TILE_SIZE.y])
-
-
-func test_corner_dead_zone_is_larger_than_the_player_collider() -> void:
-	# Design.md §12.4: a player standing inside a corner square must not be
-	# able to trigger a transition. The corner stubs make that structural, but
-	# the guarantee still depends on the dead zone being bigger than the player
-	# — if the collider ever grew past CORNER_DEAD_ZONE_PX, a player centred in
-	# a corner would overlap the adjacent edge's active trigger stretch and the
-	# "corners are never ambiguous" rule would quietly stop holding.
-	var player: CharacterBody2D = _instantiate_player()
-	if player == null:
-		return
-
-	var collider: Rect2 = CollisionProbe.player_collider_extent(player)
-	if collider.size == Vector2.ZERO:
-		return
-
-	var largest_half_extent: float = maxf(collider.size.x, collider.size.y) / 2.0
-	assert_gt(WorldArea.CORNER_DEAD_ZONE_PX, largest_half_extent,
-			("the corner dead zone is %.1fpx but the player's collider reaches %.1fpx from " +
-			"their origin — a player standing in a corner square could overlap the adjacent " +
-			"edge's trigger, so 'no transition ever starts from a corner' (design.md §12.4) " +
-			"would no longer hold.")
-					% [WorldArea.CORNER_DEAD_ZONE_PX, largest_half_extent])
 
 
 # ---------------------------------------------------------------------------

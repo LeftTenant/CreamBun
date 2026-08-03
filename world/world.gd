@@ -12,23 +12,22 @@ extends Node2D
 ## but gets reparented into the active area on load so Y-sort has one shared
 ## scope to interleave the player against the area's tiles and props (§9).
 ##
-## Slice 10 adds the edge-transition sequence (design doc §12.5): every area
-## this script activates has its edge_reached signal connected here, and
-## crossing an open edge drives the freeze -> cover -> swap -> place ->
-## reveal sequence that lands the player in the neighbouring area.
+## World Thresholds (docs/features/world-thresholds/design.md §4-§5) drives
+## every area-to-area transition off placed `Threshold` nodes: every area this
+## script activates has every Threshold found under it (now and later — see
+## _connect_all_thresholds()) connected to _on_threshold_entered(), which
+## drives a freeze -> fade -> swap -> place -> reveal sequence — resolving the
+## destination scene and its named Arrival BEFORE touching the old area
+## (resolve-before-destroy, design §5) — and lands the player exactly on the
+## Arrival's position, not a computed offset.
 ##
-## World Thresholds Slice 3 (docs/features/world-thresholds/design.md §4-§5)
-## adds a SECOND, parallel sequence off placed Threshold nodes: every area
-## this script activates also has every Threshold found under it (now and
-## later — see _connect_all_thresholds()) connected to _on_threshold_entered(),
-## which drives the same freeze -> fade -> swap -> place -> reveal shape as
-## _on_edge_reached() below, but resolves the destination scene and its named
-## Arrival BEFORE touching the old area (resolve-before-destroy, design §5),
-## and lands the player exactly on the Arrival's position instead of a
-## computed offset. Both mechanisms run side by side until World Thresholds
-## Slice 4 deletes the edge-derived one and migrates real content to placed
-## Thresholds — see that slice's notes for why the switchover can't happen
-## incrementally.
+## Slice 4 of that feature deleted the older, edge-derived mechanism this
+## script used to run alongside it (a filled `neighbour_*` slot on WorldArea,
+## an `edge_reached` signal, and opposite-edge spawn arithmetic — world-
+## collision design doc §12.4-§12.5, kept there as history) and migrated
+## `meadow.tscn`/`orchard.tscn` to placed Threshold/Arrival pairs. The
+## Threshold-driven sequence below is unchanged by that migration — it was
+## already proven against fixture scenes before real content ever used it.
 
 
 # ---------------------------------------------------------------------------
@@ -109,12 +108,10 @@ func _ready() -> void:
 ## Instance the starting WorldArea and activate it (see _activate_area()),
 ## then arm the re-entry guard (_arm_reentry_guards(), design doc §5) against
 ## the starting area's own Thresholds — exactly as every later
-## Threshold-driven arrival does. Not because meadow.tscn has any Thresholds
-## placed in it yet (it doesn't; World Thresholds Slice 4 is what migrates
-## real content to placed Threshold/Arrival pairs), but so that gap doesn't
-## get inherited by that slice: a Threshold ever placed overlapping the
-## authored spawn point must not fire on the very first physics frame at
-## game start.
+## Threshold-driven arrival does. This is load-bearing, not speculative:
+## meadow.tscn (World Thresholds Slice 4) now has two real Thresholds placed
+## in it, and a Threshold ever placed overlapping the authored spawn point
+## must not fire on the very first physics frame at game start.
 ##
 ## GameState is set to LOADING before _activate_area() runs and only
 ## restored to PLAYING once _arm_reentry_guards() has fully returned — the
@@ -133,9 +130,8 @@ func _ready() -> void:
 ## file.
 ##
 ## async (this function awaits _arm_reentry_guards()), but _ready() below
-## calls it without awaiting — a fire-and-forget start, same as every other
-## signal-driven transition in this file (_on_edge_reached(),
-## _on_threshold_entered()) is never awaited by whatever connects it. The
+## calls it without awaiting — a fire-and-forget start, same as
+## _on_threshold_entered() is never awaited by whatever connects it. The
 ## synchronous part (instantiate + _activate_area()) still completes within
 ## this same call, before the first `await` inside _arm_reentry_guards() ever
 ## suspends it.
@@ -158,13 +154,12 @@ func _load_starting_area() -> void:
 
 
 ## Add a freshly-instanced WorldArea under ActiveArea and wire it up as the
-## live area: reparent the persistent Player into it (design doc §12.1),
-## build its perimeter (§12.4), set the camera limits (§12.3), and connect
-## its edge_reached signal (§12.4/§12.5) so crossing an open edge starts a
-## transition — plus (World Thresholds Slice 3) connect every Threshold found
-## under it so crossing one of THOSE also starts a transition. Used both for
-## the startup load and for every area entered via _on_edge_reached() or
-## _on_threshold_entered() below.
+## live area: reparent the persistent Player into it (world-collision design
+## doc §12.1), build its perimeter (world-thresholds design.md §7 — every
+## edge, unconditionally), set the camera limits (world-collision design doc
+## §12.3), and connect every Threshold found under it (World Thresholds
+## design.md §4-§5) so crossing one starts a transition. Used both for the
+## startup load and for every area entered via _on_threshold_entered() below.
 ##
 ## reparent() preserves the node and all its state (including its child
 ## Camera2D), so nothing about the player is rebuilt — it is the same node,
@@ -173,28 +168,9 @@ func _load_starting_area() -> void:
 func _activate_area(area: WorldArea) -> void:
 	_active_area.add_child(area)
 	_player.reparent(area)
-	area.build_perimeter_walls(_north_headroom_inset())
+	area.build_perimeter_walls()
 	_set_camera_limits(area)
-	area.edge_reached.connect(_on_edge_reached.bind(area))
 	_connect_all_thresholds(area)
-
-
-## How far in from a map's true north edge that edge's wall/trigger must sit,
-## for the player currently in the world (design doc §12.4).
-##
-## This is the one place the player's geometry and the world's boundary
-## geometry are connected, and it is deliberately here rather than inside
-## WorldArea: this scene is the orchestrator, so reading from one node to
-## configure another is its job, while WorldArea stays a pure function of the
-## numbers it is handed (CLAUDE.md's dependency-injection rule).
-##
-## Recomputed per activation rather than cached, so it stays correct if the
-## player scene is ever swapped mid-game (a different playable character, a
-## temporary vehicle/mount). player.gd caches the underlying measurements, so
-## the repeat cost is a subtraction.
-func _north_headroom_inset() -> float:
-	return WorldArea.north_headroom_inset(
-			_player.get_visual_extent(), _player.get_collider_extent())
 
 
 ## Build the Transition overlay's fade visual: a full-screen ColorRect,
@@ -212,120 +188,9 @@ func _build_transition_overlay() -> void:
 	_transition.add_child(_fade_rect)
 
 
-## Drive the freeze -> cover -> swap -> place -> reveal sequence (design doc
-## §12.5) once the player crosses an open edge. `area` (bound at connect
-## time in _activate_area()) is the area the player just exited.
-##
-## Guarded by GameState.current_state itself rather than a separate flag: it
-## is set to LOADING as the very first, synchronous action below, so any
-## edge_reached that fires while a transition is already underway (e.g.
-## residual trigger overlap) sees LOADING already set and returns
-## immediately — no overlapping second transition, no double free, no
-## double GameEvents.area_changed.
-##
-## The neighbour scene is loaded and validated BEFORE anything about the old
-## area is touched (before the player is reparented out of it, before it is
-## removed/freed) — see _load_neighbour_area()'s doc comment for why: this is
-## what makes the failure path actually recoverable instead of a soft-lock in
-## a different guise.
-func _on_edge_reached(direction: WorldArea.Edge, area: WorldArea) -> void:
-	if GameState.current_state == GameState.State.LOADING:
-		return
-	GameState.current_state = GameState.State.LOADING
-
-	var neighbour_path: String = area.neighbour_for_edge(direction)
-	if neighbour_path.is_empty():
-		# A trigger should only ever exist on an edge whose neighbour_* slot
-		# is filled (WorldArea.build_perimeter_walls()) — this is a defensive
-		# guard against that invariant breaking, not an expected path. Bail
-		# out to PLAYING rather than leaving the game stuck frozen.
-		push_error("World._on_edge_reached: edge_reached fired for an edge with no neighbour path set")
-		GameState.current_state = GameState.State.PLAYING
-		return
-
-	# Capture the exit coordinate before anything moves — the player's exact
-	# perpendicular position at the moment they crossed (design doc §12.5
-	# step 4: "carried over verbatim").
-	var exit_position: Vector2 = _player.global_position
-	var exit_coordinate: float = (
-			exit_position.y if (direction == WorldArea.Edge.EAST or direction == WorldArea.Edge.WEST)
-			else exit_position.x)
-
-	await _fade_transition(1.0)
-
-	# Load and validate the neighbour BEFORE destroying anything: at this
-	# point the OLD area is still fully live in the tree (player still its
-	# child, area not yet removed), so a failure here can fade back to
-	# transparent and hand control straight back with nothing having moved.
-	var new_area: WorldArea = _load_neighbour_area(neighbour_path)
-	if new_area == null:
-		push_error("World._on_edge_reached: '%s' did not load/instantiate as a WorldArea — check the neighbour_* path for edge %d" % [neighbour_path, direction])
-		await _fade_transition(0.0)
-		GameState.current_state = GameState.State.PLAYING
-		return
-
-	# Detach the player from the old area before freeing it — reparent(), not
-	# remove_child(), so the player's state (including its Camera2D) survives
-	# the move intact, same as _activate_area()'s own reparent.
-	_player.reparent(self)
-
-	# Remove the old area from ActiveArea SYNCHRONOUSLY before queue_free():
-	# queue_free() only marks a node for deletion at the end of the current
-	# frame, it does not detach it from the tree immediately. Without this
-	# explicit remove_child(), _activate_area(new_area) below would add the
-	# new area as a SECOND child of ActiveArea for the rest of this frame —
-	# leaving a brief window where ActiveArea.get_child(0) is still the
-	# stale outgoing area, not the one the player was just placed into.
-	_active_area.remove_child(area)
-	area.queue_free()
-
-	_activate_area(new_area)
-
-	var new_bounds: Rect2 = new_area.get_bounds_px()
-	_player.global_position = WorldArea.compute_entry_position(
-			exit_coordinate, direction, new_bounds, _north_headroom_inset())
-	new_area.begin_entry_debounce(WorldArea.opposite_edge(direction))
-
-	# design doc §12.5 step 5: the reveal fade and PLAYING restoration happen
-	# BEFORE area_changed fires, so any listener (autosave, a future minimap)
-	# observes a fully-resumed game, not one still frozen behind an opaque
-	# screen.
-	await _fade_transition(0.0)
-	GameState.current_state = GameState.State.PLAYING
-
-	GameEvents.area_changed.emit(WorldArea.area_id_from_scene_path(neighbour_path))
-
-
-## Load `neighbour_path` and instantiate it as a WorldArea, or return null if
-## either step fails (a moved/renamed/non-WorldArea scene). Split out of
-## _on_edge_reached() so that function reads as a single "load, then either
-## bail out clean or proceed" shape, with no intermediate state to unwind.
-##
-## Round 2 of code review on this slice caught that an earlier version did
-## this load/instantiate AFTER the player had already been reparented out of
-## the old area and the old area had already been removed/freed — so the
-## null-check's "bail out" path left the player frozen behind an opaque fade
-## with no area at all in the scene tree: a soft-lock, just moved to a
-## different point in the sequence than the one round 1 fixed. Calling this
-## before anything is destroyed means a failure here is always safe to
-## recover from (see _on_edge_reached()'s fade-back-and-return).
-func _load_neighbour_area(neighbour_path: String) -> WorldArea:
-	var new_scene: PackedScene = load(neighbour_path) as PackedScene
-	if new_scene == null:
-		return null
-	return new_scene.instantiate() as WorldArea
-
-
 # ---------------------------------------------------------------------------
-# Threshold-driven transition (World Thresholds Slice 3, design doc §4-§5)
+# Threshold-driven transition (World Thresholds design doc §4-§5)
 # ---------------------------------------------------------------------------
-#
-# Runs alongside _on_edge_reached() above, untouched — see this file's header.
-# The two sequences share _fade_transition() and _set_camera_limits() below,
-# and both funnel every area they activate through _activate_area(), but
-# otherwise stay independent: neither reads the other's state, and
-# World Thresholds Slice 4 deletes the edge-derived half without touching
-# this one.
 
 ## Find and connect every Threshold currently under `area` (recursively) to
 ## _on_threshold_entered(), then keep watching for Thresholds added to `area`
@@ -361,8 +226,9 @@ func _find_thresholds(node: Node) -> Array[Threshold]:
 
 
 ## Connect one Threshold's area_entered signal to _on_threshold_entered(),
-## binding the Threshold itself and the area it was found under (needed the
-## same way _on_edge_reached() binds its exiting area — see _activate_area()).
+## binding the Threshold itself and the area it was found under (needed so
+## the handler knows which area to tear down on a successful crossing — see
+## _activate_area()).
 func _connect_threshold(threshold: Threshold, area: WorldArea) -> void:
 	threshold.area_entered.connect(_on_threshold_entered.bind(threshold, area))
 
@@ -382,10 +248,10 @@ func _on_area_child_entered_tree(child: Node, area: WorldArea) -> void:
 ## and `area` (bound at connect time) are the Threshold crossed and the area
 ## it belongs to.
 ##
-## Guarded the same way _on_edge_reached() is guarded against a residual
-## second firing: GameState.current_state == LOADING is set synchronously as
-## the first action, so anything that fires while a transition is already
-## underway sees LOADING already set and returns immediately.
+## Guarded against a residual second firing by GameState.current_state
+## itself: it is set to LOADING synchronously as the first action, so
+## anything that fires while a transition is already underway sees LOADING
+## already set and returns immediately.
 ##
 ## The re-entry guard (design §5) is checked FIRST, before the LOADING guard:
 ## a Threshold the player spawned into/onto should never start a transition
@@ -394,8 +260,7 @@ func _on_area_child_entered_tree(child: Node, area: WorldArea) -> void:
 ##
 ## Resolve-before-destroy (design §5's numbered order): destination and
 ## Arrival are loaded and validated BEFORE anything about the old area is
-## touched — see _load_threshold_area()'s doc comment for why, same reasoning
-## as _load_neighbour_area() above.
+## touched — see _load_threshold_area()'s doc comment for why.
 func _on_threshold_entered(_entered_area: Area2D, threshold: Threshold, area: WorldArea) -> void:
 	if _ignored_thresholds.has(threshold):
 		return
@@ -441,12 +306,15 @@ func _on_threshold_entered(_entered_area: Area2D, threshold: Threshold, area: Wo
 	# the move intact, same as _activate_area()'s own reparent.
 	_player.reparent(self)
 
-	# Remove the old area from ActiveArea SYNCHRONOUSLY before queue_free() —
-	# see _on_edge_reached()'s identical step for why (queue_free() alone
-	# would leave it as a second child under ActiveArea for the rest of this
-	# frame). This also frees `threshold` itself, once the deferred
-	# queue_free() actually runs — see the doc comment on the captured locals
-	# above.
+	# Remove the old area from ActiveArea SYNCHRONOUSLY before queue_free():
+	# queue_free() only marks a node for deletion at the end of the current
+	# frame, it does not detach it from the tree immediately. Without this
+	# explicit remove_child(), _activate_area(new_area) below would add the
+	# new area as a SECOND child of ActiveArea for the rest of this frame —
+	# leaving a brief window where ActiveArea.get_child(0) is still the stale
+	# outgoing area, not the one the player was just placed into. This also
+	# frees `threshold` itself, once the deferred queue_free() actually runs
+	# — see the doc comment on the captured locals above.
 	_active_area.remove_child(area)
 	area.queue_free()
 
@@ -471,10 +339,11 @@ func _on_threshold_entered(_entered_area: Area2D, threshold: Threshold, area: Wo
 
 
 ## Load `destination_path` and instantiate it as a WorldArea, or return null
-## if either step fails (a missing/moved/renamed/non-WorldArea scene). Mirrors
-## _load_neighbour_area()'s split-out shape and the same round-2-of-review
-## lesson: called before anything is destroyed, so a failure here is always
-## safe to recover from.
+## if either step fails (a missing/moved/renamed/non-WorldArea scene). Split
+## out of _on_threshold_entered() so that function reads as a single "load,
+## then either bail out clean or proceed" shape, with no intermediate state
+## to unwind — called before anything is destroyed, so a failure here is
+## always safe to recover from.
 ##
 ## Checks ResourceLoader.exists() before calling load(): load() on a path
 ## with no resource behind it logs its own pair of low-level engine errors

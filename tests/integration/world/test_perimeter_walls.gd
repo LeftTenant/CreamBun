@@ -1,24 +1,36 @@
 ## test_perimeter_walls.gd
-## Integration tests for Slice 9 of the world-collision feature ("Camera dead
-## zone, edge lock, and perimeter walls") — the perimeter-wall half of the
-## slice. Camera dead-zone/edge-lock behavior lives in the sibling file
-## test_camera_dead_zone_and_limits.gd (two distinct concerns, same slice —
-## see that file's header for why they're split).
+## Integration tests for the meadow's perimeter walls — originally Slice 9 of
+## the world-collision feature ("Camera dead zone, edge lock, and perimeter
+## walls"; camera dead-zone/edge-lock behavior lives in the sibling file
+## test_camera_dead_zone_and_limits.gd, two distinct concerns, same slice).
 ##
-## Scope note (design doc §12.4): this slice only covers the "no neighbour ->
-## invisible wall" case, since meadow.tscn declares no neighbour_* scenes yet
-## (slice 10 adds the open-edge/trigger case once a second area exists to link
-## to). So every edge of the meadow is expected to get a wall in this slice.
+## World Thresholds Slice 4 (docs/features/world-thresholds/design.md §7)
+## collapsed WorldArea.build_perimeter_walls() to build a full-span wall on
+## EVERY edge unconditionally — there is no more linked/unlinked branch, so
+## the old "only check edges with no declared neighbour" scoping this file's
+## tests used to need is gone along with the neighbour_* exports they read.
+## `tests/integration/world/test_area_transition.gd` now separately proves
+## full-span wall coverage on ALL four edges of both real areas (including
+## the two that carry a placed Threshold) — this file no longer duplicates
+## that existence/coverage check. What's left here, and worth keeping in its
+## own right:
+##   - a genuine 4-corner closure check (point containment at each diagonal,
+##     not just per-edge span coverage — a different, complementary
+##     assertion test_area_transition.gd doesn't make), and
+##   - real collision-RESPONSE checks (does move_and_slide() actually stop
+##     the player at the wall, not just "does a collider exist nearby").
+## The east/south collision-response checks are gone: those edges now carry a
+## placed Threshold (World Thresholds Slice 4's content migration) sitting
+## inset from their wall, so a normal approach transitions into orchard
+## before ever reaching the wall — "blocked by wall" is no longer observable
+## behavior there under normal play. Those two crossings are covered
+## end-to-end (approach, transition, landing) by test_area_transition.gd
+## instead.
 ##
-## Written test-first, ahead of the implementation: at the time this suite
-## was authored, no perimeter-wall generation existed anywhere (not on
-## WorldArea, not in world.gd). Perimeter-wall generation now exists on
-## WorldArea.build_perimeter_walls() (world/areas/shared/world_area.gd), and
-## every test below passes against it — this file's job now is to guard that
-## behavior against regressions as slice 10's open-edge/neighbour work lands.
-##
-## Design reference: docs/features/world-collision/design.md §12.4 (the
-## no-neighbour wall case only).
+## Design reference: docs/features/world-collision/design.md §12.4 (history —
+##   the neighbour-slot/linked-edge model those sections describe is
+##   superseded); docs/features/world-thresholds/design.md §7 (the collapsed,
+##   unconditional wall this file now tests against).
 ## Test plan: docs/features/world-collision/slice-9-camera-perimeter-test-plan.md
 ##
 ## Requires GUT: https://github.com/bitwes/Gut
@@ -45,19 +57,6 @@ const TREE_SCENE_PATH: String = "res://world/props/tree_oak.tscn"
 # (2d_physics/layer_1 = "world"). Mirrors the constant of the same name used
 # across this suite (test_player_scene.gd, test_solids_collision.gd).
 const WORLD_LAYER_BIT: int = 1
-
-# How far outward/inward from get_bounds_px()'s exact edge line to look for a
-# candidate wall's collider. Generous on purpose: this suite deliberately
-# does not assume a specific wall thickness or exact placement (flush with
-# the edge vs. straddling it vs. just outside it) — only that *something*
-# solid exists in the neighbourhood of each edge. 48px is 1.5 tiles, well
-# beyond any plausible wall thickness.
-const EDGE_BAND_PX: float = 48.0
-
-# Slack allowed when checking that wall coverage has no gap along an edge.
-# 1px absorbs floating point noise; an actual "corner gap a player could slip
-# through" (the test plan's concern) would be many pixels, not one.
-const EDGE_GAP_TOLERANCE_PX: float = 1.0
 
 # Movement-simulation tuning for the four collision-response tests below.
 # 300 physics ticks at the default 60Hz rate (~5s) covers speed(200px/s) *
@@ -88,27 +87,6 @@ const CollisionProbe := preload("res://tests/integration/world/shared/collision_
 # ---------------------------------------------------------------------------
 # Setup / teardown
 # ---------------------------------------------------------------------------
-
-## The north headroom inset the world will actually build with, derived from
-## the project's real player scene (WorldArea.north_headroom_inset()).
-##
-## Instantiated standalone rather than read off a constant: there is no longer
-## a constant to read. Kept as a helper on each suite that needs it rather than
-## hoisted somewhere shared, matching this project's convention of
-## self-contained test files.
-func _derive_headroom_inset() -> float:
-	var packed: PackedScene = load("res://player/player.tscn")
-	if packed == null:
-		fail_test("player/player.tscn should load as a PackedScene")
-		return 0.0
-	var player: CharacterBody2D = packed.instantiate() as CharacterBody2D
-	if player == null:
-		fail_test("player.tscn's root must be a CharacterBody2D")
-		return 0.0
-	autofree(player)
-	return WorldArea.north_headroom_inset(
-			player.get_visual_extent(), player.get_collider_extent())
-
 
 func before_each() -> void:
 	# Player movement is gated on GameState.current_state == PLAYING
@@ -212,74 +190,6 @@ func _world_bounding_rect(body: StaticBody2D) -> Variant:
 	return result
 
 
-## The detection band for one edge of `bounds` — a strip EDGE_BAND_PX wide
-## straddling that edge's line, extended EDGE_BAND_PX past each corner too
-## (so a wall segment placed slightly past the corner still counts).
-func _edge_band(bounds: Rect2, edge: String) -> Rect2:
-	match edge:
-		"north":
-			return Rect2(
-					bounds.position.x - EDGE_BAND_PX, bounds.position.y - EDGE_BAND_PX,
-					bounds.size.x + EDGE_BAND_PX * 2.0, EDGE_BAND_PX * 2.0)
-		"south":
-			return Rect2(
-					bounds.position.x - EDGE_BAND_PX, bounds.end.y - EDGE_BAND_PX,
-					bounds.size.x + EDGE_BAND_PX * 2.0, EDGE_BAND_PX * 2.0)
-		"west":
-			return Rect2(
-					bounds.position.x - EDGE_BAND_PX, bounds.position.y - EDGE_BAND_PX,
-					EDGE_BAND_PX * 2.0, bounds.size.y + EDGE_BAND_PX * 2.0)
-		"east":
-			return Rect2(
-					bounds.end.x - EDGE_BAND_PX, bounds.position.y - EDGE_BAND_PX,
-					EDGE_BAND_PX * 2.0, bounds.size.y + EDGE_BAND_PX * 2.0)
-		_:
-			push_error("_edge_band: unknown edge '%s'" % [edge])
-			return Rect2()
-
-
-## True if `intervals` (an Array of [min, max] float pairs, in any order,
-## possibly overlapping) covers [span_min, span_max] with no gap wider than
-## EDGE_GAP_TOLERANCE_PX. Used to check a wall (or set of wall segments)
-## spans an entire edge with no corner gap a player could slip through.
-func _covers_full_span(intervals: Array, span_min: float, span_max: float) -> bool:
-	if intervals.is_empty():
-		return false
-
-	var sorted_intervals: Array = intervals.duplicate()
-	sorted_intervals.sort_custom(func(a, b): return a[0] < b[0])
-
-	var covered_up_to: float = span_min
-	for interval in sorted_intervals:
-		if interval[0] > covered_up_to + EDGE_GAP_TOLERANCE_PX:
-			return false  # a gap between what's covered so far and this segment
-		covered_up_to = maxf(covered_up_to, interval[1])
-
-	return covered_up_to >= span_max - EDGE_GAP_TOLERANCE_PX
-
-
-## Collect [min, max] tangential-axis intervals (x for north/south, y for
-## east/west) for every candidate wall whose bounding rect falls in `edge`'s
-## detection band and is on the "world" collision layer.
-func _matching_intervals_for_edge(candidates: Array[StaticBody2D], bounds: Rect2, edge: String) -> Array:
-	var band: Rect2 = _edge_band(bounds, edge)
-	var intervals: Array = []
-	for body in candidates:
-		if body.collision_layer != WORLD_LAYER_BIT:
-			continue
-		var rect: Variant = _world_bounding_rect(body)
-		if rect == null:
-			continue
-		var wall_rect: Rect2 = rect
-		if not wall_rect.intersects(band):
-			continue
-		if edge == "north" or edge == "south":
-			intervals.append([wall_rect.position.x, wall_rect.end.x])
-		else:
-			intervals.append([wall_rect.position.y, wall_rect.end.y])
-	return intervals
-
-
 ## Hold `action` for `ticks` physics ticks then release it, using the real
 ## Input singleton so the test exercises player.gd's actual
 ## Input.get_vector() -> velocity -> move_and_slide() pipeline (same
@@ -293,144 +203,25 @@ func _drive_player(player: CharacterBody2D, action: String, ticks: int) -> void:
 
 
 # ---------------------------------------------------------------------------
-# Existence: a wall on every edge (design doc §12.4, "no neighbour -> wall")
+# Existence and full-edge-span coverage — removed
 # ---------------------------------------------------------------------------
-
-func test_perimeter_wall_exists_on_each_edge() -> void:
-	var world: Node = _instantiate_world()
-	if world == null:
-		return
-	var area: Node = _get_instanced_area(world)
-	if area == null:
-		return
-	if not (area is WorldArea):
-		fail_test("the instanced ActiveArea child must be a WorldArea instance to call get_bounds_px() on it — found a %s" % [area.get_class()])
-		return
-	var world_area: WorldArea = area as WorldArea
-
-	var bounds: Rect2 = world_area.get_bounds_px()
-	var candidates: Array[StaticBody2D] = []
-	_collect_non_prop_static_bodies(area, candidates)
-
-	# UPDATED for Slice 10 (design.md §12.4): meadow.tscn now declares
-	# neighbour_east/neighbour_south (wired to world/areas/orchard.tscn), so
-	# those two edges correctly get an open-edge Area2D TRIGGER instead of a
-	# wall (see test_edge_triggers.gd's
-	# test_linked_east/south_edge_gets_an_interactable_area2d_not_a_wall).
-	# This test's real invariant was always "an edge with NO declared
-	# neighbour gets a wall" — originally every edge qualified because no
-	# neighbour_* slot was filled yet (this suite's own header note: "this
-	# slice only covers the 'no neighbour -> invisible wall' case, since
-	# meadow.tscn declares no neighbour_* scenes yet"). That precondition no
-	# longer holds for east/south, so the loop below is restricted to
-	# edges whose neighbour_* slot is still empty, rather than a hard-coded
-	# four-edge list — preserving the same check for north/west while
-	# dropping the now-inapplicable assertion for east/south (covered
-	# instead by test_edge_triggers.gd).
-	var unlinked_edges: Dictionary = {
-		"north": world_area.neighbour_north.is_empty(),
-		"east": world_area.neighbour_east.is_empty(),
-		"south": world_area.neighbour_south.is_empty(),
-		"west": world_area.neighbour_west.is_empty(),
-	}
-	for edge in unlinked_edges:
-		if not unlinked_edges[edge]:
-			continue
-		var intervals: Array = _matching_intervals_for_edge(candidates, bounds, edge)
-		assert_gt(intervals.size(), 0,
-				(
-				"expected at least one StaticBody2D on the 'world' layer (bit %d) near "
-				+ "the %s edge of get_bounds_px() (%s) — none found. meadow.tscn declares "
-				+ "no neighbour_%s scene, so design doc §12.4 requires an invisible wall "
-				+ "here: 'No neighbour -> an invisible wall. A StaticBody2D on the world "
-				+ "layer spanning that edge.'"
-				) % [WORLD_LAYER_BIT, edge, bounds, edge])
+#
+# test_perimeter_wall_exists_on_each_edge() and
+# test_perimeter_walls_cover_full_edge_length_with_no_mid_edge_gaps() used to
+# live here, scoped to "only the edges with no declared neighbour" (this
+# suite's Slice 9/10 history). World Thresholds Slice 4 made every edge's
+# wall unconditional and full-span, so that scoping no longer applies, and
+# the resulting all-four-edges check is exactly what
+# tests/integration/world/test_area_transition.gd's
+# test_meadow_perimeter_walls_exist_on_all_four_edges_including_linked_ones()
+# (and its orchard sibling) already assert — keeping a second copy here would
+# be pure duplication of the same intervals-cover-the-whole-span check
+# against the same real content. Removed rather than un-scoped.
 
 
 # ---------------------------------------------------------------------------
-# Coverage: no gaps along the middle of an edge (test plan: "covers the full
-# length of its edge")
-# ---------------------------------------------------------------------------
-
-## Third review round (mutation testing): the ORIGINAL version of this test
-## additionally widened each edge's checked span by one wall thickness (plus
-## an asymmetric `north_reach` term on the vertical edges) and claimed that
-## widening exercised "corner-closing" behavior. It did not. On this closed
-## rectangular ring, `_matching_intervals_for_edge()` collects every
-## StaticBody2D intersecting an edge's band — not just the wall named for
-## that edge — so the west/east walls' full-bounds-height rects always
-## supplied exactly the corner coverage the widened north/south ends were
-## meant to guard, regardless of whether north/south were actually extended.
-## Confirmed by stripping the `± PERIMETER_WALL_THICKNESS_PX` extension from
-## both the north and south walls in world_area.gd's build_perimeter_walls()
-## and observing every test in this file — including the widened version of
-## this one — still pass. The widening was inert, not merely untested, so the
-## old test's name and comments overclaimed what it verified.
-##
-## This rewritten version drops the widening and the `north_reach` term
-## entirely and checks only the plain, unwidened span of each edge — "does a
-## wall (or set of wall segments) cover this whole edge with no gap wide
-## enough for a player to slip through in the MIDDLE of it." A genuine
-## corner-closure check now lives in
-## test_perimeter_walls_close_all_four_corners() below, which targets the
-## specific geometry (the south wall's x-extension) that actually IS
-## load-bearing for corner closure — see that test's docstring for why north
-## corners and south corners are not symmetric here.
-func test_perimeter_walls_cover_full_edge_length_with_no_mid_edge_gaps() -> void:
-	var world: Node = _instantiate_world()
-	if world == null:
-		return
-	var area: Node = _get_instanced_area(world)
-	if area == null:
-		return
-	if not (area is WorldArea):
-		fail_test("the instanced ActiveArea child must be a WorldArea instance to call get_bounds_px() on it — found a %s" % [area.get_class()])
-		return
-
-	var world_area: WorldArea = area as WorldArea
-	var bounds: Rect2 = world_area.get_bounds_px()
-	var candidates: Array[StaticBody2D] = []
-	_collect_non_prop_static_bodies(area, candidates)
-
-	# UPDATED for Slice 10 (design.md §12.4): "no mid-edge gap" is only a
-	# meaningful StaticBody2D-coverage check for edges that are actually
-	# walled — meadow.tscn's south/east are now linked (Area2D triggers, not
-	# walls), so they no longer have anything for _matching_intervals_for_edge
-	# (which only looks at StaticBody2D) to find. Restricted to unlinked
-	# edges, same rationale as test_perimeter_wall_exists_on_each_edge()
-	# above.
-	var unlinked_horizontal: Dictionary = {
-		"north": world_area.neighbour_north.is_empty(),
-		"south": world_area.neighbour_south.is_empty(),
-	}
-	for edge in unlinked_horizontal:
-		if not unlinked_horizontal[edge]:
-			continue
-		var intervals: Array = _matching_intervals_for_edge(candidates, bounds, edge)
-		assert_true(_covers_full_span(intervals, bounds.position.x, bounds.end.x),
-				(
-				"the %s perimeter wall(s) must fully cover x in [%.1f, %.1f] with no gap wider "
-				+ "than %.1fpx — a gap here is a spot mid-edge a player could slip through."
-				) % [edge, bounds.position.x, bounds.end.x, EDGE_GAP_TOLERANCE_PX])
-
-	var unlinked_vertical: Dictionary = {
-		"east": world_area.neighbour_east.is_empty(),
-		"west": world_area.neighbour_west.is_empty(),
-	}
-	for edge in unlinked_vertical:
-		if not unlinked_vertical[edge]:
-			continue
-		var intervals: Array = _matching_intervals_for_edge(candidates, bounds, edge)
-		assert_true(_covers_full_span(intervals, bounds.position.y, bounds.end.y),
-				(
-				"the %s perimeter wall(s) must fully cover y in [%.1f, %.1f] with no gap wider "
-				+ "than %.1fpx — a gap here is a spot mid-edge a player could slip through."
-				) % [edge, bounds.position.y, bounds.end.y, EDGE_GAP_TOLERANCE_PX])
-
-
-# ---------------------------------------------------------------------------
-# Coverage: no corner gaps (a real check — see the mid-edge test above for
-# why its old widened-span version could not actually verify this)
+# Coverage: no corner gaps (a real check distinct from full-span coverage —
+# see the removed test above's note)
 # ---------------------------------------------------------------------------
 
 ## True if some candidate StaticBody2D on the "world" layer has a
@@ -455,32 +246,23 @@ func _some_wall_contains(candidates: Array[StaticBody2D], point_px: Vector2) -> 
 
 ## A genuine corner-gap check: for each of the meadow's four corners, checks
 ## a specific point just past the corner for coverage by SOME wall, rather
-## than inferring coverage from widened per-edge spans (which the third
-## review round showed cannot actually distinguish "corner closed" from
-## "corner open" in this ring topology).
+## than inferring coverage from per-edge spans (a per-edge span check cannot
+## by itself distinguish "corner closed" from "corner open" in this ring
+## topology — see world_area.gd's _edge_rect() doc comment for why north/
+## south's rects each extend one PERIMETER_WALL_THICKNESS_PX past west/east's
+## columns specifically to close these corners).
 ##
-## The four points are NOT mirror images of each other, because the north
-## wall is inset (world_area.gd's NORTH_WALL_HEADROOM_INSET_PX) while south/
-## east/west are not:
-##
-## - NW/NE: y is `bounds.position.y + NORTH_WALL_HEADROOM_INSET_PX + 1` — one
-##   px south of the north wall's actual (inset) player-facing surface, not
-##   one px south of the true painted edge. With today's constants, the north
-##   wall's row happens to start exactly where the west/east walls' full-
-##   height columns also start, so this point is ALWAYS covered by the west/
-##   east wall alone — it does not, today, depend on the north wall's own
-##   x-extension. That is fine: the failure mode this guards against is a
-##   future change to west/east's own vertical extent or to the inset
-##   constant, not the specific mutation covered by the SW/SE points below.
-## - SW/SE: y is `bounds.end.y + 1` — one px south of the true painted south
-##   edge (south has no inset). Unlike north, the west/east walls' columns
-##   stop exactly AT the true south edge — so this point is covered ONLY
-##   because the south wall's own `± PERIMETER_WALL_THICKNESS_PX`
-##   x-extension reaches into the west/east columns' x-range. Stripping that
-##   extension (the same mutation the third review round applied) leaves
-##   this exact point uncovered — re-verified against this rewritten test,
-##   which now correctly fails on that mutation (the old widened-span test
-##   did not).
+## World Thresholds Slice 4 (design.md §7) made every edge's wall
+## unconditional and, with the old north-edge headroom inset gone, fully
+## symmetric — so all four corners now get the identical treatment, unlike
+## this test's pre-Slice-4 version (which special-cased the north edge's
+## inset and skipped any corner touching a then-"linked" edge). Each point
+## sits one px diagonally OUTSIDE the true corner, in the region ONLY the
+## extending edge (north or south) can reach — west/east's own columns run
+## flush with bounds.position.y/end.y and never extend past them — so this
+## specifically exercises the north/south extension the corners depend on,
+## not west/east's coverage (which the removed full-span-coverage test, now
+## living in test_area_transition.gd, already proves independently).
 func test_perimeter_walls_close_all_four_corners() -> void:
 	var world: Node = _instantiate_world()
 	if world == null:
@@ -497,38 +279,14 @@ func test_perimeter_walls_close_all_four_corners() -> void:
 	var candidates: Array[StaticBody2D] = []
 	_collect_non_prop_static_bodies(area, candidates)
 
-	var inset: float = _derive_headroom_inset()
-	# UPDATED for Slice 10 (design.md §12.4): a corner's "no gap between two
-	# walls" concern only applies when BOTH edges meeting there are
-	# unlinked (solid StaticBody2D walls). meadow.tscn now links east/south
-	# to orchard.tscn, so NE/SW/SE each have at least one open (Area2D
-	# trigger, not solid) side — there is no wall-vs-wall gap to close
-	# there, since the player is meant to be able to cross through the
-	# linked side entirely. Only NW (north+west, both still unlinked)
-	# remains a meaningful check for this fixture; the guard below keeps
-	# this test generically correct (rather than meadow-specific) by
-	# skipping any corner where either adjacent edge has a neighbour set.
-	# The corners this narrows away (NE/SW/SE) are NOT left uncovered by this
-	# suite overall — tests/integration/world/test_edge_triggers.gd's corner-
-	# dead-zone tests (test_player_near_east_edge_corner_does_not_trigger_
-	# edge_reached and its south-edge sibling) cover linked-corner containment
-	# instead, since a linked corner's "wall" is a stub/trigger/stub split
-	# this file's plain-StaticBody2D scan wasn't written to reason about.
 	var corners: Dictionary = {
-		"NW": [Vector2(bounds.position.x - 1.0, bounds.position.y + inset + 1.0),
-				world_area.neighbour_north.is_empty() and world_area.neighbour_west.is_empty()],
-		"NE": [Vector2(bounds.end.x + 1.0, bounds.position.y + inset + 1.0),
-				world_area.neighbour_north.is_empty() and world_area.neighbour_east.is_empty()],
-		"SW": [Vector2(bounds.position.x - 1.0, bounds.end.y + 1.0),
-				world_area.neighbour_south.is_empty() and world_area.neighbour_west.is_empty()],
-		"SE": [Vector2(bounds.end.x + 1.0, bounds.end.y + 1.0),
-				world_area.neighbour_south.is_empty() and world_area.neighbour_east.is_empty()],
+		"NW": Vector2(bounds.position.x - 1.0, bounds.position.y - 1.0),
+		"NE": Vector2(bounds.end.x + 1.0, bounds.position.y - 1.0),
+		"SW": Vector2(bounds.position.x - 1.0, bounds.end.y + 1.0),
+		"SE": Vector2(bounds.end.x + 1.0, bounds.end.y + 1.0),
 	}
 	for corner_name in corners:
-		var point: Vector2 = corners[corner_name][0]
-		var both_edges_unlinked: bool = corners[corner_name][1]
-		if not both_edges_unlinked:
-			continue
+		var point: Vector2 = corners[corner_name]
 		assert_true(_some_wall_contains(candidates, point),
 				(
 				"no perimeter wall covers the %s corner's test point %s — a player could slip "
@@ -623,12 +381,11 @@ func test_player_is_blocked_by_north_perimeter_wall() -> void:
 	# Lower bound: without this, a player that never moved at all (e.g. a
 	# broken Input.get_vector() wiring, or move_and_slide() never called)
 	# would also satisfy the upper-bound check above — vacuously "blocked".
-	# 100.0 sits comfortably below the ~123.0px this test actually measures
-	# (re-verified empirically after adding the north wall's camera-headroom
-	# inset above, which shortened this specific edge's travel from the
-	# ~155px measured pre-inset, since the wall's player-facing surface now
-	# sits NORTH_WALL_HEADROOM_INSET_PX/32px closer to the start point —
-	# world_area.gd's build_perimeter_walls()) and comfortably above zero.
+	# 100.0 sits comfortably below the ~146px this test actually measures
+	# (176 - 30: the north wall's player-facing surface sits flush at the true
+	# painted edge — World Thresholds Slice 4 removed the camera-headroom
+	# inset that used to sit it 32px further in, world_area.gd's
+	# build_perimeter_walls()) and comfortably above zero.
 	assert_gt(actual_travel, 100.0,
 			(
 			"player travelled only %.1fpx toward the north edge — expected clearly more than "
@@ -637,27 +394,19 @@ func test_player_is_blocked_by_north_perimeter_wall() -> void:
 			) % [actual_travel])
 
 
-func test_player_is_blocked_by_south_perimeter_wall() -> void:
-	# UPDATED for Slice 10 (design.md §12.4): meadow.tscn's south edge is now
-	# linked (neighbour_south -> orchard.tscn), so it is built as an open
-	# Area2D trigger, not a solid StaticBody2D wall — a "blocked by wall"
-	# check no longer applies to it (this file's own header scoped it to
-	# "the no-neighbour-wall case", a precondition that stopped holding for
-	# this edge once slice 10 wired the fixture). The south-edge transition
-	# behavior itself (frozen input, correct spawn on the far side, etc.) is
-	# covered by tests/integration/world/test_area_transition.gd and
-	# test_edge_triggers.gd instead.
-	pending("meadow's south edge is now a linked open-edge trigger (design.md §12.4) — " +
-			"see test_edge_triggers.gd / test_area_transition.gd for its actual behavior")
-
-
-func test_player_is_blocked_by_east_perimeter_wall() -> void:
-	# UPDATED for Slice 10 (design.md §12.4): meadow.tscn's east edge is now
-	# linked (neighbour_east -> orchard.tscn), so it is built as an open
-	# Area2D trigger, not a solid StaticBody2D wall — see
-	# test_player_is_blocked_by_south_perimeter_wall()'s identical note.
-	pending("meadow's east edge is now a linked open-edge trigger (design.md §12.4) — " +
-			"see test_edge_triggers.gd / test_area_transition.gd for its actual behavior")
+# test_player_is_blocked_by_south_perimeter_wall() and
+# test_player_is_blocked_by_east_perimeter_wall() used to live here as
+# pending() placeholders (Slice 10, when those edges first linked to
+# orchard.tscn). Removed rather than left pending indefinitely: World
+# Thresholds Slice 4 gave meadow's south/east edges a real placed Threshold,
+# sitting inset from their (now unconditional) wall, so a normal approach
+# transitions into orchard before ever reaching the wall — "blocked by wall"
+# is still true of the underlying geometry (test_perimeter_walls_close_all_
+# four_corners() above and test_area_transition.gd's full-span coverage
+# tests both prove the wall itself exists), but is no longer observable
+# collision-RESPONSE behavior on those two edges under normal play. The
+# actual approach-transition-landing behavior for both is covered end-to-end
+# by test_area_transition.gd's four real-crossing tests.
 
 
 func test_player_is_blocked_by_west_perimeter_wall() -> void:

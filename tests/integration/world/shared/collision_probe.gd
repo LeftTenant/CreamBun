@@ -28,11 +28,10 @@ extends RefCounted
 ## Design reference: docs/features/world-collision/design.md §6.1, §10
 ## Test plan: docs/features/world-collision/player-collider-capsule-test-plan.md
 
-# Auto-built boundary nodes (world_area.gd's build_perimeter_walls()). Named
-# by prefix because a linked edge splits into "<name>CornerA"/"<name>CornerB"
-# stubs around its trigger, so an exact-name match would miss two thirds of
-# them.
-const PERIMETER_NODE_PREFIXES: Array[String] = ["PerimeterWall", "EdgeTrigger"]
+# Auto-built boundary nodes (world_area.gd's build_perimeter_walls()). Matched
+# by prefix so a rename of the auto-generated node (e.g. an editor-added
+# suffix) still gets excluded.
+const PERIMETER_NODE_PREFIXES: Array[String] = ["PerimeterWall"]
 
 # How finely to step through candidate lanes. 4px is well under the player's
 # 10px collider depth, so no gap wide enough to walk through can be stepped
@@ -192,10 +191,22 @@ static func _is_clear(swept: PackedVector2Array, obstacles: Array[PackedVector2A
 
 ## Collision polygons from every TileMapLayer under `area`, converted from
 ## tile-local to area-local coordinates.
+##
+## Guards on the TileSet actually having a physics layer 0 before asking any
+## TileData for its collision polygons: a TileSet with no physics layers at
+## all (e.g. orchard.tscn's — a plain visual floor with no per-tile collision,
+## unlike meadow's edge-variant tiles) has `TileData.get_collision_polygons_
+## count(0)` fail with an engine-level "Index p_layer_id = 0 is out of bounds"
+## error instead of just returning 0, once per queried cell. Found by World
+## Thresholds Slice 4's real-content parity suite
+## (tests/integration/world/test_area_transition.gd), the first test to run a
+## CollisionProbe lane search against orchard's Ground layer specifically.
 static func _collect_tile_polygons(area: Node2D, out: Array[PackedVector2Array]) -> void:
 	for child in area.get_children():
 		var layer: TileMapLayer = child as TileMapLayer
 		if layer == null:
+			continue
+		if layer.tile_set == null or layer.tile_set.get_physics_layers_count() == 0:
 			continue
 		for cell in layer.get_used_cells():
 			var tile_data: TileData = layer.get_cell_tile_data(cell)

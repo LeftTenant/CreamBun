@@ -4,13 +4,19 @@
 ## shell").
 ##
 ## WorldArea is the base class every concrete area scene (meadow.tscn, and
-## later market.tscn, …) uses as its root. This slice's designer-facing
-## surface is small: four neighbour_* file-path export slots (declared now,
-## wired up in slice 10 — design doc §12.2) and get_bounds_px(), which
-## derives the area's pixel extent from whatever the level designer has
-## already painted onto its Ground TileMapLayer child, rather than making
-## anyone re-declare geometry the art already encodes (design doc §12.2's
+## later market.tscn, …) uses as its root. get_bounds_px() derives the area's
+## pixel extent from whatever the level designer has already painted onto
+## its Ground TileMapLayer child, rather than making anyone re-declare
+## geometry the art already encodes (world-collision design doc §12.2's
 ## "designers never re-declare geometry they already painted").
+##
+## World Thresholds Slice 4 (docs/features/world-thresholds/design.md §7)
+## collapsed WorldArea's designer-facing surface further: the four
+## neighbour_* file-path export slots this file used to test
+## (test_neighbour_slots_are_unset_by_default()) are gone — transitions are
+## now driven by placed Threshold/Arrival nodes, not by anything declared on
+## WorldArea itself. get_bounds_px() is unaffected and still the only thing
+## this file needs to prove.
 ##
 ## FIXTURE SCENE
 ## -------------
@@ -125,29 +131,3 @@ func test_get_bounds_px_scales_used_rect_by_tile_size() -> void:
 			+ "TILE_SIZE (%s) = %s (design doc §12.2). REGION_SIZE_CELLS is 4x2 (not square) "
 			+ "specifically so an x/y axis swap in the scaling maths would show up here."
 			) % [REGION_SIZE_CELLS, TILE_SIZE, expected_size])
-
-
-# ---------------------------------------------------------------------------
-# Test 2 — the four neighbour_* slots are unset by default
-# ---------------------------------------------------------------------------
-
-func test_neighbour_slots_are_unset_by_default() -> void:
-	# Design doc §12.2: an empty neighbour slot means a hard boundary wall,
-	# and filling one in is genuinely new information a designer declares by
-	# hand per edge — it is never derived.
-	#
-	# UPDATED for Slice 10: neighbour_* changed from @export PackedScene to
-	# @export_file("*.tscn") String (design doc §12.2) — two areas linking
-	# back to each other deadlock Godot's loader if both hold a live
-	# PackedScene ext_resource pointing at one another. "Unset" is now an
-	# empty string rather than null.
-	var area: WorldArea = _make_area()
-
-	assert_true(area.neighbour_north.is_empty(),
-			"neighbour_north should be unset (empty string) by default")
-	assert_true(area.neighbour_east.is_empty(),
-			"neighbour_east should be unset (empty string) by default")
-	assert_true(area.neighbour_south.is_empty(),
-			"neighbour_south should be unset (empty string) by default")
-	assert_true(area.neighbour_west.is_empty(),
-			"neighbour_west should be unset (empty string) by default")

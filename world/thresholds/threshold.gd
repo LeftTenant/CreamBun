@@ -40,8 +40,8 @@ extends Area2D
 ## The area scene this Threshold leads to, as a path.
 ##
 ## A String, not a PackedScene, for the same reason the `neighbour_*` exports
-## being replaced (world-collision design; still live in world_area.gd until
-## World Thresholds Slice 4) use one: two area scenes holding live PackedScene
+## it replaces (world-collision design; deleted from world_area.gd by World
+## Thresholds Slice 4) used one: two area scenes holding live PackedScene
 ## references to each other deadlock Godot's resource loader at parse time,
 ## because loading either scene would require first loading the other. A path
 ## sidesteps this — it is only resolved with load() at crossing time, in
