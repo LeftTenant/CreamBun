@@ -55,6 +55,22 @@ const EXPECTED_PROCESS_MODE: int = 3
 
 
 # ---------------------------------------------------------------------------
+# Setup / teardown
+# ---------------------------------------------------------------------------
+
+func before_each() -> void:
+	# Player movement is gated on GameState.current_state == PLAYING
+	# (player.gd). Set explicitly, matching test_perimeter_walls.gd's
+	# convention, so this suite doesn't depend on GameState's default or on
+	# whatever an earlier-running test file left it in — including
+	# world.gd's own _load_starting_area(), which now brackets startup in
+	# LOADING and can leave GameState stuck there if a test tears down
+	# world.tscn before that coroutine finishes (see _load_starting_area()'s
+	# doc comment in world/world.gd).
+	GameState.change_state(GameState.State.PLAYING)
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
