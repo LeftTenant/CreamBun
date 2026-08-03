@@ -10,7 +10,9 @@
 - [.tscn Default-Valued Props](gotcha_tscn_default_valued_props.md) — Godot drops props equal to the class default on save (`collision_mask = 1` vanishes); they can't document intent
 - [@tool _ready writes get serialized](gotcha_tool_ready_writes_serialize.md) — editor-run `_ready()` bakes instance-ROOT props into the placing .tscn; child writes never stored
 - [Vacuous "blocked" movement tests](gotcha_vacuous_blocked_movement_assertions.md) — upper-bound-only assertions pass when the probe never moves; GUT `simulate()` no-ops on scriptless bodies
-- [find_child owned flag](gotcha_find_child_owned_flag.md) — `owned=true` prunes whole subtrees under script-instanced (owner-less) nodes; reparent preserves owner
+- [find_child owned flag](gotcha_find_child_owned_flag.md) — `owned=true` prunes whole subtrees under script-instanced nodes; the `type` filter DOES resolve `class_name` (claims otherwise are false)
+- [LOADING guard masks the re-entry guard](gotcha_loading_guard_masks_reentry_guard.md) — ignore-set unobservable behind the LOADING early-return; physics_frame emission order; a LOADING bracket leaks the autoload if freed mid-await
+- [Invalid TileMap source_id paints silently](gotcha_tilemap_invalid_source_id_paints_silently.md) — `set_cell` with an undefined source still fills `get_used_rect()`; first TileSet source id is 1, not 0
 - [GUT helper silent passes](gotcha_gut_helper_silent_passes.md) — `return node as T` swallows a failed cast; `%` binds tighter than `+`; sentinel returns; a parse error drops a script yet still reports "All tests passed!"
 - [Player Sprite Geometry](reference_player_sprite_geometry.md) — measured opaque union is 26×27 at x[-13,13] y[-31,-4]; the "5px padding on every side / 22×22" claim is false
 - [Camera edge lock vs tall sprite](gotcha_camera_edge_lock_vs_tall_sprite.md) — fixed by insetting the north wall 32px; only 5px of slack, redo the math if any constant moves

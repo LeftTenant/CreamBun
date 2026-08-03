@@ -35,7 +35,29 @@ middle of the chain that breaks the search, not the reparented node itself.
   it for `find_child(name, true, false)` is a pure lookup-mechanism fix, not a weakened
   assertion — but check that the assertion text and the assertions themselves are untouched.
 
+## `find_children`'s `type` filter DOES understand `class_name` — `owned` is the real culprit
+
+**Verified, Godot 4.6.2.** A `class_name Threshold extends Area2D` node added at runtime
+(`add_child()`, no `set_owner()`) under a plain `Node2D`:
+
+| call | result |
+|---|---|
+| `find_children("*", "Threshold", true, false)` | **1** — found |
+| `find_children("*", "Threshold", true, true)`  | **0** — missed |
+
+So `find_children`'s `type` argument resolves scripted global class names fine. The *only* reason a
+scripted-class search "silently matches nothing" is the `owned` default above. Treat any comment or
+memory claiming "`type` is checked with `is_class()`, which only knows native engine classes" as
+**false** — a hand-rolled recursive `if child is X` walk is still defensible (it returns a properly
+typed `Array[X]`, which `find_children` does not), but not for that reason.
+
+**Review lesson:** when a diff's comment states an *engine behaviour* as the justification for a
+hand-rolled workaround, probe the behaviour before passing it. A wrong engine fact written into a
+doc comment propagates — it gets copied into the next slice's rationale and into agent memory.
+
 ## Related
 
 [[testing-conventions]] — GUT conventions and scene-instantiation facts.
 [[CreamBun Code Patterns]] — general Godot/GDScript engine facts.
+[[gotcha-gut-helper-silent-passes]] — the other family of "the search returned nothing and nobody
+noticed" failures.
