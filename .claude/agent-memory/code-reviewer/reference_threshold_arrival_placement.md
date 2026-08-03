@@ -23,6 +23,16 @@ For a Threshold standing in for a **map edge** (as opposed to a doorway or pit):
 - Perimeter walls are unconditional and full-span on **every** edge, including edges that carry a
   Threshold — a Threshold is crossed before the wall is ever reached, not instead of it.
 
+## The two shipped areas' bounds (re-derived from `tile_map_data`, so you don't have to)
+
+- `meadow.tscn` — `get_used_rect()` cells `(0,1)` size `(17,20)` → **`Rect2(0, 16, 544, 320)`**
+- `orchard.tscn` — → **`Rect2(0, 0, 448, 256)`**
+
+Meadow's bounds do NOT start at y=0 — the top painted row is `y=1`. Any hand-check of a north-edge
+number that assumes `bounds.position == Vector2.ZERO` will be 16px wrong. The 2px/4px/8px
+conventions above check out against both: e.g. meadow's east Threshold at `x=539` with a 2-wide
+shape has its outer face at 540, four pixels inside `bounds.end.x == 544`.
+
 ## Proving an Arrival's position is right, not merely self-consistent
 
 An integration test that reads the marker's own position as ground truth cannot catch a
