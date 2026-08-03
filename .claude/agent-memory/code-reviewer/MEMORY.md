@@ -21,6 +21,7 @@
 - [Threshold/Arrival placement](reference_threshold_arrival_placement.md) — 2px depth, 4px gap from the wall, 8px corner inset; how to prove an Arrival reproduces the retired landing math
 - [World-area authoring facts](reference_world_area_authoring_facts.md) — TileSets are per-scene embedded sub-resources; min area is 10×**12** tiles; bounds are a bounding box
 - [Destroy-before-acquire soft-lock](gotcha_destroy_before_acquire_soft_lock.md) — validate the replacement scene BEFORE reparent/remove_child/queue_free; a late null-guard fires into an empty tree
+- [@export_file String paths break on rename](gotcha_export_file_string_not_rename_tracked.md) — String paths aren't dependencies, so the editor never rewrites them; PackedScene isn't an option (loader deadlock)
 - [Sub-resource mutation leaks](gotcha_test_subresource_mutation_leak.md) — instantiate() shares [sub_resource]s process-wide; tests must assign not mutate, template scenes need resource_local_to_scene
 
 Per-developer profile memories live in `.claude/agent-memory-local/code-reviewer/` (gitignored). Check there for any local context before reviewing.

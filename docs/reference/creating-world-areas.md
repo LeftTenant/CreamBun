@@ -3,8 +3,10 @@
 This is a how-to guide for building CreamBun's world by hand in the Godot editor: painting
 terrain, placing props, laying out a new area, and linking areas together. It assumes no prior
 reading of the design doc — if you want the *why* behind any rule here, the full rationale lives
-in `docs/features/world-collision/design.md` (referenced by section below), but everything you
-need to actually do the work is on this page.
+in the relevant feature design doc (referenced by section below) — mostly
+`docs/features/world-collision/design.md`, with `docs/features/world-thresholds/design.md`
+covering how areas link to each other (§4) — but everything you need to actually do the work is on
+this page.
 
 **The one rule everything below serves:** collision is authored once, on the thing itself — a
 tile in the TileSet, or a prop's `.tscn` — never drawn separately onto the map. If you ever find
@@ -131,28 +133,48 @@ the code works around.
 **Paint `Ground` as a filled rectangle, not a ragged or L-shaped outline.** Bounds, camera limits,
 and the perimeter are all computed from `get_used_rect()` — the bounding box of every painted
 cell, not the actual painted silhouette. If you paint an L-shape (or leave gaps), the area's
-"bounds" still cover the full rectangle that encloses it, and the perimeter wall/trigger goes
-around *that* rectangle — leaving the parts of it you didn't paint as unwalled void a player can
-wander into. Keep `Ground` a solid rectangle so the computed bounds match what you actually see.
+"bounds" still cover the full rectangle that encloses it, and the perimeter wall goes around *that*
+rectangle — leaving the parts of it you didn't paint as unwalled void a player can wander into.
+Keep `Ground` a solid rectangle so the computed bounds match what you actually see.
 
-**The north edge always eats a couple of rows.** The topmost tile rows of whatever `Ground` you
-paint are a **visual-only backdrop** — they render, but the player can never actually stand there.
-An automatic inset keeps the north wall (or trigger) that far south of the true painted edge, so
-the camera still shows all of Cream Bun even when they're stopped at the boundary. Paint that
-strip as normal ground for visual continuity — just don't expect the player to walk into it.
-(South, east, and west don't have this problem and sit flush with the true edge.)
+**Whether the north edge clips the character is now something you decide per area, not something
+the code computes for you.** Every edge of every area gets a perimeter wall automatically (below),
+and it sits flush at the true painted edge on all four sides — there's no inset anywhere any more.
+The camera's limits clamp to that same line, and because Cream Bun is feet-anchored (the
+ground-anchor rule above — the sprite is drawn *above* the node origin, not centred on it), that
+interacts very differently edge by edge. At the **north** edge, a player standing flush against it
+has roughly the top two-thirds of the drawn sprite pushed above `Camera2D.limit_top` — a real,
+visible clip. At the **east/west**
+edges the equivalent clip is only a couple of pixels — easy to miss and not worth mitigating. At
+the **south** edge there's no clip at all: the feet-anchor means the drawn sprite never reaches
+past the camera's `limit_bottom` in the first place. So this is a north-edge-specific decision, not
+a general "every edge" one — don't spend effort inset-painting or Threshold-placing a south (or
+east/west) edge that has no problem to fix. Fix the north edge per area, as needed, by:
 
-You don't set the inset, and there's no constant to look up: it's computed from the player
-sprite's own measurements every time an area loads (`WorldArea.north_headroom_inset()`), so it
-follows the art. At the time of writing it works out to **32px — two tile rows**. If the player
-art changes, this number changes with it and every area's backdrop strip grows or shrinks
-automatically; nothing per-area needs editing.
+- painting a row or two of impassable terrain in from the north edge (§1), so the player is stopped
+  before they'd clip,
+- placing a `Threshold` there (§4) — it fires as soon as the player's `ThresholdBounds` reaches it,
+  before their sprite would leave the view, or
+- accepting the clip, if the north edge isn't somewhere the player has a reason to stand.
 
-**Nothing else needs manual wiring.** The camera's two-tile dead zone and edge-lock limits, and
-the perimeter walls/triggers, are all built automatically from `Ground`'s painted extent the first
-time `world.gd` activates the area — there's no per-area camera setup to do.
+`meadow.tscn`'s own north edge is a live example of the third option: it has neither inset terrain
+nor a placed Threshold, so a player standing at the true north wall today shows the top of Cream
+Bun's sprite clipped above the camera's `limit_top`. This is deliberate, not an oversight — the
+starting area's north edge isn't somewhere a player lingers — and it's worth looking at once in
+the editor to see what "accepted" actually looks like before deciding whether your own new area
+needs one of the other two options instead.
 
-Design rationale: `docs/features/world-collision/design.md` §6.1, §8, §9, §12.1, §12.3.
+**Nothing else needs manual wiring.** The camera's two-tile dead zone and edge-lock limits, and the
+perimeter walls, are all built automatically from `Ground`'s painted extent the first time
+`world.gd` activates the area — there's no per-area camera setup to do. The one thing that *is*
+manual is reachability: a wall alone never lets the player through, so an area with no `Threshold`
+placed anywhere in it is a dead end (§4).
+
+Design rationale: `docs/features/world-collision/design.md` §6.1, §8 (the ground-anchor rule),
+§9, §12.1, §12.3; `docs/features/world-thresholds/design.md` §7 (perimeter walls, now
+unconditional on every edge), §8 (the north edge clipping by default — now a content decision, not
+a code one). Note both docs happen to have their own §8, covering different things — the citations
+above name which doc each belongs to on purpose, so don't merge them.
 
 ---
 
@@ -200,47 +222,102 @@ Design rationale: `docs/features/world-collision/design.md` §7, §8.
 
 ---
 
-## 4. Linking two areas with the `neighbour_*` slots
+## 4. Linking two areas with placed Thresholds
 
 **A new area isn't reachable in-game until something links to it.** Finishing §2 gets you a
 complete area scene, but the game always starts in `meadow.tscn` (`STARTING_AREA_SCENE` in
 `world/world.gd`) and has no other way to discover an area scene sitting unused on disk. The last
-step of building a new area is always this section: point an existing, reachable area's
-`neighbour_*` slot at it.
+step of building a new area is always this section: place a `Threshold` in an existing, reachable
+area that leads to it.
 
-Each `WorldArea` root has four Inspector slots — **Neighbour North / East / South / West** — that
-pick another area's `.tscn` file. A filled slot is a doorway; an empty slot (the default) is a
-solid wall.
+**A `Threshold` is a placed trigger, not a property of the map's shape.** There's no per-edge
+Inspector slot to fill in on `WorldArea` any more — every crossing between areas, including the
+meadow ↔ orchard link, is a `Threshold`/`Arrival` pair a designer drags into the scene tree by
+hand, positioned and sized like any other placed thing (compare to how a `WorldProp` is placed,
+§3).
 
-**To link area A's east edge to area B:**
+**To place a Threshold that leads from area A to area B:**
 
-1. Open area A, select its root node, and set **Neighbour East** to area B's scene file (the
-   Inspector gives you a file-picker button — you don't type the path by hand).
-2. **Also open area B and set its Neighbour West back to area A.** This is the step that's easy to
-   forget: each slot is one-directional. If you only fill in A's side, walking from A into B works
-   fine, but walking back toward that same edge in B just hits an ordinary wall — which reads as a
-   bug, not a design choice, unless you intended a one-way passage.
-3. That's it. The first time either area loads, the game builds a trigger (instead of a wall) on
-   that edge automatically, and walking into it fades the screen, swaps the active area, and
-   spawns the player just inside the opposite edge of the new area, at the same perpendicular
-   position they exited at. None of this needs further wiring once the two slots are set.
+1. Open area A and drag `world/thresholds/threshold.tscn` into the scene tree as a **direct child
+   of the area root** (§2's prop-placement rule applies here too — never nested under a sub-node).
+2. Select it and resize its `CollisionShape2D` in the 2D viewport to cover whatever region should
+   trigger the crossing — a thin strip along a map edge, the mouth of a doorway, the lip of a pit.
+   Each placed Threshold gets its own independent shape, so resizing one instance never affects any
+   other Threshold placed from the same template.
+3. In the Inspector, set **Destination** to area B's `.tscn` file (a file-picker button — you
+   don't type the path by hand) and **Arrival** to the *name* of the Marker2D you're about to place
+   in area B (next step). Type it exactly: it's matched by name at crossing time, not picked from a
+   list, so a typo here fails silently until you actually test the crossing.
 
-**A few things to know about how the linked edge behaves**, none of which need action from you,
-but which explain what you'll see when testing a new link:
+   **Destination is stored as a plain path string, not a scene reference** — the file-picker
+   button is a convenience for typing it, but under the hood it's just text in the `.tscn`, not an
+   `ext_resource`/`uid://` link Godot's FileSystem dock tracks and updates. If you later rename or
+   move area B's scene file, nothing warns you and nothing gets updated: this Threshold quietly
+   keeps pointing at the old path. The only symptom is a `push_error` at crossing time (see §5),
+   with the player left standing exactly where they were. After renaming or moving any area scene,
+   grep the project for the old path and fix up every Threshold that referenced it by hand.
+4. Open area B and add a plain **Marker2D** anywhere under its root — no script, no other setup —
+   at the exact spot the player should land. Name it to match what you typed into **Arrival**
+   above.
+5. That's the whole link. The first time the player's `ThresholdBounds` collider (an invisible box
+   that tracks Cream Bun's whole drawn extent, separate from and larger than the movement capsule
+   — see the Quick reference table) overlaps the Threshold's shape, the game fades out, swaps the
+   active area, places the player at the named Marker2D, and fades back in.
 
-- **Corners never trigger a transition.** A 32×32px square at each end of a linked edge stays
-  ordinary walkable ground that simply can't start a transition — this exists so the game is never
-  ambiguous about which of two edges meeting at a corner you meant to cross. You can stand there;
-  you just won't be teleported from there.
-- **The north edge's own headroom inset (§2) applies here too.** A north-south link still carries
-  the same non-walkable backdrop strip on its north side; a north neighbour doesn't remove
-  it. It also shifts where a north-entering player lands: they spawn one tile in from the *inset*
-  boundary, not one tile in from the true painted edge.
-- **Reusing one area on two different edges is fine.** `orchard.tscn` links back to `meadow.tscn`
-  on both its north and west edges — a single second area can stand in for multiple neighbours
-  while you're prototyping, with no special handling needed.
+**If you're placing a Threshold to stand in for a map edge** (the common case, and the direct
+replacement for what used to be a `neighbour_*` slot), position it a couple of pixels in from the
+painted edge — inside the perimeter wall every area gets automatically (§2), not flush against it.
+The wall is a backstop the player should never actually reach; the Threshold should fire first.
+`meadow.tscn`'s `ThresholdToOrchardEast` and `ThresholdToOrchardSouth` are the reference examples:
+each is a thin, 2px-deep strip hugging the inside of its wall.
 
-Design rationale: `docs/features/world-collision/design.md` §12.2, §12.4, §12.5.
+**Both directions need their own placed pair.** A `Threshold` only works one way — crossing it
+takes you to its `destination` and drops you at its `arrival`, full stop. There is no automatic
+reverse link. A two-way doorway between area A and area B is **two** Thresholds, one placed in
+each area, each with its own `destination` and `arrival` pointing back the other way. Forgetting
+the second one is the single easiest mistake to make here — see §5.
+
+**Worked example — meadow ↔ orchard**, the project's one real link today:
+
+```
+meadow.tscn
+├── ThresholdToOrchardEast   (Threshold → orchard.tscn, arrival = &"ArrivalFromMeadowEast")
+├── ThresholdToOrchardSouth  (Threshold → orchard.tscn, arrival = &"ArrivalFromMeadowSouth")
+├── ArrivalFromOrchardNorth  (Marker2D)
+└── ArrivalFromOrchardWest   (Marker2D)
+
+orchard.tscn
+├── ThresholdToMeadowNorth   (Threshold → meadow.tscn, arrival = &"ArrivalFromOrchardNorth")
+├── ThresholdToMeadowWest    (Threshold → meadow.tscn, arrival = &"ArrivalFromOrchardWest")
+├── ArrivalFromMeadowEast    (Marker2D)
+└── ArrivalFromMeadowSouth   (Marker2D)
+```
+
+Four Thresholds and four Arrivals across two areas — that's what a fully-reciprocal two-area link
+looks like on disk once you count both directions.
+
+**A couple of things to know about how a placed Threshold behaves**, neither of which need action
+from you, but which explain what you'll see when testing a new link:
+
+- **Landing exactly inside a Threshold doesn't immediately send you back.** The re-entry guard
+  covers only true overlap: whatever the player's `ThresholdBounds` is already touching at the
+  moment they arrive stays inert until they've actually walked clear of it. It does **not** extend
+  to an Arrival placed merely near a Threshold without overlapping it — one step in that direction
+  fires the crossing normally, same as anywhere else. Treat this as a safety net, not a reason to
+  place them loosely: if you do end up with an Arrival inside a Threshold, it won't immediately
+  bounce the player back out — but place them clearly apart from each other regardless. All four
+  of this project's shipped Arrivals are placed well clear of any Threshold, and design doc §5
+  notes a future `@tool` editor warning for the inside-a-Threshold case precisely because it's
+  considered a bad placement, not a supported pattern.
+- **Nothing stops two Thresholds sharing an edge, or even overlapping, pointing at different
+  destinations.** There's no rule limiting one edge — or one area — to a single exit.
+
+**Nothing else needs manual wiring on the code side.** Any Threshold placed anywhere under an area
+is found and connected automatically the moment that area becomes active — there's no signal to
+hook up by hand.
+
+Design rationale: `docs/features/world-thresholds/design.md` §4 (the `Threshold` node), §5 (the
+`Arrival` node and the re-entry guard).
 
 ---
 
@@ -268,8 +345,23 @@ Design rationale: `docs/features/world-collision/design.md` §12.2, §12.4, §12
   wherever it's painted, `Ground` included. Painting one there *on purpose* is a supported pattern
   for flat boundaries (§1's layer-choice note); the mistake is doing it without meaning to, since
   the tile can look identical to its walkable neighbours.
-- **Setting only one side of a `neighbour_*` link.** Each slot is one-directional; a real two-way
-  doorway needs the reverse slot filled in on the other area too (§4).
+- **Placing a Threshold but forgetting its destination's Arrival, or forgetting the
+  reverse-direction Threshold.** A `Threshold` only works one way — it needs a matching,
+  correctly-named `Marker2D` waiting in its `destination` scene, and a real two-way link needs a
+  *second*, independent `Threshold` placed in the other area pointing back (§4). Get the Arrival's
+  name wrong (or leave it out) and the game fails safe: it still starts the transition, so you see
+  the screen fade to black and fade back in (the same ~0.3s cover/reveal as a working crossing),
+  the player is left exactly where they were, and an error is pushed to the Output panel. That
+  fade is actually the tell that the Threshold *did* fire and the Arrival lookup failed — it isn't
+  "crossing does nothing," it just doesn't finish. Forget the reverse Threshold and walking back
+  toward that same spot just hits an ordinary wall, with no fade and no error at all. Neither
+  reads as a missing authoring step unless you already know to look for one.
+- **Renaming or moving an area `.tscn` after a Threshold already points at it.** `destination` is
+  a plain string path (§4), not a tracked scene reference — Godot's FileSystem dock has no way to
+  notice the move and update it for you. The Threshold silently keeps the stale path; the only
+  symptom is a `push_error` at crossing time, with the player left in place, which looks identical
+  to any other bad-destination mistake above. Grep the project for the old path after any such
+  rename/move and fix up every Threshold that referenced it.
 
 ---
 
@@ -279,10 +371,10 @@ Design rationale: `docs/features/world-collision/design.md` §12.2, §12.4, §12
 | --- | --- | --- |
 | Tile size | 32×16 px | `world_area.gd`, `world_prop.gd` — `TILE_SIZE` |
 | Minimum area size | 320×180 px (10 wide × 12 tall tiles) | one full viewport |
-| North-edge headroom inset | derived from the player sprite; currently 32 px (two tile rows) | `WorldArea.north_headroom_inset()` |
-| Corner dead zone (linked edges) | 32×32 px | `CORNER_DEAD_ZONE_PX` |
-| Physics layers | `world` (terrain + props), `player`, `interactable` (edge triggers) | `project.godot` `[layer_names]` |
+| Physics layers | `world` (terrain + props), `player`, `interactable` (Thresholds), `player_bounds` (`ThresholdBounds` only) | `project.godot` `[layer_names]` |
 | Player collider | `CapsuleShape2D`, 22×10 px (radius 5, height 22, rotated 90°), at `(0, -9)` | `player/player.tscn` |
+| `ThresholdBounds` | `RectangleShape2D`, 26×27 px, at `(0, -17.5)` — the player's whole drawn extent, used only to detect Thresholds | `player/player.tscn` |
 | Player sprite offset | `(0, -16)` | `player/player.tscn` |
 
-Full design rationale for all of the above: `docs/features/world-collision/design.md`.
+Full design rationale for all of the above: `docs/features/world-collision/design.md`; area-linking
+specifically: `docs/features/world-thresholds/design.md`.
