@@ -3,8 +3,7 @@
 ##
 ## These tests define the expected contents of the base theme: default font,
 ## default font size, the nine §4 palette colors, and the "Heading" Label type
-## variation. They will FAIL until the theme resource is populated. That is by
-## design — the tests are the spec. See:
+## variation. Regression guard for that shipped theme resource. See:
 ##   docs/refactors/pixel-art-purist-size-and-theme.md (§3 font, §4 theme/palette)
 ##   docs/features/pixel-art-purist/slices.md (Slice 1)
 ##   docs/features/pixel-art-purist/slice-1-populate-base-theme-test-plan.md

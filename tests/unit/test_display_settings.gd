@@ -11,8 +11,7 @@
 ##   - rendering/2d/snap/snap_2d_vertices_to_pixel = true     ([rendering] section)
 ##   - allow_hidpi = false   (non-default — persists in file; keeps window sizes in logical points)
 ##
-## The five new assertions will FAIL until project.godot is updated by the
-## coder — that is by design; the tests are the specification.
+## Regression guard for those five shipped project.godot values.
 ##
 ## Design reference:
 ##   docs/refactors/pixel-art-purist-size-and-theme.md §2 and §7 Step 5

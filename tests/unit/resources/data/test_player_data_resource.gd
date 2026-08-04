@@ -2,8 +2,7 @@
 ## TDD contract tests for PlayerDataResource (resources/data/player_data_resource.gd).
 ##
 ## These tests define the expected API and Phase 1 seeding behavior for
-## PlayerDataResource. They will FAIL until that file exists. That is by
-## design — the tests are the spec. See:
+## PlayerDataResource. Regression guard for that shipped behavior. See:
 ##   docs/features/game-data/design.md (§9.2)
 ##   docs/features/game-data/slices.md (Slice 1)
 ##   docs/features/game-data/slice-1-foundation-test-plan.md

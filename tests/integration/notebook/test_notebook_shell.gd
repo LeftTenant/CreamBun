@@ -2,9 +2,8 @@
 ## TDD contract tests for the Phase 1 Core Notebook Shell.
 ##
 ## These tests define the expected API for Notebook (ui/notebook/notebook.gd) and
-## NotebookTab (ui/notebook/shared/notebook_tab.gd). They will FAIL until those
-## files exist. That is by design — the tests are the spec. Run them after
-## implementing each class to confirm the contract is met.
+## NotebookTab (ui/notebook/shared/notebook_tab.gd). Regression guard for that
+## shipped contract.
 ##
 ## Requires GUT: https://github.com/bitwes/Gut
 ## Install via Godot Asset Library (search "GUT - Godot Unit Testing").

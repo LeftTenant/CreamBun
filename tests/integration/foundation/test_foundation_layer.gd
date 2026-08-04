@@ -1,10 +1,8 @@
 ## test_foundation_layer.gd
 ## TDD contract tests for the Phase 1 Foundation Layer.
 ##
-## These tests define the expected API for every new class introduced in Phase 1.
-## They will FAIL until the corresponding implementation files exist. That is by
-## design — the tests are the spec. Run them after implementing each class to
-## confirm the contract is met.
+## These tests define the expected API for every class introduced in Phase 1.
+## Regression guard for that shipped contract.
 ##
 ## Requires GUT: https://github.com/bitwes/Gut
 ## Install via Godot Asset Library (search "GUT - Godot Unit Testing").
