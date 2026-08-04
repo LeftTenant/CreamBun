@@ -18,24 +18,55 @@ Defaults from `GameSettings`:
 
 Design doc reference: §5.5 (Settings tab).
 
+NOTE: there is exactly one reset button in `settings_tab.tscn`
+(`RightPage/ResetButton`, text "Reset to Defaults"). A previous revision of
+this scenario had the reset split across two steps — one clicking a
+"Reset Audio & Gameplay to Defaults" button that does not exist in the
+current scene. That was a leftover from before the pixel-art-purist Slice 3
+consolidation to a single shared reset button (see the SLICE 3 note in
+`tests/integration/notebook/test_settings_tab_handlers.gd`). Fixed below:
+there is now one reset step (Step 3) that presses the real `ResetButton` and
+asserts every setting it restores in one press.
+
 ⚠️ Side-effect note: `_on_window_scale_changed` calls
-`DisplayServer.window_set_size`. The right-page reset step in this scenario
-will resize the host window — that is the expected behaviour and the test
-deliberately exercises it. Run this scenario last in a batch so the resize
-does not interfere with other scenarios' screenshots.
+`DisplayServer.window_set_size`. The reset step in this scenario will resize
+the host window — that is the expected behaviour and the test deliberately
+exercises it. Run this scenario last in a batch so the resize does not
+interfere with other scenarios' screenshots.
 
 TODO: strengthen this scenario by changing the window scale to a non-default
-value (e.g. 2× or 8×) via the OptionButton popup **before** clicking the
-right-page reset. As written, `GameSettings.window_scale` already defaults
-to `4` (index 1 in [2×, 4×, 6×, 8×]), so the right-page reset is a no-op
-for window size and the scenario does not actually exercise a mid-scenario
-`DisplayServer.window_set_size` call. Adding a pre-step that pops the
-OptionButton, selects a different scale, then clicks a left-page slider in
-viewport coords would prove that the testing-sandbox's per-call
-viewport→window conversion in
-`plugins/godot-testing/godot/testing_server.gd:_viewport_to_window` keeps
-mouse coords accurate across a live window resize — which is the case this
-scenario is meant to be the canonical proof for.
+value (e.g. 2× or 8×) via the OptionButton popup **before** clicking
+`ResetButton`. As written, `GameSettings.window_scale` already defaults to
+`4` (index 1 in [2×, 4×, 6×, 8×]), so the reset is a no-op for window size
+and the scenario does not actually exercise a mid-scenario
+`DisplayServer.window_set_size` call. A pre-step that pops the OptionButton,
+selects a different scale, then clicks a left-page slider in viewport
+coords would prove that the testing-sandbox's per-call viewport→window
+conversion in `plugins/godot-testing/godot/testing_server.gd:_viewport_to_window`
+keeps mouse coords accurate across a live window resize — which is the case
+this scenario is meant to be the canonical proof for.
+
+Attempted live (2026-08-03) and backed out: clicking the OptionButton at its
+on-screen centre produced no visible popup and left `.selected` unchanged,
+but so did a repeat click on the Master Volume slider's leftmost edge in the
+same session — i.e. mouse input was not registering on *any* control that
+run, not something specific to OptionButton popups. Rule out a stuck/stale
+sandbox session (a fresh `stop_game` + `launch_game` + `reset_state`, not
+just `reset_state` alone) and confirm the slider click still moves the
+value before spending more time on the OptionButton popup specifically.
+
+⚠️ STALE REFERENCE SCREENSHOTS (found 2026-08-03, not yet fixed): every
+`.png` still committed under `tests/e2e/notebook/screenshots/settings_controls_*`
+(`step_00_setup`, `step_01_defaults`, `step_02_sliders_moved`,
+`step_02_master_zero`) predates the pixel-art-purist theme pass — they show
+the old generic UI font and the old two-reset-button layout, not the current
+monogram-themed single-`ResetButton` layout visible today. A real run of
+this scenario would screenshot-diff-fail on every step, not just the ones
+touched above. The two screenshots tied to the removed phantom-button step
+(`step_03_left_reset`, `step_04_right_reset`) were deleted as part of this
+pass since the step they illustrated no longer exists; the remaining four
+still need to be regenerated from a real run before this scenario's
+screenshot comparisons can be trusted again.
 
 ## Setup
 - Load scene: `res://world/world.tscn`
@@ -85,12 +116,14 @@ scenario is meant to be the canonical proof for.
   (this is the assertion that would have caught the bug where `_text_speed_slider`
   was a local variable and the reset handler could not update the widget)
 
-### Step 3: Click "Reset Audio & Gameplay to Defaults"
-- Mouse move to: centre of the "Reset Audio & Gameplay to Defaults" button
+### Step 3: Click "Reset to Defaults" (the single shared reset button)
+- Mouse move to: centre of the "Reset to Defaults" button (`ResetButton`) on
+  the right page — this is the single shared button that resets ALL settings
+  (audio volumes, text speed, and window scale) via `_on_reset_all_pressed`
 - Mouse button press: `LEFT`
 - Mouse button release: `LEFT`
-- Wait: 10 frames
-- Screenshot → save / compare reference: `settings_controls_step_03_left_reset.png`
+- Wait: 15 frames     # window resize happens here; let it settle
+- Screenshot → save / compare reference: `settings_controls_step_03_shared_reset.png`
 - Assert: all three volume sliders are back to `value == 100.0`
 - Assert: the Text Speed slider widget `value` is exactly `100.0`
   (not "approximately default" — the reset handler must explicitly set
@@ -101,14 +134,5 @@ scenario is meant to be the canonical proof for.
 - Assert: `SettingsTab._settings.sfx_volume` == `1.0`
 - Assert: `SettingsTab._settings.text_speed` == `1.0`
   (data model must be restored alongside the widget)
-
-### Step 4: Click "Reset to Defaults" (shared reset button)
-- Mouse move to: centre of the "Reset to Defaults" button (`ResetButton`) on
-  the right page — this is the single shared button that resets ALL settings
-  (audio volumes, text speed, and window scale) via `_on_reset_all_pressed`
-- Mouse button press: `LEFT`
-- Mouse button release: `LEFT`
-- Wait: 15 frames     # window resize happens here; let it settle
-- Screenshot → save / compare reference: `settings_controls_step_04_shared_reset.png`
 - Assert: the window-scale `OptionButton.selected` == `1` (index for "4×" — the default in [2×,4×,6×,8×])
 - Assert: `SettingsTab._settings.window_scale` == `4`

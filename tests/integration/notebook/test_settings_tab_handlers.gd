@@ -250,6 +250,15 @@ func test_window_scale_option_calls_display_server() -> void:
 
 	await get_tree().process_frame
 
+	# The _settings model update must happen unconditionally — mirrors the
+	# pattern in test_music_slider_drives_audio_bus_1/2, which assert the
+	# _settings side of the handler before their own environment-guarded
+	# hardware check below. Without this, the test asserted nothing at all
+	# under headless CI (the only environment GUT actually runs in here).
+	assert_eq(_tab._settings.window_scale, expected_scale,
+			"_settings.window_scale must be %d after selecting index 0 (2×); got %d" % [
+					expected_scale, _tab._settings.window_scale])
+
 	# DisplayServer.window_get_size() always returns (0, 0) in headless mode
 	# because there is no OS window to query. Godot's headless DisplayServer is
 	# a no-op stub; window_set_size() was still called (that is what we care
