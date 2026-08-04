@@ -9,9 +9,8 @@
 ##  - the launch-time call sequence (SaveManager._ready() → load_settings() +
 ##    new_game())
 ##
-## They will FAIL until SaveManager is rewritten per design §6.2 and launch
-## wiring calls load_settings() + new_game() from _ready(). That is by
-## design — the tests are the spec. See:
+## Regression guard for the §6.2 rewrite and its launch wiring
+## (load_settings() + new_game() from _ready()). See:
 ##   docs/features/game-data/design.md (§6.2, §10, §11)
 ##   docs/features/game-data/slices.md (Slice 2)
 ##   docs/features/game-data/slice-2-savemanager-test-plan.md

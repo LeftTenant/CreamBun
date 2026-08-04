@@ -158,9 +158,11 @@ func test_scene_declares_last_played_label() -> void:
 # ---------------------------------------------------------------------------
 
 func test_scene_declares_switch_button() -> void:
-	# SwitchButton is the no-op Phase-1 switch affordance. In Phase 2 it will
-	# be wired to GameEvents.story_switch_requested. It must be a Button so the
-	# pressed signal is available for future connection. A missing node would
+	# SwitchButton is the switch-story affordance — Slice 6 wired its pressed
+	# signal to emit GameEvents.story_switch_requested (see the SLICE 6 NOTE
+	# above and test_sessions_tab.gd's
+	# test_story_card_switch_pressed_emits_story_switch_requested). It must be
+	# a Button so that pressed signal is available. A missing node would
 	# silently remove the switch affordance from every card without a runtime error.
 	var instance: StoryCard = _make_scene_instance()
 

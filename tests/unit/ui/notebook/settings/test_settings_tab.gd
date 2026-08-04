@@ -3,9 +3,8 @@
 ##
 ## Covers SettingsTab (ui/notebook/settings/settings_tab.gd).
 ##
-## These tests define the expected API. They will FAIL until the implementation
-## files exist — that is by design. Run them after implementing each class to
-## confirm the contract is met.
+## These tests define the expected API. Regression guard for that shipped
+## contract.
 ##
 ## --- SLICE 5 DATA SOURCE NOTE ---
 ## SettingsTab._settings now sources from the shared SaveManager.settings

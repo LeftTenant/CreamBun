@@ -10,8 +10,7 @@
 ## are also asserted: equipment_slot SlotLabel/ItemNameLabel and quests
 ## CompletedSeparator.
 ##
-## These tests are intentionally RED before implementation. See the approved
-## test plan at:
+## Regression guard for that shipped assignment. See the approved test plan at:
 ##   docs/features/pixel-art-purist/slice-5-notebook-font-size-pass-test-plan.md
 ##
 ## HOW PER-NODE THEME OVERRIDES ARE TESTED

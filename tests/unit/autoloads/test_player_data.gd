@@ -3,9 +3,8 @@
 ##
 ## These tests cover the forwarded getters/setter and the to_resource()
 ## identity contract — the parts of PlayerData that are pure "thin wrapper"
-## logic and can be exercised without any scene tree. They will FAIL until
-## both PlayerDataResource and the PlayerData autoload exist. That is by
-## design — the tests are the spec. See:
+## logic and can be exercised without any scene tree. Regression guard for
+## that shipped behavior. See:
 ##   docs/features/game-data/design.md (§3, §9.1)
 ##   docs/features/game-data/slices.md (Slice 1)
 ##   docs/features/game-data/slice-1-foundation-test-plan.md

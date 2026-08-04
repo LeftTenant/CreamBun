@@ -5,9 +5,8 @@
 ## GlobalMap (ui/notebook/map/global_map.gd), and
 ## LocalMap (ui/notebook/map/local_map.gd).
 ##
-## These tests define the expected API. They will FAIL until the implementation
-## files exist — that is by design. Run them after implementing each class to
-## confirm the contract is met.
+## These tests define the expected API. Regression guard for that shipped
+## contract.
 ##
 ## Requires GUT: https://github.com/bitwes/Gut
 ## Install via Godot Asset Library (search "GUT - Godot Unit Testing").
