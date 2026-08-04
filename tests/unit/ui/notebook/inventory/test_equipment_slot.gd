@@ -304,3 +304,84 @@ func test_click_on_empty_slot_leaves_it_unselected() -> void:
 	if name_label != null:
 		assert_false(name_label.visible,
 				"clicking an EMPTY slot must not reveal ItemNameLabel")
+
+
+# ---------------------------------------------------------------------------
+# Test 10 — setup() with a null item (empty slot) does not crash
+# ---------------------------------------------------------------------------
+# RELOCATED from tests/integration/notebook/test_inventory_tab.gd (Test 2):
+# this only exercises EquipmentSlot in isolation — no PlayerData, no tab
+# wiring — so it belongs at the unit level alongside the rest of this file.
+
+func test_setup_with_null_item_does_not_crash() -> void:
+	# setup() with a null item (empty slot) must be safe — it is the initial
+	# state before the player has equipped anything.
+	var slot: EquipmentSlot = _make_slot()
+
+	# If this raises an error GUT records a failure automatically.
+	slot.setup(ItemData.EquipSlot.BOOTS, null)
+
+	assert_true(true, "setup() with null item must not crash")
+
+
+# ---------------------------------------------------------------------------
+# Test 11 — setup() stores the slot type passed to it
+# ---------------------------------------------------------------------------
+# RELOCATED from tests/integration/notebook/test_inventory_tab.gd (Test 3).
+
+func test_setup_stores_slot_type() -> void:
+	# _slot is the internal record that _can_drop_data() compares against
+	# incoming drag data. It must match the value passed to setup().
+	var slot: EquipmentSlot = _make_slot()
+	slot.setup(ItemData.EquipSlot.GLOVES, null)
+
+	assert_eq(slot._slot, ItemData.EquipSlot.GLOVES,
+			"EquipmentSlot._slot must equal the value passed to setup()")
+
+
+# ---------------------------------------------------------------------------
+# Test 12 — _can_drop_data() rejects items whose equip_slot does not match
+# ---------------------------------------------------------------------------
+# RELOCATED from tests/integration/notebook/test_inventory_tab.gd (Test 4).
+
+func test_can_drop_data_returns_false_for_wrong_slot() -> void:
+	# A BOOTS slot must refuse a GLOVES item so the player cannot put the
+	# wrong item type in the wrong slot.
+	var gloves: ItemData = ItemData.new()
+	gloves.id = &"test_gloves"
+	gloves.equip_slot = ItemData.EquipSlot.GLOVES
+	autofree(gloves)
+
+	var stack: ItemStack = ItemStack.new()
+	stack.item_id = gloves.id
+	stack.item = gloves  # set runtime reference so _can_drop_data can read equip_slot
+	autofree(stack)
+
+	var slot: EquipmentSlot = _make_slot()
+	slot.setup(ItemData.EquipSlot.BOOTS, null)
+
+	var data: Dictionary = {"kind": "item", "stack": stack}
+	assert_false(slot._can_drop_data(Vector2.ZERO, data),
+			"_can_drop_data must return false when item.equip_slot != this slot")
+
+
+# ---------------------------------------------------------------------------
+# Test 13 — _can_drop_data() accepts items whose equip_slot matches
+# ---------------------------------------------------------------------------
+# RELOCATED from tests/integration/notebook/test_inventory_tab.gd (Test 5).
+
+func test_can_drop_data_returns_true_for_matching_slot() -> void:
+	# A BOOTS slot must accept a BOOTS item so drag-to-equip works.
+	var boots: ItemData = _make_item(&"drop_test_boots", ItemData.EquipSlot.BOOTS)
+
+	var stack: ItemStack = ItemStack.new()
+	stack.item_id = boots.id
+	stack.item = boots
+	autofree(stack)
+
+	var slot: EquipmentSlot = _make_slot()
+	slot.setup(ItemData.EquipSlot.BOOTS, null)
+
+	var data: Dictionary = {"kind": "item", "stack": stack}
+	assert_true(slot._can_drop_data(Vector2.ZERO, data),
+			"_can_drop_data must return true when item.equip_slot == this slot")
