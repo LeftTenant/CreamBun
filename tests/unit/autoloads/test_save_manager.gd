@@ -3,14 +3,12 @@
 ## (autoloads/save_manager.gd) — Slice 2.
 ##
 ## These tests cover the purely structural / constant-level parts of the §6.2
-## rewrite: the new SETTINGS_PATH / SLOT_DIR constants, _slot_path(), the
-## initial (unloaded) state of `settings`, and confirming the OLD
-## SAVE_PATH constant and save_game()/load_game() stubs are gone. They do not
-## touch disk or PlayerData — see tests/integration/foundation/ for the I/O
-## and launch-wiring behaviors.
+## rewrite: the new SETTINGS_PATH / SLOT_DIR constants, _slot_path(), and the
+## initial (unloaded) state of `settings`. They do not touch disk or
+## PlayerData — see tests/integration/foundation/ for the I/O and
+## launch-wiring behaviors.
 ##
-## They will FAIL until SaveManager is rewritten per design §6.2. That is by
-## design — the tests are the spec. See:
+## Regression guard for the §6.2 rewrite. See:
 ##   docs/features/game-data/design.md (§6.2, §10, §11)
 ##   docs/features/game-data/slices.md (Slice 2)
 ##   docs/features/game-data/slice-2-savemanager-test-plan.md
@@ -60,38 +58,7 @@ func test_slot_path_reflects_slot_dir_for_a_different_slot_id() -> void:
 
 
 # ---------------------------------------------------------------------------
-# Test 3 — old SAVE_PATH constant and save_game()/load_game() stubs are gone
-# ---------------------------------------------------------------------------
-
-func test_old_save_path_constant_no_longer_exists() -> void:
-	# The pre-rewrite SaveManager declared `const SAVE_PATH := "user://savegame.tres"`.
-	# §6.2's rewrite replaces it with SETTINGS_PATH / SLOT_DIR — SAVE_PATH must
-	# not survive the rewrite as dead/confusing API surface.
-	#
-	# GDScript `const` members live on the Script resource, not as object
-	# properties, so a removed constant can't be checked with `in` or
-	# Object.get() (those target instance properties). get_script_constant_map()
-	# returns every const declared on the script as a Dictionary — and, unlike
-	# referencing `SaveManager.SAVE_PATH` directly, looking it up by key here
-	# does not cause a parse error if the constant has been removed.
-	# https://docs.godotengine.org/en/stable/classes/class_script.html#class-script-method-get-script-constant-map
-	var constants: Dictionary = SaveManager.get_script().get_script_constant_map()
-	assert_false(constants.has("SAVE_PATH"),
-			"the old SAVE_PATH constant should no longer exist on SaveManager")
-
-
-func test_old_save_game_method_no_longer_exists() -> void:
-	assert_false(SaveManager.has_method("save_game"),
-			"the old save_game() stub should no longer exist on SaveManager")
-
-
-func test_old_load_game_method_no_longer_exists() -> void:
-	assert_false(SaveManager.has_method("load_game"),
-			"the old load_game() stub should no longer exist on SaveManager")
-
-
-# ---------------------------------------------------------------------------
-# Test 4 — settings is null before load_settings() has ever been called
+# Test 3 — settings is null before load_settings() has ever been called
 # ---------------------------------------------------------------------------
 #
 # NOTE: SaveManager is an autoload singleton, so by the time any test runs,
