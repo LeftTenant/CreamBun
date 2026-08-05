@@ -63,18 +63,21 @@ release position right before the button-up event (mirroring what
 regression guard. This scenario should be re-run against the fix to confirm
 it also holds for a paused, in-notebook `Control`.
 
-⚠️ STALE REFERENCE SCREENSHOTS (found 2026-08-03, not yet fixed): every
-`.png` still committed under `tests/e2e/notebook/screenshots/settings_controls_*`
-(`step_00_setup`, `step_01_defaults`, `step_02_sliders_moved`,
-`step_02_master_zero`) predates the pixel-art-purist theme pass — they show
-the old generic UI font and the old two-reset-button layout, not the current
-monogram-themed single-`ResetButton` layout visible today. A real run of
-this scenario would screenshot-diff-fail on every step, not just the ones
-touched above. The two screenshots tied to the removed phantom-button step
-(`step_03_left_reset`, `step_04_right_reset`) were deleted as part of this
-pass since the step they illustrated no longer exists; the remaining four
-still need to be regenerated from a real run before this scenario's
-screenshot comparisons can be trusted again.
+⚠️ STALE REFERENCE SCREENSHOTS, regeneration blocked by #41: every `.png`
+still committed under `tests/e2e/notebook/screenshots/settings_controls_*`
+(`step_01_defaults`, `step_02_sliders_moved`) predates the pixel-art-purist
+theme pass — they show the old generic UI font and the old two-reset-button
+layout, not the current monogram-themed single-`ResetButton` layout visible
+today. A real run of this scenario would screenshot-diff-fail on every step.
+`step_03_shared_reset.png` doesn't exist yet either (new in this revision).
+None of the three can be regenerated until #41 (mouse input not registering
+in the sandbox) is fixed — step_01 alone needs no interaction and COULD be
+captured standalone, but was deliberately left stale so all three are
+captured in one consistent pass rather than in two visually-inconsistent
+batches. Two more screenshots (`step_00_setup`, `step_02_master_zero`) were
+deleted outright in this pass: both predated the current scenario text
+entirely (referenced by neither the old nor the current revision's actual
+steps) and had no step left to illustrate.
 
 ## Setup
 - Load scene: `res://world/world.tscn`
