@@ -1,7 +1,9 @@
 class_name MouseInputIsolationButton
 extends Button
-## Regression fixture for issue #41 — testing-sandbox mouse events never
-## reaching a Control node.
+## Regression fixture for issue #41 — testing-sandbox mouse input on a
+## Control was unreliable: raw button_down/button_up landed on every
+## injected click, but the completed `pressed` signal cycle only fired
+## intermittently across repeated clicks in the same session.
 ##
 ## This script exists ONLY to make every stage of a click independently
 ## observable via `get_node_property`, without depending on screenshot
@@ -28,10 +30,10 @@ extends Button
 ## "pointer motion doesn't route to GUI" from "clicks specifically fail".
 var hover_count: int = 0
 
-## Bumped on Button.button_down — the press half of a click. This is the
-## "purely client-side pressed visual state" issue #41 calls out: it flips
-## the instant BaseButton sees a GUI mouse-button-down inside its rect, with
-## no signal bus or autoload involved at all.
+## Bumped on Button.button_down — the press half of a click. This counter
+## reliably reaches 1 on every injected click even when the bug in issue #41
+## was present; it flips the instant BaseButton sees a GUI mouse-button-down
+## inside its rect, with no signal bus or autoload involved at all.
 var button_down_count: int = 0
 
 ## Bumped on Button.button_up — the release half of a click.

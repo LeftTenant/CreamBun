@@ -30,3 +30,4 @@
 - [Threshold node freed before final read](gotcha_threshold_freed_before_final_read.md) — capture a trigger node's exported data into locals before queue_free()'ing its parent in a multi-await coroutine, or a late re-read is a use-after-free
 - [load() on a missing path is noisy](gotcha_load_missing_path_noisy_engine_errors.md) — pushes 2 extra engine errors beyond your own push_error(); guard with ResourceLoader.exists() first when a test counts exact errors
 - [find_children() owned default prunes runtime nodes](reference_find_children_owned_default_prunes_runtime_nodes.md) — `owned=true` default silently misses runtime-added owner-less nodes; type filter itself is fine with class_name
+- [custom_minimum_size is a floor, not a ceiling](gotcha_custom_minimum_size_is_a_floor_not_ceiling.md) — can't shrink a themed Button below its text/font/stylebox intrinsic minimum; pin to the real measured size instead

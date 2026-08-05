@@ -18,11 +18,20 @@ pause/process_mode interaction.
 
 Fixture: `tests/e2e/testing-sandbox/fixtures/mouse_input_isolation.tscn` +
 `mouse_input_isolation_button.gd`. The `TestButton` is a `toggle_mode` Button
-at viewport rect (120, 70)–(200, 94), centre (160, 82). It exposes four
-counters (`hover_count`, `button_down_count`, `button_up_count`,
-`click_count`) plus the inherited `button_pressed` toggle state, so every
-stage of a click is independently assertable via `get_node_property` without
-depending on screenshot comparison.
+positioned at (120, 70). A `Control`'s authored `size` in a `.tscn` is not
+authoritative — Godot clamps it up to `get_combined_minimum_size()`, which
+for a themed `Button` depends on its text/font/stylebox margins. This
+fixture has no theme override, so under the default engine theme "Test
+Button" actually renders at 98×31, not the 80×24 the old `size` line alone
+implied. `custom_minimum_size` is set explicitly to `Vector2(98, 31)` to
+match and pin that real size, so it is deterministic rather than an
+incidental side effect of the current default font. The button's true
+viewport rect is therefore (120, 70)–(218, 101), centre (169, 85) — the
+coordinates the steps below click. It exposes four counters (`hover_count`,
+`button_down_count`, `button_up_count`, `click_count`) plus the inherited
+`button_pressed` toggle state, so every stage of a click is independently
+assertable via `get_node_property` without depending on screenshot
+comparison.
 
 Test plan: `docs/features/testing-sandbox/issue-41-mouse-input-test-plan.md`.
 
@@ -42,11 +51,11 @@ consistently zero or all — see issue #41 for the full investigation.
 
 ## Setup
 - Stop game (if running) — start from a guaranteed-fresh, guaranteed-unpaused
-  process rather than relying on `reset_state`, which does not touch
-  `get_tree().paused`. `settings_controls.md` documents a prior session where
-  a stale sandbox connection produced misleading "no click registers"
-  symptoms; ruling that out here matters precisely because this scenario's
-  whole job is to tell pause/session staleness apart from a real bug.
+  process rather than relying on `reset_state`, which reloads the current
+  scene but does not touch `get_tree().paused`. A full relaunch is the only
+  way to be certain this scenario starts unpaused, which matters because its
+  whole job is to prove the sandbox's mouse plumbing works on its own terms,
+  independent of any pause state.
 - Launch game
 - Load scene: `res://tests/e2e/testing-sandbox/fixtures/mouse_input_isolation.tscn`
 - Wait: 10 frames
@@ -57,7 +66,7 @@ consistently zero or all — see issue #41 for the full investigation.
 ## Steps
 
 ### Step 1: `mouse_move` alone registers hover before any click
-- Mouse move to: `(160, 82)` (centre of `TestButton`)
+- Mouse move to: `(169, 85)` (centre of `TestButton`)
 - Wait: 5 frames
 - Assert: node property `TestButton.hover_count` == `1`
   (isolates whether pointer motion reaches GUI dispatch at all, independent
@@ -65,13 +74,14 @@ consistently zero or all — see issue #41 for the full investigation.
   motion-event routing, not click routing specifically)
 
 ### Step 2: full press + release registers a click and flips `button_pressed`
-- Mouse button press: `LEFT` at `(160, 82)`
+- Mouse button press: `LEFT` at `(169, 85)`
 - Wait: 3 frames
 - Assert: node property `TestButton.button_down_count` == `1`
-  (this is the "purely client-side pressed visual state" issue #41 says never
-  registers — no signal bus, no autoload, nothing but BaseButton's own GUI
-  input handling between the injected event and this counter)
-- Mouse button release: `LEFT` at `(160, 82)`
+  (this counter reliably reached 1 on every injected click even before the
+  fix — issue #41 was never a routing failure at this stage; no signal bus,
+  no autoload, nothing but BaseButton's own GUI input handling between the
+  injected event and this counter)
+- Mouse button release: `LEFT` at `(169, 85)`
 - Wait: 5 frames
 - Screenshot → save / compare reference: `mouse_input_isolation_step_02_after_click.png`
   (visual sanity only — the hard assertions below are the actual pass/fail
@@ -81,9 +91,9 @@ consistently zero or all — see issue #41 for the full investigation.
 - Assert: node property `TestButton.button_pressed` == `true`
 
 ### Step 3: a second, independent click also registers
-- Mouse button press: `LEFT` at `(160, 82)`
+- Mouse button press: `LEFT` at `(169, 85)`
 - Wait: 3 frames
-- Mouse button release: `LEFT` at `(160, 82)`
+- Mouse button release: `LEFT` at `(169, 85)`
 - Wait: 5 frames
 - Assert: node property `TestButton.click_count` == `2`
 - Assert: node property `TestButton.button_down_count` == `2`
