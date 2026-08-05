@@ -6,7 +6,8 @@
 
 [node name="TestButton" type="Button" parent="."]
 position = Vector2(120, 70)
-size = Vector2(80, 24)
+size = Vector2(98, 31)
+custom_minimum_size = Vector2(98, 31)
 toggle_mode = true
 text = "Test Button"
 script = ExtResource("1")
