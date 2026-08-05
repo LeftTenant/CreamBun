@@ -50,11 +50,12 @@ Attempted live (2026-08-03) and backed out: clicking the OptionButton at its
 on-screen centre produced no visible popup and left `.selected` unchanged,
 but so did a repeat click on the Master Volume slider's leftmost edge in the
 same session — i.e. mouse input was not registering on *any* control that
-run, not something specific to OptionButton popups. This was **not** a
-stuck/stale sandbox session — it was issue #41: `testing_server.gd`'s
-`_cmd_mouse_button_release` sent the button-up event with no synthetic
-`InputEventMouseMotion` immediately before it, leaving `BaseButton`'s
-`pressing_inside` state stale at release time. Fixed on branch
+run, not something specific to OptionButton popups. The most likely cause is
+issue #41 (see `plugins/godot-testing/godot/testing_server.gd` and
+`tests/e2e/testing-sandbox/mouse_input_isolation.md`), though the slider
+symptom isn't fully explained by it since `Slider` commits its value on
+button-down, which was already reliable pre-fix — re-run this scenario
+against the fix to confirm. Fixed on branch
 `fix/41-e2e-mouse-input-not-registering` by priming a motion event at the
 release position right before the button-up event (mirroring what
 `_cmd_mouse_button_press` already did); see
