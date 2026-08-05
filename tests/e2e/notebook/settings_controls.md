@@ -50,10 +50,17 @@ Attempted live (2026-08-03) and backed out: clicking the OptionButton at its
 on-screen centre produced no visible popup and left `.selected` unchanged,
 but so did a repeat click on the Master Volume slider's leftmost edge in the
 same session — i.e. mouse input was not registering on *any* control that
-run, not something specific to OptionButton popups. Rule out a stuck/stale
-sandbox session (a fresh `stop_game` + `launch_game` + `reset_state`, not
-just `reset_state` alone) and confirm the slider click still moves the
-value before spending more time on the OptionButton popup specifically.
+run, not something specific to OptionButton popups. This was **not** a
+stuck/stale sandbox session — it was issue #41: `testing_server.gd`'s
+`_cmd_mouse_button_release` sent the button-up event with no synthetic
+`InputEventMouseMotion` immediately before it, leaving `BaseButton`'s
+`pressing_inside` state stale at release time. Fixed on branch
+`fix/41-e2e-mouse-input-not-registering` by priming a motion event at the
+release position right before the button-up event (mirroring what
+`_cmd_mouse_button_press` already did); see
+`tests/e2e/testing-sandbox/mouse_input_isolation.md` for the isolated
+regression guard. This scenario should be re-run against the fix to confirm
+it also holds for a paused, in-notebook `Control`.
 
 ⚠️ STALE REFERENCE SCREENSHOTS (found 2026-08-03, not yet fixed): every
 `.png` still committed under `tests/e2e/notebook/screenshots/settings_controls_*`

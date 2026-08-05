@@ -1,0 +1,12 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" uid="uid://ryiur2pprl2f" path="res://tests/e2e/testing-sandbox/fixtures/mouse_input_isolation_button.gd" id="1"]
+
+[node name="MouseInputIsolation" type="Control"]
+
+[node name="TestButton" type="Button" parent="."]
+position = Vector2(120, 70)
+size = Vector2(80, 24)
+toggle_mode = true
+text = "Test Button"
+script = ExtResource("1")
