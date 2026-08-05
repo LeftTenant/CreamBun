@@ -23,9 +23,10 @@ authoritative — Godot clamps it up to `get_combined_minimum_size()`, which
 for a themed `Button` depends on its text/font/stylebox margins. This
 fixture has no theme override, so under the default engine theme "Test
 Button" actually renders at 98×31, not the 80×24 the old `size` line alone
-implied. `custom_minimum_size` is set explicitly to `Vector2(98, 31)` to
-match and pin that real size, so it is deterministic rather than an
-incidental side effect of the current default font. The button's true
+implied. `custom_minimum_size` is set explicitly to the measured
+`Vector2(98, 31)` so the rect can't shrink below the documented value; it
+can still grow if the default theme's font changes, so re-measure if the
+rect ever looks wrong. The button's true
 viewport rect is therefore (120, 70)–(218, 101), centre (169, 85) — the
 coordinates the steps below click. It exposes four counters (`hover_count`,
 `button_down_count`, `button_up_count`, `click_count`) plus the inherited
