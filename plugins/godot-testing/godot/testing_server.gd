@@ -348,6 +348,34 @@ func _cmd_mouse_button_release(request: Dictionary) -> Dictionary:
 	var pos: Vector2 = _viewport_to_window(
 			Vector2(float(request.get("x", 0)), float(request.get("y", 0))))
 	var button: int = int(request.get("button", MOUSE_BUTTON_LEFT))
+
+	# Send a synthetic motion event at the release position immediately before
+	# the button-up event, mirroring _cmd_mouse_button_press above.
+	#
+	# BaseButton only emits `pressed` when both `press_attempt` and
+	# `pressing_inside` are true at button-up — see
+	# BaseButton::on_action_event() in Godot's base_button.cpp.
+	# `pressing_inside` isn't set once at press time; it's recomputed from
+	# motion events (Viewport's `_gui_input_event` hover tracking), and gets
+	# cleared by NOTIFICATION_MOUSE_EXIT. Because the developer's real
+	# physical pointer feeds the same viewport concurrently with injected
+	# events, the viewport's hover bookkeeping can fire that exit
+	# notification in the gap between the injected press and the injected
+	# release, leaving `pressing_inside` false by the time the release event
+	# arrives even though the injected click was never actually "outside"
+	# the button. Re-priming with a motion event at the release point before
+	# the button-up event makes that state deterministic regardless of what
+	# the real pointer is doing.
+	#
+	# In practice this showed up as an intermittent bug (issue #41): raw
+	# button_down/button_up counters incremented reliably on every injected
+	# click, but the completed `pressed` signal fired on some click cycles
+	# and not others.
+	var motion: InputEventMouseMotion = InputEventMouseMotion.new()
+	motion.position = pos
+	motion.global_position = pos
+	Input.parse_input_event(motion)
+
 	var event: InputEventMouseButton = InputEventMouseButton.new()
 	event.button_index = button
 	event.position = pos
