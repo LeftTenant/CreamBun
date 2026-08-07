@@ -24,6 +24,12 @@ from the documented rect, or the theme/font changes.
 - Prefer `custom_minimum_size` (or an explicit anchors/offsets layout) in the fixture when a
   scenario depends on an exact rect — that makes the authored number real instead of advisory.
 - Flag a bare `size = ...` on a themed Control in a fixture as inert data if a doc quotes it.
+- `custom_minimum_size` is a **floor, not a ceiling** — setting it to the measured size stops the
+  rect shrinking but not growing, so reject doc wording like "pinned / deterministic / no longer
+  depends on the font". The only way to make a documented rect self-verifying is an explicit
+  `size` assertion in the scenario's Setup.
+- To verify a documented rect independently: measure the non-background bbox of the committed
+  baseline `.png` and divide by the capture scale (1280×720 capture / 320×180 viewport = 4×).
 
 Related: [[gotcha-synthetic-mouse-click-needs-motion]], [[testing-conventions]],
 [[gotcha-tscn-default-valued-props]].

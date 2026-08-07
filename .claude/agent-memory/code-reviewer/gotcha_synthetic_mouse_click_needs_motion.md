@@ -32,5 +32,12 @@ when missing: `button_down` / `button_up` fire reliably on every injected click 
 - Do **not** justify this in comments as "the OS always sends a motion event before a button
   event" — a stationary click emits no motion event on X11/Windows/macOS. The real reason is
   the stale hover / `pressing_inside` state above.
+- **The release-side fix explains `Button`/`BaseButton` symptoms only.** `Slider` (`HSlider`/
+  `VSlider`) sets its value from the click position in `gui_input` on mouse-button-**down**
+  (`Slider::gui_input` calls `set_as_ratio()` in the `is_pressed()` branch), so a slider that
+  didn't move on an injected click means the button-down GUI event never reached it — a
+  *different* failure (usually a click coordinate derived from an inert `.tscn` `size`, see
+  [[gotcha-control-size-vs-theme-min-size]]). Don't let a doc attribute a stuck-slider session to
+  this `pressing_inside` root cause without re-running it.
 
 Related: [[testing-conventions]], [[project-patterns]].
