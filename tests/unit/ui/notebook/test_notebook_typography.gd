@@ -204,10 +204,30 @@ func test_equipment_slot_item_name_label_has_no_heading_variation() -> void:
 func test_equipment_slot_item_name_label_color_is_ink_muted() -> void:
 	# ItemNameLabel uses ink_muted (#7a6a5d) — the muted palette color signals
 	# that this text is secondary within the slot widget, below the SlotLabel.
-	var instance: Node = _make_instance("res://ui/notebook/inventory/equipment_slot.tscn")
-	assert_not_null(instance, "equipment_slot.tscn must load and instantiate")
-	if instance == null:
+	#
+	# UNLIKE every other test in this file, this one deliberately does NOT use
+	# _make_instance()/add_child_autofree(). Adding the instance to the scene
+	# tree runs equipment_slot.gd's _ready() -> _update_display(), and per
+	# issue #45, _update_display() unconditionally re-applies ink_muted (or
+	# ink, if selected) as a runtime theme_override_colors/font_color override
+	# on ItemNameLabel regardless of what the .tscn has baked in. If we
+	# entered the tree here, this test would keep passing even if the
+	# .tscn's baked color were deleted entirely — the script would just
+	# re-apply ink_muted at runtime, and we'd only be re-testing
+	# equipment_slot.gd's behavior (already covered by
+	# tests/unit/ui/notebook/inventory/test_equipment_slot.gd), not the
+	# scene's baked data. Node properties — including theme_override_colors —
+	# are applied at instantiate() time; _ready() only runs on tree entry. So
+	# we read the property straight off a freshly instantiated, never-added
+	# node to see the true .tscn-baked value.
+	var packed: PackedScene = load("res://ui/notebook/inventory/equipment_slot.tscn") as PackedScene
+	assert_not_null(packed, "equipment_slot.tscn must load")
+	if packed == null:
 		return
+
+	var instance: Node = packed.instantiate()
+	autofree(instance)
+	# Do NOT add_child(instance) here — see the comment above.
 
 	var label: Node = instance.find_child("ItemNameLabel", true, false)
 	assert_not_null(label, "equipment_slot.tscn must contain a node named 'ItemNameLabel'")

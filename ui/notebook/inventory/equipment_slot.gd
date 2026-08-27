@@ -21,6 +21,11 @@ extends Control
 ## size/anchor properties) lives in equipment_slot.tscn — this script only
 ## handles data binding, selection state, and drop logic.
 ##
+## Exception: ItemNameLabel's font_color is owned at runtime by
+## _update_display() (issue #45) — the .tscn's baked color is only the
+## pre-_ready() initial baseline, so editing it in the editor has no visible
+## effect once the game runs.
+##
 ## Drag-and-drop overview:
 ##   https://docs.godotengine.org/en/stable/tutorials/ui/gui_drag_and_drop.html
 
@@ -38,6 +43,17 @@ signal selected(slot: EquipmentSlot)
 
 
 # ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+# Theme palette values from base_theme.tres, mirrored here since no runtime
+# Theme-lookup helper exists in this codebase yet; see _update_display() for
+# why the selected state swaps between them (issue #45).
+const COLOR_INK: Color = Color("#3b2f2a")
+const COLOR_INK_MUTED: Color = Color("#7a6a5d")
+
+
+# ---------------------------------------------------------------------------
 # Private vars
 # ---------------------------------------------------------------------------
 
@@ -50,7 +66,8 @@ var _slot: ItemData.EquipSlot = ItemData.EquipSlot.NONE
 var _item: ItemData = null
 
 # Whether this slot is the player's active selection. Mirrors
-# InventoryRow's selection flag — true reveals SelectionRect only.
+# InventoryRow's selection flag — true reveals SelectionRect and switches
+# ItemNameLabel's font color to the selected-text theme color (issue #45).
 # Set via set_selected(); read by _update_display() and _gui_input().
 var _selected: bool = false
 
@@ -205,8 +222,8 @@ func _drop_data(_at_position: Vector2, data: Variant) -> void:
 ## SlotLabel (the heading) is ALWAYS visible, filled or empty (issue #7).
 ## IconRect and ItemNameLabel both follow fill state (_item != null) — they
 ## show the equipped item's icon and display name whenever the slot is
-## filled, regardless of selection. SelectionRect is the only element driven
-## by _selected.
+## filled, regardless of selection. _selected drives SelectionRect's
+## visibility and ItemNameLabel's font color (issue #45).
 ##
 ## @onready guarantees all child refs are non-null by the time _ready() runs,
 ## and setup() is always called after _ready(), so no null guards are needed.
@@ -228,7 +245,24 @@ func _update_display() -> void:
 		_item_name_label.text = _item.display_name
 		_item_name_label.visible = true
 
-	# SelectionRect is the only element driven by selection state.
+	# ItemNameLabel's font color (issue #45): a filled + selected slot renders
+	# full-contrast ink instead of the .tscn-baked ink_muted, because
+	# SelectionRect's translucent highlight lightens the effective background
+	# enough to drop ink_muted below WCAG AA contrast. Every other state
+	# (empty, or filled-but-unselected) actively re-applies ink_muted rather
+	# than calling remove_theme_color_override() — base_theme.tres sets no
+	# Label/font_color default, so removing the override would fall through
+	# to the engine-default white instead of reverting to ink_muted. This
+	# lives in _update_display() (not bolted onto setup()/set_selected()
+	# individually) so the color never goes stale when only one of _item or
+	# _selected changes.
+	if _item != null and _selected:
+		_item_name_label.add_theme_color_override("font_color", COLOR_INK)
+	else:
+		_item_name_label.add_theme_color_override("font_color", COLOR_INK_MUTED)
+
+	# SelectionRect's visibility is the other half of the selection state
+	# (see the font-color block above).
 	_selection_rect.visible = _selected
 
 
