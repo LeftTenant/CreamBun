@@ -23,8 +23,10 @@
 ##     (_item != null), regardless of selection — and is hidden when empty.
 ##   - A filled slot is selectable (click emits `selected`); an EMPTY slot is
 ##     NOT selectable (click does nothing, no `selected` emission).
-##   - set_selected(true) reveals SelectionRect only; set_selected(false)
-##     hides it again. ItemNameLabel is unaffected by selection.
+##   - set_selected(true) reveals SelectionRect; set_selected(false) hides it
+##     again. As of issue #45, selection also drives ItemNameLabel's font
+##     color (filled+selected -> ink, otherwise -> ink_muted) — see the tests
+##     near the bottom of this file.
 ##
 ## These tests currently FAIL against the pre-fix equipment_slot.gd, which:
 ##   - hides SlotLabel when an item is set (_update_display branch),
@@ -53,6 +55,15 @@ extends GutTest
 # ---------------------------------------------------------------------------
 
 const SCENE_PATH: String = "res://ui/notebook/inventory/equipment_slot.tscn"
+
+# Theme colors from resources/theme/base_theme.tres, duplicated here (as in
+# test_notebook_typography.gd) so these tests don't depend on Theme lookups
+# succeeding at test time. See issue #45: ItemNameLabel's baked ink_muted
+# color is too low-contrast against SelectionRect's translucent highlight
+# (Color(1, 0.9, 0.6, 0.35)) when a filled slot is selected — the fix swaps
+# in full-contrast ink for that one state only.
+const COLOR_INK: Color = Color("#3b2f2a")
+const COLOR_INK_MUTED: Color = Color("#7a6a5d")
 
 
 # ---------------------------------------------------------------------------
@@ -175,10 +186,10 @@ func test_icon_rect_hidden_when_empty() -> void:
 
 # ---------------------------------------------------------------------------
 # Test 5 — set_selected(true) on a filled slot reveals the SelectionRect
-#          highlight only (ItemNameLabel is unaffected by selection)
+#          highlight
 # ---------------------------------------------------------------------------
 
-func test_set_selected_true_reveals_highlight_only() -> void:
+func test_set_selected_true_reveals_highlight() -> void:
 	var slot: EquipmentSlot = _make_slot()
 	var clothing: ItemData = _make_item(&"select_test_clothing", ItemData.EquipSlot.CLOTHING)
 	slot.setup(ItemData.EquipSlot.CLOTHING, clothing)
@@ -454,3 +465,141 @@ func test_slot_name_label_for_belt() -> void:
 	if heading != null:
 		assert_eq(heading.text, "Belt",
 				"SlotLabel must read 'Belt' for the BELT slot (renamed from NECKLACE, issue #30)")
+
+
+# ---------------------------------------------------------------------------
+# Issue #45 — selected + filled slot must render ItemNameLabel in full-
+# contrast `ink`, not the `.tscn`-baked `ink_muted`
+# ---------------------------------------------------------------------------
+# ItemNameLabel's baked color (ink_muted, #7a6a5d) was tuned for legibility
+# against the plain page background. SelectionRect's translucent warm-yellow
+# highlight (Color(1, 0.9, 0.6, 0.35)) lightens that background enough when a
+# filled slot is selected that ink_muted text drops to ~4.3:1 contrast
+# (below WCAG AA for small text) — vs. ~10.6:1 for the theme's full-contrast
+# `ink` color already used for SlotLabel.
+#
+# IMPORTANT — why these assertions read get_theme_color(), not just
+# has_theme_color_override():
+# equipment_slot.tscn bakes ItemNameLabel's ink_muted as a per-node
+# `theme_override_colors/font_color` value. That is the SAME override slot
+# `add_theme_color_override("font_color", ...)`/`remove_theme_color_override`
+# read and write at runtime — confirmed empirically: instantiating the scene
+# and immediately calling `remove_theme_color_override("font_color")` leaves
+# has_theme_color_override() == false and get_theme_color("font_color") ==
+# Color(1,1,1,1) (engine default), NOT ink_muted, because base_theme.tres
+# defines no Label/font_color default to fall back to. So a naive
+# `remove_theme_color_override()` on deselect would NOT "revert to
+# ink_muted" — it would regress to white text. get_theme_color() reads the
+# actual merged/rendered color regardless of mechanism, so it is the correct
+# thing to assert on; has_theme_color_override() alone is not.
+#
+# Only the two tests below that actually flip selection (select →
+# unselected-vs-selected) exercise the current gap and FAIL against pre-fix
+# equipment_slot.gd, which never touches ItemNameLabel's font_color at all —
+# _update_display() only toggles .visible/.text on it, so it always renders
+# ink_muted regardless of selection. The other two (never-selected,
+# unequip-while-selected) are non-regression guards: pre-fix code never
+# changes the color at all, so they hold trivially before the fix too — their
+# value is catching regressions once the fix lands, per test-plan items 3-4.
+
+func test_selected_filled_slot_renders_ink_not_ink_muted() -> void:
+	# Filled + selected: ItemNameLabel must render theme 'ink' (#3b2f2a), not
+	# the baked ink_muted — this is the core issue #45 gap. FAILS pre-fix
+	# (renders ink_muted regardless of selection).
+	var slot: EquipmentSlot = _make_slot()
+	var clothing: ItemData = _make_item(&"contrast_test_clothing", ItemData.EquipSlot.CLOTHING)
+	slot.setup(ItemData.EquipSlot.CLOTHING, clothing)
+
+	slot.set_selected(true)
+
+	var name_label: Label = slot.find_child("ItemNameLabel", true, false) as Label
+	assert_not_null(name_label, "equipment_slot.tscn must declare 'ItemNameLabel'")
+	if name_label == null:
+		return
+
+	var actual: Color = name_label.get_theme_color("font_color")
+	assert_eq(actual, COLOR_INK,
+			"ItemNameLabel must render theme 'ink' (#3b2f2a) when the slot is filled and selected " +
+			"(issue #45 — ink_muted is too low-contrast against SelectionRect's highlight) — got %s" % actual)
+
+
+func test_deselecting_filled_slot_reverts_from_ink_to_ink_muted() -> void:
+	# Filled + selected (ink), then deselected: must revert to ink_muted, not
+	# stay stuck on the brighter selected-state color, and — per the gotcha
+	# above — must NOT fall through to the engine-default white that a naive
+	# remove_theme_color_override() would produce. The first assertion FAILS
+	# pre-fix (selecting never changes the color away from ink_muted in the
+	# first place); the second holds trivially either way, verifying the
+	# revert once the fix supplies the first half.
+	var slot: EquipmentSlot = _make_slot()
+	var clothing: ItemData = _make_item(&"contrast_test_deselect", ItemData.EquipSlot.CLOTHING)
+	slot.setup(ItemData.EquipSlot.CLOTHING, clothing)
+
+	slot.set_selected(true)
+	var name_label: Label = slot.find_child("ItemNameLabel", true, false) as Label
+	assert_not_null(name_label, "equipment_slot.tscn must declare 'ItemNameLabel'")
+	if name_label == null:
+		return
+	assert_eq(name_label.get_theme_color("font_color"), COLOR_INK,
+			"ItemNameLabel must render 'ink' while selected before we can test reverting from it")
+
+	slot.set_selected(false)
+
+	var actual: Color = name_label.get_theme_color("font_color")
+	assert_eq(actual, COLOR_INK_MUTED,
+			("ItemNameLabel must revert to ink_muted (#7a6a5d) after set_selected(false) — " +
+			"got %s (a naive remove_theme_color_override() would fall through to engine-default " +
+			"white here instead, since base_theme.tres sets no Label/font_color default)") % actual)
+
+
+func test_filled_never_selected_slot_keeps_ink_muted() -> void:
+	# Filled, never selected: no regression to the existing unselected look —
+	# ItemNameLabel must still render ink_muted. Non-regression guard: passes
+	# both before and after the fix, since pre-fix code never touches
+	# font_color in the first place.
+	var slot: EquipmentSlot = _make_slot()
+	var clothing: ItemData = _make_item(&"contrast_test_unselected", ItemData.EquipSlot.CLOTHING)
+
+	slot.setup(ItemData.EquipSlot.CLOTHING, clothing)
+
+	var name_label: Label = slot.find_child("ItemNameLabel", true, false) as Label
+	assert_not_null(name_label, "equipment_slot.tscn must declare 'ItemNameLabel'")
+	if name_label == null:
+		return
+
+	assert_eq(name_label.get_theme_color("font_color"), COLOR_INK_MUTED,
+			"ItemNameLabel must keep rendering ink_muted (#7a6a5d) when filled but never selected")
+
+
+func test_unequip_while_selected_leaves_no_stale_ink_on_refill() -> void:
+	# A slot that was filled + selected, then unequipped (setup() called with
+	# item == null), must not retain a stale bright-'ink' override that
+	# reappears if the slot is refilled without another explicit selection
+	# change. setup() already forces _selected = false when item == null (see
+	# setup()'s docstring), but _update_display() must also re-apply
+	# ink_muted for this to hold.
+	#
+	# Non-regression guard: passes both before and after the fix, since
+	# pre-fix code never sets an ink override to begin with.
+	var slot: EquipmentSlot = _make_slot()
+	var clothing: ItemData = _make_item(&"contrast_test_unequip", ItemData.EquipSlot.CLOTHING)
+	slot.setup(ItemData.EquipSlot.CLOTHING, clothing)
+	slot.set_selected(true)
+
+	slot.setup(ItemData.EquipSlot.CLOTHING, null)
+
+	# Refill without reselecting — setup() forced _selected = false above, so
+	# this must render ink_muted, not a leftover 'ink' override from before
+	# the unequip.
+	var replacement: ItemData = _make_item(&"contrast_test_unequip_refill", ItemData.EquipSlot.CLOTHING)
+	slot.setup(ItemData.EquipSlot.CLOTHING, replacement)
+
+	var name_label: Label = slot.find_child("ItemNameLabel", true, false) as Label
+	assert_not_null(name_label, "equipment_slot.tscn must declare 'ItemNameLabel'")
+	if name_label == null:
+		return
+
+	var actual: Color = name_label.get_theme_color("font_color")
+	assert_eq(actual, COLOR_INK_MUTED,
+			"ItemNameLabel must render ink_muted on refill after an unequip-while-selected — " +
+			"no stale 'ink' override should survive (issue #45) — got %s" % actual)
