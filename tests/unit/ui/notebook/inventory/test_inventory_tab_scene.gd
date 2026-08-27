@@ -44,14 +44,25 @@ extends GutTest
 # if the file moves and ensures every test in this file references the same path.
 const SCENE_PATH: String = "res://ui/notebook/inventory/inventory_tab.tscn"
 
-# The six slot names that populate_left() depends on to build the equipment
+# The four slot names that populate_left() depends on to build the equipment
 # silhouette. Asserting them as a constant list makes additions visible as a diff.
+#
+# Issue #30 ("more blob, less limbs"): BOOTS and GLOVES are removed entirely
+# (CreamBun's current design has no legs/paws) and NECKLACE is renamed BELT.
 const SLOT_NAMES: Array[String] = [
 	"Slot_BACKPACK",
 	"Slot_CLOTHING",
+	"Slot_GOGGLES",
+	"Slot_BELT",
+]
+
+# The old slot node names that must NOT exist after issue #30's fix — a
+# regression guard against the scene still declaring the removed/renamed
+# slots (e.g. a half-applied fix that adds Slot_BELT without deleting
+# Slot_NECKLACE).
+const REMOVED_SLOT_NAMES: Array[String] = [
 	"Slot_BOOTS",
 	"Slot_GLOVES",
-	"Slot_GOGGLES",
 	"Slot_NECKLACE",
 ]
 
@@ -151,21 +162,41 @@ func test_scene_declares_right_page() -> void:
 
 
 # ---------------------------------------------------------------------------
-# Test 4 — Scene declares exactly the 6 named equipment slot placeholders
+# Test 4 — Scene declares exactly the 4 named equipment slot placeholders
+# (issue #30)
 # ---------------------------------------------------------------------------
 
-func test_scene_declares_all_six_equipment_slot_placeholders() -> void:
-	# populate_left() builds EquipmentSlot nodes named Slot_BACKPACK … Slot_NECKLACE.
+func test_scene_declares_all_four_equipment_slot_placeholders() -> void:
+	# populate_left() builds EquipmentSlot nodes named Slot_BACKPACK … Slot_BELT.
 	# These names are the stable contract between the tab script and the scene
 	# layout. A missing or misspelled name would silently produce a detached slot
 	# that never receives drag-drop events. We assert on each name individually so
-	# the failure message identifies which slot is missing rather than just "not 6".
+	# the failure message identifies which slot is missing rather than just "not 4".
 	var instance: Control = _make_scene_instance()
 
 	for slot_name: String in SLOT_NAMES:
 		var node: Node = instance.find_child(slot_name, true, false)
 		assert_not_null(node,
 				"inventory_tab.tscn must declare a node named '%s'" % slot_name)
+
+
+# ---------------------------------------------------------------------------
+# Test 4b — Scene no longer declares the removed/renamed slot placeholders
+# (issue #30)
+# ---------------------------------------------------------------------------
+
+func test_scene_does_not_declare_removed_equipment_slot_placeholders() -> void:
+	# Regression guard: CreamBun's blob redesign removes BOOTS/GLOVES entirely
+	# and renames NECKLACE to BELT. A half-applied fix could add Slot_BELT
+	# without deleting the old nodes, silently reintroducing the overflow this
+	# issue exists to fix. We assert absence individually so the failure
+	# message identifies exactly which stale node remains.
+	var instance: Control = _make_scene_instance()
+
+	for slot_name: String in REMOVED_SLOT_NAMES:
+		var node: Node = instance.find_child(slot_name, true, false)
+		assert_null(node,
+				"inventory_tab.tscn must NOT declare a node named '%s' (issue #30)" % slot_name)
 
 
 # ---------------------------------------------------------------------------
@@ -383,8 +414,9 @@ func test_starter_bag_resolves_to_non_zero_weight_via_local_registry() -> void:
 	# design §13: a temporary local item registry (seeded from the stacks
 	# present in PlayerData.inventory) stands in for the future ItemDatabase
 	# helper. After populate_right() with a freshly-seeded starter bag
-	# (3x sample_leaf @ 0.5kg + 1x sample_boots @ 0.8kg = 2.3kg, see
-	# _seed_starter_content()), the rendered weight header must reflect that
+	# (3x sample_leaf @ 0.5kg + 1x sample_scarf @ 0.3kg = 1.8kg, see
+	# _seed_starter_content(); issue #30 replaced the old sample_boots starter
+	# item with sample_scarf), the rendered weight header must reflect that
 	# non-zero total — proving the registry resolved both item ids to weights.
 	var data: PlayerDataResource = PlayerDataResource.new()
 	data.reset_to_new_game()
@@ -402,8 +434,8 @@ func test_starter_bag_resolves_to_non_zero_weight_via_local_registry() -> void:
 	var weight_label: Node = parent.find_child("WeightLabel", true, false)
 	assert_not_null(weight_label, "WeightLabel must exist after populate_right()")
 	if weight_label != null:
-		assert_eq((weight_label as Label).text, "Weight: 2.3 / ∞",
-				"the starter bag (3x sample_leaf @ 0.5kg + 1x sample_boots @ 0.8kg) must total 2.3kg")
+		assert_eq((weight_label as Label).text, "Weight: 1.8 / ∞",
+				"the starter bag (3x sample_leaf @ 0.5kg + 1x sample_scarf @ 0.3kg) must total 1.8kg")
 
 
 # ---------------------------------------------------------------------------

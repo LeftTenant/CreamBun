@@ -18,7 +18,7 @@ extends Resource
 @export var stacks: Array[ItemStack] = []
 
 ## Maps ItemData.EquipSlot (int) → ItemData for each worn item slot.
-## Example: { ItemData.EquipSlot.BOOTS: boots_item_data }
+## Example: { ItemData.EquipSlot.CLOTHING: clothing_item_data }
 ## We use a plain Dictionary (not a typed one) because GDScript does not
 ## support Dictionary[int, ItemData] type hints yet.
 ## See: https://docs.godotengine.org/en/stable/tutorials/scripting/gdscript/gdscript_basics.html#dictionary

@@ -12,10 +12,8 @@ enum EquipSlot {
 	NONE,
 	BACKPACK,
 	CLOTHING,
-	BOOTS,
-	GLOVES,
 	GOGGLES,
-	NECKLACE,
+	BELT,
 }
 
 ## Unique identifier used in save files and registries. Prefer &"snake_case" literals.

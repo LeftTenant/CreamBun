@@ -113,21 +113,22 @@ func test_launch_seeds_player_data_with_starter_content() -> void:
 		assert_eq(states[&"the_foraging_book"].get("status"), QuestLog.Status.COMPLETED,
 				"the_foraging_book should be seeded as COMPLETED")
 
-	# Starter bag: 3x sample_leaf + 1x sample_boots (§9.2).
+	# Starter bag: 3x sample_leaf + 1x sample_scarf (§9.2; issue #30 replaced
+	# the old BOOTS-slot starter item with a CLOTHING-slot scarf).
 	var stacks: Array[ItemStack] = PlayerData.inventory.stacks
 	assert_eq(stacks.size(), 2,
 			"PlayerData.inventory should contain exactly 2 starter stacks after new_game()")
 
 	var leaf_count: int = 0
-	var boots_count: int = 0
+	var scarf_count: int = 0
 	for stack: ItemStack in stacks:
 		if stack.item_id == &"sample_leaf":
 			leaf_count = stack.count
-		elif stack.item_id == &"sample_boots":
-			boots_count = stack.count
+		elif stack.item_id == &"sample_scarf":
+			scarf_count = stack.count
 
 	assert_eq(leaf_count, 3, "starter bag should contain 3x sample_leaf")
-	assert_eq(boots_count, 1, "starter bag should contain 1x sample_boots")
+	assert_eq(scarf_count, 1, "starter bag should contain 1x sample_scarf")
 
 
 # ---------------------------------------------------------------------------

@@ -41,7 +41,7 @@ signal selected(slot: EquipmentSlot)
 # Private vars
 # ---------------------------------------------------------------------------
 
-# Which equipment slot this node represents (e.g. BOOTS, GLOVES).
+# Which equipment slot this node represents (e.g. CLOTHING, GOGGLES).
 # Set by setup() and never changed afterwards.
 var _slot: ItemData.EquipSlot = ItemData.EquipSlot.NONE
 
@@ -59,7 +59,7 @@ var _selected: bool = false
 # @onready vars
 # ---------------------------------------------------------------------------
 
-# Always-visible heading showing the slot name ("Boots", "Gloves", etc.),
+# Always-visible heading showing the slot name ("Clothing", "Goggles", etc.),
 # whether the slot is empty or filled (issue #7).
 # Declared in equipment_slot.tscn — this script only sets its text.
 @onready var _slot_label: Label = $HBox/TextVBox/SlotLabel
@@ -162,7 +162,7 @@ func set_selected(value: bool) -> void:
 ##
 ## We only accept dictionary data with kind == "item" where the item's
 ## equip_slot matches this slot. This prevents the player from dropping
-## boots onto the gloves slot.
+## goggles onto the clothing slot.
 ##
 ## The runtime `item` reference on the stack must be set (it is set by
 ## Inventory.add()) so we can read equip_slot without a registry lookup.
@@ -238,8 +238,6 @@ func _slot_name() -> String:
 	match _slot:
 		ItemData.EquipSlot.BACKPACK:  return "Backpack"
 		ItemData.EquipSlot.CLOTHING:  return "Clothing"
-		ItemData.EquipSlot.BOOTS:     return "Boots"
-		ItemData.EquipSlot.GLOVES:    return "Gloves"
 		ItemData.EquipSlot.GOGGLES:   return "Goggles"
-		ItemData.EquipSlot.NECKLACE:  return "Necklace"
+		ItemData.EquipSlot.BELT:      return "Belt"
 		_:                            return "—"

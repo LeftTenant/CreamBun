@@ -50,8 +50,9 @@ func test_default_constructed_resource_save_version_matches_current_version() ->
 
 	assert_eq(data.save_version, PlayerDataResource.CURRENT_VERSION,
 			"save_version should equal CURRENT_VERSION on a default-constructed PlayerDataResource")
-	assert_eq(PlayerDataResource.CURRENT_VERSION, 1,
-			"CURRENT_VERSION should be 1 for Phase 1 (no schema migrations yet)")
+	assert_eq(PlayerDataResource.CURRENT_VERSION, 2,
+			"CURRENT_VERSION should be 2: bumped for issue #30's EquipSlot enum renumbering, " +
+			"which changed what persisted save ints mean (no migration code needed yet)")
 
 
 # ---------------------------------------------------------------------------
@@ -152,12 +153,15 @@ func test_reset_to_new_game_seeds_foraging_book_quest_as_completed() -> void:
 # Test 5 — reset_to_new_game(): seeds the default starter bag
 # ---------------------------------------------------------------------------
 
-func test_reset_to_new_game_seeds_starter_bag_with_leaves_and_boots() -> void:
+func test_reset_to_new_game_seeds_starter_bag_with_leaves_and_scarf() -> void:
 	# Slice 1 (user review 2026-06-11): the starter inventory — 3x sample_leaf
-	# and 1x sample_boots — moves from inventory_tab.gd's hand-seeded sample
+	# and 1x sample_scarf — moves from inventory_tab.gd's hand-seeded sample
 	# data into _seed_starter_content(). This is now the single source of
 	# truth, asserted directly by item_id and count (no dependency on
 	# inventory_tab.gd).
+	# Issue #30: the old BOOTS-slot "Old Boots" starter item was replaced with
+	# a CLOTHING-slot "Cozy Scarf" (BOOTS slot no longer exists in the blob
+	# redesign).
 	var data: PlayerDataResource = PlayerDataResource.new()
 	autofree(data)
 
@@ -165,23 +169,23 @@ func test_reset_to_new_game_seeds_starter_bag_with_leaves_and_boots() -> void:
 
 	var stacks: Array[ItemStack] = data.inventory.stacks
 	assert_eq(stacks.size(), 2,
-			"a fresh starter bag should contain exactly 2 stacks (sample_leaf, sample_boots); got %d" % stacks.size())
+			"a fresh starter bag should contain exactly 2 stacks (sample_leaf, sample_scarf); got %d" % stacks.size())
 
 	var leaf_stack: ItemStack = null
-	var boots_stack: ItemStack = null
+	var scarf_stack: ItemStack = null
 	for stack: ItemStack in stacks:
 		if stack.item_id == &"sample_leaf":
 			leaf_stack = stack
-		elif stack.item_id == &"sample_boots":
-			boots_stack = stack
+		elif stack.item_id == &"sample_scarf":
+			scarf_stack = stack
 
 	assert_not_null(leaf_stack, "starter bag must contain a stack with item_id &\"sample_leaf\"")
-	assert_not_null(boots_stack, "starter bag must contain a stack with item_id &\"sample_boots\"")
+	assert_not_null(scarf_stack, "starter bag must contain a stack with item_id &\"sample_scarf\"")
 
 	if leaf_stack != null:
 		assert_eq(leaf_stack.count, 3, "sample_leaf starter stack should have count 3")
-	if boots_stack != null:
-		assert_eq(boots_stack.count, 1, "sample_boots starter stack should have count 1")
+	if scarf_stack != null:
+		assert_eq(scarf_stack.count, 1, "sample_scarf starter stack should have count 1")
 
 
 # ---------------------------------------------------------------------------
