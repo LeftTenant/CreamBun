@@ -100,7 +100,7 @@ The player can move around local maps with their arrow keys, WASD, or game pad d
 * Session management (New, Save, Load, Quit)
 
 ### Equipment and Inventory
-This tab includes a left-hand page that shows the player with selectable equipment slots for a backpack, clothing, boots, gloves, goggles, and a necklace. The right-hand page shows the contents of the player's backpack as a scrollable list of items with a photo, name, and weight displayed for each item. There can only be one backpack equipped with an associated weight capacity. Once the weight capacity is reached, the player must drop items to make more space. The right-hand page also includes an option to drop or recycle a selected item. Recycling the item will break it down into component parts that then enter the inventory in place of the original item. Not all items can be disassembled.
+This tab includes a left-hand page that shows the player with selectable equipment slots for a backpack, clothing, goggles, and a belt. The right-hand page shows the contents of the player's backpack as a scrollable list of items with a photo, name, and weight displayed for each item. There can only be one backpack equipped with an associated weight capacity. Once the weight capacity is reached, the player must drop items to make more space. The right-hand page also includes an option to drop or recycle a selected item. Recycling the item will break it down into component parts that then enter the inventory in place of the original item. Not all items can be disassembled.
 
 Input for this tab works as follows:
 

@@ -71,7 +71,8 @@ func test_scene_loads_without_error() -> void:
 # ---------------------------------------------------------------------------
 
 func test_scene_declares_slot_label() -> void:
-	# SlotLabel is the slot-name heading ("Boots", "Gloves", etc.). Per issue #7
+	# SlotLabel is the slot-name heading ("Backpack", "Clothing", "Goggles",
+	# "Belt"). Per issue #7
 	# it must remain visible at all times — including once an item is equipped —
 	# so the player never loses track of which body region a filled slot
 	# represents. The script references it via @onready; if the name is wrong

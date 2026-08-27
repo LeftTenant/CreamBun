@@ -2,8 +2,8 @@ class_name InventoryTab
 extends NotebookTab
 ## The Inventory tab of the in-game notebook.
 ##
-## Left page: equipment silhouette with six drop-target slots (BACKPACK,
-## CLOTHING, BOOTS, GLOVES, GOGGLES, NECKLACE).
+## Left page: equipment silhouette with four drop-target slots (BACKPACK,
+## CLOTHING, GOGGLES, BELT).
 ##
 ## Right page: scrollable item list showing every stack in the bag, a
 ## weight header, and three action buttons (Equip E, Throw T, Recycle R).
@@ -52,10 +52,8 @@ const INVENTORY_ROW_SCENE: PackedScene = preload("res://ui/notebook/inventory/in
 const SLOT_NODE_NAMES: Dictionary = {
 	ItemData.EquipSlot.BACKPACK: "Slot_BACKPACK",
 	ItemData.EquipSlot.CLOTHING: "Slot_CLOTHING",
-	ItemData.EquipSlot.BOOTS:    "Slot_BOOTS",
-	ItemData.EquipSlot.GLOVES:   "Slot_GLOVES",
 	ItemData.EquipSlot.GOGGLES:  "Slot_GOGGLES",
-	ItemData.EquipSlot.NECKLACE: "Slot_NECKLACE",
+	ItemData.EquipSlot.BELT:     "Slot_BELT",
 }
 
 
@@ -152,9 +150,9 @@ func _unhandled_input(event: InputEvent) -> void:
 ## per equippable slot. Each slot is a drop target for dragging items from
 ## the right page.
 ##
-## The six EquipmentSlot nodes (res://ui/notebook/inventory/equipment_slot.tscn)
+## The four EquipmentSlot nodes (res://ui/notebook/inventory/equipment_slot.tscn)
 ## are declared as children of LeftPage in inventory_tab.tscn, named
-## Slot_BACKPACK … Slot_NECKLACE. This method extracts that subtree, reparents
+## Slot_BACKPACK … Slot_BELT. This method extracts that subtree, reparents
 ## it into parent, then resolves each slot by name, calls setup(), and wires
 ## the slot_drop_received signal. No additional slots are instantiated at runtime.
 ##
@@ -190,10 +188,8 @@ func populate_left(parent: Control) -> void:
 	var slots: Array = [
 		ItemData.EquipSlot.BACKPACK,
 		ItemData.EquipSlot.CLOTHING,
-		ItemData.EquipSlot.BOOTS,
-		ItemData.EquipSlot.GLOVES,
 		ItemData.EquipSlot.GOGGLES,
-		ItemData.EquipSlot.NECKLACE,
+		ItemData.EquipSlot.BELT,
 	]
 
 	for slot_enum: int in slots:

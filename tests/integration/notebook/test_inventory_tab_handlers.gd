@@ -27,10 +27,12 @@
 ## InventoryTab no longer constructs its own Inventory/_item_registry in
 ## _ready() — it reads PlayerData.inventory directly (design §7.4, §13).
 ## before_each() seeds PlayerData with a fresh reset_to_new_game() resource
-## (3x sample_leaf, 1x sample_boots — see _seed_starter_content()) BEFORE
-## instantiating the tab and calling populate_left/right, so the rendered
-## rows come from the same starter bag the old _ready() sample-data block
-## used to construct locally.
+## (3x sample_leaf plus one equippable item — see _seed_starter_content())
+## BEFORE instantiating the tab and calling populate_left/right, so the
+## rendered rows come from the same starter bag the old _ready() sample-data
+## block used to construct locally. Equip/unequip tests below do NOT depend
+## on the starter bag's equippable item specifically — see the issue #30
+## note further down for why.
 ##
 ## Requires GUT: https://github.com/bitwes/Gut
 ## Install via Godot Asset Library (search "GUT - Godot Unit Testing").
@@ -187,6 +189,33 @@ func _click(control: Control) -> void:
 	control._gui_input(mb)
 
 
+## Add a fresh equippable item directly to PlayerData.inventory and rebuild
+## the right page so a row exists for it, then return the freshly-built row.
+##
+## Issue #30 ("more blob, less limbs") removes the BOOTS slot and changes
+## what the starter bag's equippable item is. Many tests in this file used to
+## reach for the starter-seeded "sample_boots" item as "the reliable
+## equippable item to test with" — that assumption no longer holds once the
+## starter item changes, so these tests build their own equip fixture on a
+## RETAINED slot (CLOTHING) instead.
+##
+## @param item_id - unique StringName id for this test's fixture item
+## @return the newly built InventoryRow for the fixture item, or null if the
+##         row could not be found (the caller should assert_not_null on this)
+func _seed_equippable_clothing_row(item_id: StringName) -> InventoryRow:
+	var item: ItemData = ItemData.new()
+	item.id = item_id
+	item.display_name = "Test " + String(item_id)
+	item.weight = 0.5
+	item.equip_slot = ItemData.EquipSlot.CLOTHING
+	autofree(item)
+
+	PlayerData.inventory.add(item, 1)
+	_tab.populate_right(_right_parent)
+
+	return _find_row(_right_parent, item_id)
+
+
 # ---------------------------------------------------------------------------
 # Test 1 — slot_drop_received from an EquipmentSlot reaches _on_slot_drop
 #           and emits GameEvents.inventory_changed
@@ -207,31 +236,32 @@ func test_slot_drop_received_emits_inventory_changed() -> void:
 	# _drop_data() emits slot_drop_received synchronously, so no await is needed
 	# between the emit and the GameEvents assertion.
 
-	# Find any BOOTS slot — it accepts boots items and is reliably present.
-	var boots_slot: EquipmentSlot = null
+	# Find any CLOTHING slot — a retained slot per issue #30 (the old BOOTS
+	# slot no longer exists), reliably present after populate_left().
+	var clothing_slot: EquipmentSlot = null
 	var slots: Array[Node] = _find_all_by_class(_left_parent, "EquipmentSlot")
 	for node: Node in slots:
 		var es: EquipmentSlot = node as EquipmentSlot
-		if es._slot == ItemData.EquipSlot.BOOTS:
-			boots_slot = es
+		if es._slot == ItemData.EquipSlot.CLOTHING:
+			clothing_slot = es
 			break
 
-	assert_not_null(boots_slot,
-			"A BOOTS EquipmentSlot must exist in the left page after populate_left()")
-	if boots_slot == null:
+	assert_not_null(clothing_slot,
+			"A CLOTHING EquipmentSlot must exist in the left page after populate_left()")
+	if clothing_slot == null:
 		return
 
-	# Build a boots ItemStack payload matching the slot.
-	var boots: ItemData = ItemData.new()
-	boots.id = &"drop_test_boots"
-	boots.display_name = "Drop Test Boots"
-	boots.weight = 0.8
-	boots.equip_slot = ItemData.EquipSlot.BOOTS
-	autofree(boots)
+	# Build a clothing ItemStack payload matching the slot.
+	var cloak: ItemData = ItemData.new()
+	cloak.id = &"drop_test_cloak"
+	cloak.display_name = "Drop Test Cloak"
+	cloak.weight = 0.8
+	cloak.equip_slot = ItemData.EquipSlot.CLOTHING
+	autofree(cloak)
 
 	var stack: ItemStack = ItemStack.new()
-	stack.item_id = boots.id
-	stack.item = boots
+	stack.item_id = cloak.id
+	stack.item = cloak
 	stack.count = 1
 	autofree(stack)
 
@@ -239,7 +269,7 @@ func test_slot_drop_received_emits_inventory_changed() -> void:
 	# fail. _on_slot_drop() resolves the item via stack.item (set above) with
 	# a registry fallback, so this is mainly to keep Inventory.equip()'s
 	# bookkeeping consistent.
-	PlayerData.inventory.add(boots, 1)
+	PlayerData.inventory.add(cloak, 1)
 
 	watch_signals(GameEvents)
 
@@ -247,10 +277,10 @@ func test_slot_drop_received_emits_inventory_changed() -> void:
 	# emits slot_drop_received. We bypass that and emit the signal directly so
 	# the test doesn't depend on the drag-and-drop GUI context.
 	# https://docs.godotengine.org/en/stable/classes/class_signal.html#class-signal-method-emit
-	boots_slot.slot_drop_received.emit(stack, ItemData.EquipSlot.BOOTS)
+	clothing_slot.slot_drop_received.emit(stack, ItemData.EquipSlot.CLOTHING)
 
 	assert_signal_emitted(GameEvents, "inventory_changed",
-			"slot_drop_received on a BOOTS slot must ultimately emit GameEvents.inventory_changed")
+			"slot_drop_received on a CLOTHING slot must ultimately emit GameEvents.inventory_changed")
 
 
 # ---------------------------------------------------------------------------
@@ -406,20 +436,24 @@ func test_do_equip_mutates_player_data_equipped() -> void:
 	# Inventory instance held by PlayerData, so PlayerData.inventory.equipped
 	# reflects the change immediately — not a tab-local copy that the rest of
 	# the game can't see.
-	var boots_row: InventoryRow = _find_row(_right_parent, &"sample_boots")
-	assert_not_null(boots_row, "A sample_boots InventoryRow must exist after populate_right()")
-	if boots_row == null:
+	# Uses a locally-seeded CLOTHING fixture (a retained slot) rather than the
+	# starter bag's equippable item — issue #30 changes that item's identity
+	# independently of this file. See _seed_equippable_clothing_row().
+	var cloak_row: InventoryRow = _seed_equippable_clothing_row(&"test_equip_mutation_cloak")
+	assert_not_null(cloak_row, "A test_equip_mutation_cloak InventoryRow must exist after seeding")
+	if cloak_row == null:
 		return
 
-	_tab._selected_row = boots_row
+	_tab._selected_row = cloak_row
 
 	watch_signals(GameEvents)
 	_tab._do_equip()
 
-	assert_true(PlayerData.inventory.equipped.has(ItemData.EquipSlot.BOOTS),
-			"_do_equip() must place the boots into PlayerData.inventory.equipped[BOOTS]")
-	assert_eq((PlayerData.inventory.equipped.get(ItemData.EquipSlot.BOOTS) as ItemData).id, &"sample_boots",
-			"PlayerData.inventory.equipped[BOOTS] must be the sample_boots item after equipping")
+	assert_true(PlayerData.inventory.equipped.has(ItemData.EquipSlot.CLOTHING),
+			"_do_equip() must place the cloak into PlayerData.inventory.equipped[CLOTHING]")
+	assert_eq((PlayerData.inventory.equipped.get(ItemData.EquipSlot.CLOTHING) as ItemData).id,
+			&"test_equip_mutation_cloak",
+			"PlayerData.inventory.equipped[CLOTHING] must be the fixture cloak item after equipping")
 
 	assert_signal_emitted(GameEvents, "item_equipped",
 			"_do_equip() must emit GameEvents.item_equipped")
@@ -527,28 +561,30 @@ func test_on_slot_drop_equips_into_player_data_equipped() -> void:
 	# _on_slot_drop() is the handler behind drag-to-equip. It must equip into
 	# PlayerData.inventory.equipped (the single source of truth) and emit
 	# item_equipped + inventory_changed, mirroring _do_equip()'s contract.
-	var boots: ItemData = ItemData.new()
-	boots.id = &"slot_drop_boots"
-	boots.display_name = "Slot Drop Boots"
-	boots.weight = 0.8
-	boots.equip_slot = ItemData.EquipSlot.BOOTS
-	autofree(boots)
+	# Uses CLOTHING (a retained slot) rather than BOOTS, which issue #30
+	# removes entirely.
+	var cloak: ItemData = ItemData.new()
+	cloak.id = &"slot_drop_cloak"
+	cloak.display_name = "Slot Drop Cloak"
+	cloak.weight = 0.8
+	cloak.equip_slot = ItemData.EquipSlot.CLOTHING
+	autofree(cloak)
 
 	var stack: ItemStack = ItemStack.new()
-	stack.item_id = boots.id
-	stack.item = boots
+	stack.item_id = cloak.id
+	stack.item = cloak
 	stack.count = 1
 	autofree(stack)
 
-	PlayerData.inventory.add(boots, 1)
+	PlayerData.inventory.add(cloak, 1)
 
 	watch_signals(GameEvents)
-	_tab._on_slot_drop(stack, ItemData.EquipSlot.BOOTS)
+	_tab._on_slot_drop(stack, ItemData.EquipSlot.CLOTHING)
 
-	assert_true(PlayerData.inventory.equipped.has(ItemData.EquipSlot.BOOTS),
-			"_on_slot_drop() must place the dropped item into PlayerData.inventory.equipped[BOOTS]")
-	assert_eq((PlayerData.inventory.equipped.get(ItemData.EquipSlot.BOOTS) as ItemData).id, &"slot_drop_boots",
-			"PlayerData.inventory.equipped[BOOTS] must be the dropped item")
+	assert_true(PlayerData.inventory.equipped.has(ItemData.EquipSlot.CLOTHING),
+			"_on_slot_drop() must place the dropped item into PlayerData.inventory.equipped[CLOTHING]")
+	assert_eq((PlayerData.inventory.equipped.get(ItemData.EquipSlot.CLOTHING) as ItemData).id, &"slot_drop_cloak",
+			"PlayerData.inventory.equipped[CLOTHING] must be the dropped item")
 
 	assert_signal_emitted(GameEvents, "item_equipped",
 			"_on_slot_drop() must emit GameEvents.item_equipped")
@@ -704,17 +740,19 @@ func test_selecting_filled_slot_relabels_equip_button() -> void:
 	# right-page Equip button to "Unequip (E)" so the player knows pressing
 	# E (or clicking it) will return the item to the bag.
 	#
-	# Equip the starter boots first so the BOOTS slot is filled, then click it.
-	var boots_row: InventoryRow = _find_row(_right_parent, &"sample_boots")
-	assert_not_null(boots_row, "A sample_boots InventoryRow must exist after populate_right()")
-	if boots_row == null:
+	# Equip a locally-seeded CLOTHING fixture first (a retained slot, per
+	# issue #30 — see _seed_equippable_clothing_row()) so the slot is filled,
+	# then click it.
+	var cloak_row: InventoryRow = _seed_equippable_clothing_row(&"relabel_test_cloak")
+	assert_not_null(cloak_row, "A relabel_test_cloak InventoryRow must exist after seeding")
+	if cloak_row == null:
 		return
-	_tab._selected_row = boots_row
+	_tab._selected_row = cloak_row
 	_tab._do_equip()
 
-	var boots_slot: EquipmentSlot = _find_slot(ItemData.EquipSlot.BOOTS)
-	assert_not_null(boots_slot, "A BOOTS EquipmentSlot must exist after populate_left()")
-	if boots_slot == null:
+	var clothing_slot: EquipmentSlot = _find_slot(ItemData.EquipSlot.CLOTHING)
+	assert_not_null(clothing_slot, "A CLOTHING EquipmentSlot must exist after populate_left()")
+	if clothing_slot == null:
 		return
 
 	var equip_button: Button = _equip_button()
@@ -726,10 +764,10 @@ func test_selecting_filled_slot_relabels_equip_button() -> void:
 	assert_eq(equip_button.text, "Equip",
 			"EquipButton must read 'Equip' before any equipment slot is selected")
 
-	# Click the now-filled BOOTS slot to select it.
-	_click(boots_slot)
+	# Click the now-filled CLOTHING slot to select it.
+	_click(clothing_slot)
 
-	assert_eq(_tab._selected_slot, boots_slot,
+	assert_eq(_tab._selected_slot, clothing_slot,
 			"clicking a FILLED equipment slot must set _tab._selected_slot")
 	assert_eq(equip_button.text, "Unequip (E)",
 			"EquipButton must read 'Unequip (E)' once a filled equipment slot is selected")
@@ -742,41 +780,42 @@ func test_selecting_filled_slot_relabels_equip_button() -> void:
 # ---------------------------------------------------------------------------
 
 func test_do_equip_with_slot_selected_unequips_item() -> void:
-	# Equip the starter boots, select the now-filled BOOTS slot, then invoke
-	# the equip-action (which becomes "Unequip" while a slot is selected).
-	var boots_row: InventoryRow = _find_row(_right_parent, &"sample_boots")
-	assert_not_null(boots_row, "A sample_boots InventoryRow must exist after populate_right()")
-	if boots_row == null:
+	# Equip a locally-seeded CLOTHING fixture (a retained slot, issue #30),
+	# select the now-filled slot, then invoke the equip-action (which becomes
+	# "Unequip" while a slot is selected).
+	var cloak_row: InventoryRow = _seed_equippable_clothing_row(&"unequip_test_cloak")
+	assert_not_null(cloak_row, "An unequip_test_cloak InventoryRow must exist after seeding")
+	if cloak_row == null:
 		return
-	_tab._selected_row = boots_row
+	_tab._selected_row = cloak_row
 	_tab._do_equip()
 
-	assert_true(PlayerData.inventory.equipped.has(ItemData.EquipSlot.BOOTS),
-			"the starter boots must be equipped before this test's unequip step")
+	assert_true(PlayerData.inventory.equipped.has(ItemData.EquipSlot.CLOTHING),
+			"the fixture cloak must be equipped before this test's unequip step")
 
-	var boots_slot: EquipmentSlot = _find_slot(ItemData.EquipSlot.BOOTS)
-	assert_not_null(boots_slot, "A BOOTS EquipmentSlot must exist after populate_left()")
-	if boots_slot == null:
+	var clothing_slot: EquipmentSlot = _find_slot(ItemData.EquipSlot.CLOTHING)
+	assert_not_null(clothing_slot, "A CLOTHING EquipmentSlot must exist after populate_left()")
+	if clothing_slot == null:
 		return
 
 	# Select the filled slot via a real click so the selection wiring
 	# (EquipmentSlot.selected -> InventoryTab handler) is exercised end to end.
-	_click(boots_slot)
-	assert_eq(_tab._selected_slot, boots_slot,
+	_click(clothing_slot)
+	assert_eq(_tab._selected_slot, clothing_slot,
 			"clicking a FILLED equipment slot must set _tab._selected_slot")
 
-	var before_count: int = _stack_count(PlayerData.inventory, &"sample_boots")
+	var before_count: int = _stack_count(PlayerData.inventory, &"unequip_test_cloak")
 
 	watch_signals(GameEvents)
 	_tab._do_equip()
 
-	# Inventory.unequip() must have run: BOOTS is no longer in `equipped`,
-	# and the boots are back in `stacks`.
-	assert_false(PlayerData.inventory.equipped.has(ItemData.EquipSlot.BOOTS),
-			"_do_equip() with a slot selected must call Inventory.unequip(), clearing equipped[BOOTS]")
-	var after_count: int = _stack_count(PlayerData.inventory, &"sample_boots")
+	# Inventory.unequip() must have run: CLOTHING is no longer in `equipped`,
+	# and the cloak is back in `stacks`.
+	assert_false(PlayerData.inventory.equipped.has(ItemData.EquipSlot.CLOTHING),
+			"_do_equip() with a slot selected must call Inventory.unequip(), clearing equipped[CLOTHING]")
+	var after_count: int = _stack_count(PlayerData.inventory, &"unequip_test_cloak")
 	assert_eq(after_count, before_count + 1,
-			"the unequipped boots must be returned to PlayerData.inventory.stacks")
+			"the unequipped cloak must be returned to PlayerData.inventory.stacks")
 
 	assert_signal_emitted(GameEvents, "item_unequipped",
 			"_do_equip() with a slot selected must emit GameEvents.item_unequipped")
@@ -785,17 +824,17 @@ func test_do_equip_with_slot_selected_unequips_item() -> void:
 
 	# The slot's heading must still be present (and visible) now that the slot
 	# is empty again — this is the core issue #7 regression check.
-	var refreshed_slot: EquipmentSlot = _find_slot(ItemData.EquipSlot.BOOTS)
-	assert_not_null(refreshed_slot, "the BOOTS EquipmentSlot must still exist after _refresh_both_pages()")
+	var refreshed_slot: EquipmentSlot = _find_slot(ItemData.EquipSlot.CLOTHING)
+	assert_not_null(refreshed_slot, "the CLOTHING EquipmentSlot must still exist after _refresh_both_pages()")
 	if refreshed_slot == null:
 		return
 	var heading: Label = refreshed_slot.find_child("SlotLabel", true, false) as Label
 	assert_not_null(heading, "equipment_slot.tscn must declare 'SlotLabel'")
 	if heading != null:
 		assert_true(heading.visible,
-				"the BOOTS slot heading must remain visible after unequipping")
-		assert_eq(heading.text, "Boots",
-				"the BOOTS slot heading text must read 'Boots' once the slot is empty again")
+				"the CLOTHING slot heading must remain visible after unequipping")
+		assert_eq(heading.text, "Clothing",
+				"the CLOTHING slot heading text must read 'Clothing' once the slot is empty again")
 
 
 # ---------------------------------------------------------------------------
@@ -807,20 +846,20 @@ func test_notebook_equip_hotkey_with_slot_selected_unequips_item() -> void:
 	# The E key (notebook_equip action) must trigger the same _do_equip()
 	# unequip branch as clicking the button, per the action-verb table in
 	# docs/features/notebook/design.md §5.2.
-	var boots_row: InventoryRow = _find_row(_right_parent, &"sample_boots")
-	assert_not_null(boots_row, "A sample_boots InventoryRow must exist after populate_right()")
-	if boots_row == null:
+	var cloak_row: InventoryRow = _seed_equippable_clothing_row(&"hotkey_test_cloak")
+	assert_not_null(cloak_row, "A hotkey_test_cloak InventoryRow must exist after seeding")
+	if cloak_row == null:
 		return
-	_tab._selected_row = boots_row
+	_tab._selected_row = cloak_row
 	_tab._do_equip()
 
-	var boots_slot: EquipmentSlot = _find_slot(ItemData.EquipSlot.BOOTS)
-	assert_not_null(boots_slot, "A BOOTS EquipmentSlot must exist after populate_left()")
-	if boots_slot == null:
+	var clothing_slot: EquipmentSlot = _find_slot(ItemData.EquipSlot.CLOTHING)
+	assert_not_null(clothing_slot, "A CLOTHING EquipmentSlot must exist after populate_left()")
+	if clothing_slot == null:
 		return
 
-	_click(boots_slot)
-	assert_eq(_tab._selected_slot, boots_slot,
+	_click(clothing_slot)
+	assert_eq(_tab._selected_slot, clothing_slot,
 			"clicking a FILLED equipment slot must set _tab._selected_slot")
 
 	# _unhandled_input() only runs the hotkey branches while the tab is visible.
@@ -835,7 +874,7 @@ func test_notebook_equip_hotkey_with_slot_selected_unequips_item() -> void:
 	event.pressed = true
 	_tab._unhandled_input(event)
 
-	assert_false(PlayerData.inventory.equipped.has(ItemData.EquipSlot.BOOTS),
+	assert_false(PlayerData.inventory.equipped.has(ItemData.EquipSlot.CLOTHING),
 			"the notebook_equip hotkey with a slot selected must call Inventory.unequip()")
 	assert_signal_emitted(GameEvents, "item_unequipped",
 			"the notebook_equip hotkey with a slot selected must emit GameEvents.item_unequipped")
@@ -853,27 +892,27 @@ func test_selecting_bag_row_clears_slot_selection_and_restores_equip_label() -> 
 	# contract documented on _on_row_selected(), selecting a bag row while an
 	# equipment slot is selected must clear _selected_slot and restore the
 	# EquipButton label to "Equip".
-	var boots_row: InventoryRow = _find_row(_right_parent, &"sample_boots")
-	assert_not_null(boots_row, "A sample_boots InventoryRow must exist after populate_right()")
-	if boots_row == null:
+	var cloak_row: InventoryRow = _seed_equippable_clothing_row(&"bagrow_test_cloak")
+	assert_not_null(cloak_row, "A bagrow_test_cloak InventoryRow must exist after seeding")
+	if cloak_row == null:
 		return
-	_tab._selected_row = boots_row
+	_tab._selected_row = cloak_row
 	_tab._do_equip()
 
-	var boots_slot: EquipmentSlot = _find_slot(ItemData.EquipSlot.BOOTS)
-	assert_not_null(boots_slot, "A BOOTS EquipmentSlot must exist after populate_left()")
-	if boots_slot == null:
+	var clothing_slot: EquipmentSlot = _find_slot(ItemData.EquipSlot.CLOTHING)
+	assert_not_null(clothing_slot, "A CLOTHING EquipmentSlot must exist after populate_left()")
+	if clothing_slot == null:
 		return
 
-	_click(boots_slot)
-	assert_eq(_tab._selected_slot, boots_slot,
+	_click(clothing_slot)
+	assert_eq(_tab._selected_slot, clothing_slot,
 			"clicking a FILLED equipment slot must set _tab._selected_slot")
 
 	var equip_button: Button = _equip_button()
 	assert_not_null(equip_button, "A named EquipButton node must exist after populate_right()")
 	if equip_button != null:
 		assert_eq(equip_button.text, "Unequip (E)",
-				"EquipButton must read 'Unequip (E)' once the BOOTS slot is selected")
+				"EquipButton must read 'Unequip (E)' once the CLOTHING slot is selected")
 
 	# Now select the sample_leaf bag row.
 	var leaf_row: InventoryRow = _find_row(_right_parent, &"sample_leaf")

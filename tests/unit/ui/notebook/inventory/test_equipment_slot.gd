@@ -1,6 +1,16 @@
 ## test_equipment_slot.gd
 ## Behavior tests for EquipmentSlot (ui/notebook/inventory/equipment_slot.gd).
 ##
+## SLOT VOCABULARY NOTE (Issue #30)
+## ---------------------------------
+## Issue #30 ("more blob, less limbs") removes BOOTS and GLOVES from
+## ItemData.EquipSlot entirely (CreamBun has no legs/paws) and renames
+## NECKLACE to BELT. Most of the tests below are about generic EquipmentSlot
+## behavior (issue #7) and simply needed their fixture slot swapped from a
+## removed value (BOOTS/GLOVES) to a retained one (CLOTHING/GOGGLES) so this
+## file keeps compiling once the enum changes — see the bottom of the file
+## for tests specifically about the new slot labels.
+##
 ## WHAT THESE TESTS GUARD (Issue #7)
 ## ----------------------------------
 ## Before the fix, equipping an item hid the slot-name heading entirely
@@ -94,7 +104,7 @@ func _click(slot: EquipmentSlot) -> void:
 
 func test_heading_visible_when_empty() -> void:
 	var slot: EquipmentSlot = _make_slot()
-	slot.setup(ItemData.EquipSlot.BOOTS, null)
+	slot.setup(ItemData.EquipSlot.CLOTHING, null)
 
 	var heading: Label = slot.find_child("SlotLabel", true, false) as Label
 	assert_not_null(heading, "equipment_slot.tscn must declare 'SlotLabel'")
@@ -102,8 +112,8 @@ func test_heading_visible_when_empty() -> void:
 		return
 	assert_true(heading.visible,
 			"SlotLabel must be visible when the slot is empty")
-	assert_eq(heading.text, "Boots",
-			"SlotLabel must show the slot name ('Boots') when empty")
+	assert_eq(heading.text, "Clothing",
+			"SlotLabel must show the slot name ('Clothing') when empty")
 
 
 # ---------------------------------------------------------------------------
@@ -115,16 +125,16 @@ func test_heading_stays_visible_when_item_equipped() -> void:
 	# set SlotLabel.visible = false. The heading must remain visible so the
 	# player always knows which body region a filled slot represents.
 	var slot: EquipmentSlot = _make_slot()
-	var boots: ItemData = _make_item(&"heading_test_boots", ItemData.EquipSlot.BOOTS)
+	var clothing: ItemData = _make_item(&"heading_test_clothing", ItemData.EquipSlot.CLOTHING)
 
-	slot.setup(ItemData.EquipSlot.BOOTS, boots)
+	slot.setup(ItemData.EquipSlot.CLOTHING, clothing)
 
 	var heading: Label = slot.find_child("SlotLabel", true, false) as Label
 	assert_not_null(heading, "equipment_slot.tscn must declare 'SlotLabel'")
 	if heading == null:
 		return
 	assert_true(heading.visible,
-			"SlotLabel ('Boots' heading) must remain visible after an item is equipped")
+			"SlotLabel ('Clothing' heading) must remain visible after an item is equipped")
 
 
 # ---------------------------------------------------------------------------
@@ -133,9 +143,9 @@ func test_heading_stays_visible_when_item_equipped() -> void:
 
 func test_icon_rect_populated_when_filled() -> void:
 	var slot: EquipmentSlot = _make_slot()
-	var boots: ItemData = _make_item(&"icon_test_boots", ItemData.EquipSlot.BOOTS)
+	var clothing: ItemData = _make_item(&"icon_test_clothing", ItemData.EquipSlot.CLOTHING)
 
-	slot.setup(ItemData.EquipSlot.BOOTS, boots)
+	slot.setup(ItemData.EquipSlot.CLOTHING, clothing)
 
 	var icon_rect: TextureRect = slot.find_child("IconRect", true, false) as TextureRect
 	assert_not_null(icon_rect, "equipment_slot.tscn must declare 'IconRect'")
@@ -143,7 +153,7 @@ func test_icon_rect_populated_when_filled() -> void:
 		return
 	assert_true(icon_rect.visible,
 			"IconRect must be visible once an item is equipped")
-	assert_eq(icon_rect.texture, boots.icon,
+	assert_eq(icon_rect.texture, clothing.icon,
 			"IconRect.texture must be set to the equipped item's icon")
 
 
@@ -153,7 +163,7 @@ func test_icon_rect_populated_when_filled() -> void:
 
 func test_icon_rect_hidden_when_empty() -> void:
 	var slot: EquipmentSlot = _make_slot()
-	slot.setup(ItemData.EquipSlot.BOOTS, null)
+	slot.setup(ItemData.EquipSlot.CLOTHING, null)
 
 	var icon_rect: TextureRect = slot.find_child("IconRect", true, false) as TextureRect
 	assert_not_null(icon_rect, "equipment_slot.tscn must declare 'IconRect'")
@@ -170,8 +180,8 @@ func test_icon_rect_hidden_when_empty() -> void:
 
 func test_set_selected_true_reveals_highlight_only() -> void:
 	var slot: EquipmentSlot = _make_slot()
-	var boots: ItemData = _make_item(&"select_test_boots", ItemData.EquipSlot.BOOTS)
-	slot.setup(ItemData.EquipSlot.BOOTS, boots)
+	var clothing: ItemData = _make_item(&"select_test_clothing", ItemData.EquipSlot.CLOTHING)
+	slot.setup(ItemData.EquipSlot.CLOTHING, clothing)
 
 	slot.set_selected(true)
 
@@ -197,8 +207,8 @@ func test_set_selected_true_reveals_highlight_only() -> void:
 
 func test_set_selected_false_hides_highlight_but_not_item_name() -> void:
 	var slot: EquipmentSlot = _make_slot()
-	var boots: ItemData = _make_item(&"deselect_test_boots", ItemData.EquipSlot.BOOTS)
-	slot.setup(ItemData.EquipSlot.BOOTS, boots)
+	var clothing: ItemData = _make_item(&"deselect_test_clothing", ItemData.EquipSlot.CLOTHING)
+	slot.setup(ItemData.EquipSlot.CLOTHING, clothing)
 
 	slot.set_selected(true)
 	slot.set_selected(false)
@@ -212,7 +222,7 @@ func test_set_selected_false_hides_highlight_but_not_item_name() -> void:
 	if name_label != null:
 		assert_true(name_label.visible,
 				"ItemNameLabel must remain visible after set_selected(false) because the slot is still filled")
-		assert_eq(name_label.text, boots.display_name,
+		assert_eq(name_label.text, clothing.display_name,
 				"ItemNameLabel must show the equipped item's display_name")
 
 
@@ -223,9 +233,9 @@ func test_set_selected_false_hides_highlight_but_not_item_name() -> void:
 
 func test_setup_with_item_shows_item_name_label_when_not_selected() -> void:
 	var slot: EquipmentSlot = _make_slot()
-	var boots: ItemData = _make_item(&"unselected_fill_test_boots", ItemData.EquipSlot.BOOTS)
+	var clothing: ItemData = _make_item(&"unselected_fill_test_clothing", ItemData.EquipSlot.CLOTHING)
 
-	slot.setup(ItemData.EquipSlot.BOOTS, boots)
+	slot.setup(ItemData.EquipSlot.CLOTHING, clothing)
 
 	var name_label: Label = slot.find_child("ItemNameLabel", true, false) as Label
 	assert_not_null(name_label, "equipment_slot.tscn must declare 'ItemNameLabel'")
@@ -233,7 +243,7 @@ func test_setup_with_item_shows_item_name_label_when_not_selected() -> void:
 		return
 	assert_true(name_label.visible,
 			"ItemNameLabel must be visible whenever the slot is filled, even when not selected")
-	assert_eq(name_label.text, boots.display_name,
+	assert_eq(name_label.text, clothing.display_name,
 			"ItemNameLabel must show the equipped item's display_name")
 
 
@@ -244,7 +254,7 @@ func test_setup_with_item_shows_item_name_label_when_not_selected() -> void:
 func test_setup_without_item_hides_item_name_label() -> void:
 	var slot: EquipmentSlot = _make_slot()
 
-	slot.setup(ItemData.EquipSlot.BOOTS, null)
+	slot.setup(ItemData.EquipSlot.CLOTHING, null)
 
 	var name_label: Label = slot.find_child("ItemNameLabel", true, false) as Label
 	assert_not_null(name_label, "equipment_slot.tscn must declare 'ItemNameLabel'")
@@ -260,8 +270,8 @@ func test_setup_without_item_hides_item_name_label() -> void:
 
 func test_click_on_filled_slot_emits_selected() -> void:
 	var slot: EquipmentSlot = _make_slot()
-	var boots: ItemData = _make_item(&"click_test_boots", ItemData.EquipSlot.BOOTS)
-	slot.setup(ItemData.EquipSlot.BOOTS, boots)
+	var clothing: ItemData = _make_item(&"click_test_clothing", ItemData.EquipSlot.CLOTHING)
+	slot.setup(ItemData.EquipSlot.CLOTHING, clothing)
 
 	watch_signals(slot)
 	_click(slot)
@@ -276,7 +286,7 @@ func test_click_on_filled_slot_emits_selected() -> void:
 
 func test_click_on_empty_slot_does_not_emit_selected() -> void:
 	var slot: EquipmentSlot = _make_slot()
-	slot.setup(ItemData.EquipSlot.BOOTS, null)
+	slot.setup(ItemData.EquipSlot.CLOTHING, null)
 
 	watch_signals(slot)
 	_click(slot)
@@ -291,7 +301,7 @@ func test_click_on_empty_slot_does_not_emit_selected() -> void:
 
 func test_click_on_empty_slot_leaves_it_unselected() -> void:
 	var slot: EquipmentSlot = _make_slot()
-	slot.setup(ItemData.EquipSlot.BOOTS, null)
+	slot.setup(ItemData.EquipSlot.CLOTHING, null)
 
 	_click(slot)
 
@@ -319,7 +329,7 @@ func test_setup_with_null_item_does_not_crash() -> void:
 	var slot: EquipmentSlot = _make_slot()
 
 	# If this raises an error GUT records a failure automatically.
-	slot.setup(ItemData.EquipSlot.BOOTS, null)
+	slot.setup(ItemData.EquipSlot.CLOTHING, null)
 
 	assert_true(true, "setup() with null item must not crash")
 
@@ -332,10 +342,11 @@ func test_setup_with_null_item_does_not_crash() -> void:
 func test_setup_stores_slot_type() -> void:
 	# _slot is the internal record that _can_drop_data() compares against
 	# incoming drag data. It must match the value passed to setup().
+	# Uses GOGGLES (a retained slot, not GLOVES) per issue #30.
 	var slot: EquipmentSlot = _make_slot()
-	slot.setup(ItemData.EquipSlot.GLOVES, null)
+	slot.setup(ItemData.EquipSlot.GOGGLES, null)
 
-	assert_eq(slot._slot, ItemData.EquipSlot.GLOVES,
+	assert_eq(slot._slot, ItemData.EquipSlot.GOGGLES,
 			"EquipmentSlot._slot must equal the value passed to setup()")
 
 
@@ -345,20 +356,21 @@ func test_setup_stores_slot_type() -> void:
 # RELOCATED from tests/integration/notebook/test_inventory_tab.gd (Test 4).
 
 func test_can_drop_data_returns_false_for_wrong_slot() -> void:
-	# A BOOTS slot must refuse a GLOVES item so the player cannot put the
-	# wrong item type in the wrong slot.
-	var gloves: ItemData = ItemData.new()
-	gloves.id = &"test_gloves"
-	gloves.equip_slot = ItemData.EquipSlot.GLOVES
-	autofree(gloves)
+	# A CLOTHING slot must refuse a GOGGLES item so the player cannot put the
+	# wrong item type in the wrong slot. (Was BOOTS/GLOVES before issue #30
+	# removed those slots.)
+	var goggles: ItemData = ItemData.new()
+	goggles.id = &"test_goggles"
+	goggles.equip_slot = ItemData.EquipSlot.GOGGLES
+	autofree(goggles)
 
 	var stack: ItemStack = ItemStack.new()
-	stack.item_id = gloves.id
-	stack.item = gloves  # set runtime reference so _can_drop_data can read equip_slot
+	stack.item_id = goggles.id
+	stack.item = goggles  # set runtime reference so _can_drop_data can read equip_slot
 	autofree(stack)
 
 	var slot: EquipmentSlot = _make_slot()
-	slot.setup(ItemData.EquipSlot.BOOTS, null)
+	slot.setup(ItemData.EquipSlot.CLOTHING, null)
 
 	var data: Dictionary = {"kind": "item", "stack": stack}
 	assert_false(slot._can_drop_data(Vector2.ZERO, data),
@@ -371,17 +383,74 @@ func test_can_drop_data_returns_false_for_wrong_slot() -> void:
 # RELOCATED from tests/integration/notebook/test_inventory_tab.gd (Test 5).
 
 func test_can_drop_data_returns_true_for_matching_slot() -> void:
-	# A BOOTS slot must accept a BOOTS item so drag-to-equip works.
-	var boots: ItemData = _make_item(&"drop_test_boots", ItemData.EquipSlot.BOOTS)
+	# A CLOTHING slot must accept a CLOTHING item so drag-to-equip works.
+	var cloak: ItemData = _make_item(&"drop_test_cloak", ItemData.EquipSlot.CLOTHING)
 
 	var stack: ItemStack = ItemStack.new()
-	stack.item_id = boots.id
-	stack.item = boots
+	stack.item_id = cloak.id
+	stack.item = cloak
 	autofree(stack)
 
 	var slot: EquipmentSlot = _make_slot()
-	slot.setup(ItemData.EquipSlot.BOOTS, null)
+	slot.setup(ItemData.EquipSlot.CLOTHING, null)
 
 	var data: Dictionary = {"kind": "item", "stack": stack}
 	assert_true(slot._can_drop_data(Vector2.ZERO, data),
 			"_can_drop_data must return true when item.equip_slot == this slot")
+
+
+# ---------------------------------------------------------------------------
+# Test 14 — _slot_name() labels the four retained slots correctly (issue #30)
+# ---------------------------------------------------------------------------
+# These tests are specifically about the issue #30 slot redesign, unlike the
+# tests above (which merely needed a non-removed fixture slot). BACKPACK,
+# CLOTHING, and GOGGLES already existed pre-fix, so referencing them directly
+# is safe; BELT is the issue #30 rename of NECKLACE, and is resolved by name
+# via .get() with a sentinel default rather than a direct
+# ItemData.EquipSlot.BELT reference, so a future removal of the member fails
+# that one assertion cleanly instead of causing a parse error that would take
+# down this whole file.
+
+func test_slot_name_label_for_backpack() -> void:
+	var slot: EquipmentSlot = _make_slot()
+	slot.setup(ItemData.EquipSlot.BACKPACK, null)
+
+	var heading: Label = slot.find_child("SlotLabel", true, false) as Label
+	assert_not_null(heading, "equipment_slot.tscn must declare 'SlotLabel'")
+	if heading != null:
+		assert_eq(heading.text, "Backpack", "SlotLabel must read 'Backpack' for the BACKPACK slot")
+
+
+func test_slot_name_label_for_clothing() -> void:
+	var slot: EquipmentSlot = _make_slot()
+	slot.setup(ItemData.EquipSlot.CLOTHING, null)
+
+	var heading: Label = slot.find_child("SlotLabel", true, false) as Label
+	assert_not_null(heading, "equipment_slot.tscn must declare 'SlotLabel'")
+	if heading != null:
+		assert_eq(heading.text, "Clothing", "SlotLabel must read 'Clothing' for the CLOTHING slot")
+
+
+func test_slot_name_label_for_goggles() -> void:
+	var slot: EquipmentSlot = _make_slot()
+	slot.setup(ItemData.EquipSlot.GOGGLES, null)
+
+	var heading: Label = slot.find_child("SlotLabel", true, false) as Label
+	assert_not_null(heading, "equipment_slot.tscn must declare 'SlotLabel'")
+	if heading != null:
+		assert_eq(heading.text, "Goggles", "SlotLabel must read 'Goggles' for the GOGGLES slot")
+
+
+func test_slot_name_label_for_belt() -> void:
+	# BELT is the issue #30 rename of NECKLACE. See the file-level note above
+	# for why .get() is used instead of a direct enum member reference.
+	var belt_slot: int = ItemData.EquipSlot.get("BELT", -1)
+
+	var slot: EquipmentSlot = _make_slot()
+	slot.setup(belt_slot, null)
+
+	var heading: Label = slot.find_child("SlotLabel", true, false) as Label
+	assert_not_null(heading, "equipment_slot.tscn must declare 'SlotLabel'")
+	if heading != null:
+		assert_eq(heading.text, "Belt",
+				"SlotLabel must read 'Belt' for the BELT slot (renamed from NECKLACE, issue #30)")

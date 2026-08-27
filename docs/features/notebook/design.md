@@ -30,7 +30,7 @@ ui/
     inventory/
       inventory_tab.tscn           # Equipment (left page) + item list (right page)
       inventory_tab.gd
-      equipment_slot.tscn          # One slot (backpack, boots, etc.)
+      equipment_slot.tscn          # One slot (backpack, clothing, etc.)
       equipment_slot.gd
       inventory_row.tscn           # One item row in the right-page list
       inventory_row.gd
@@ -95,10 +95,8 @@ enum EquipSlot {
     NONE,
     BACKPACK,
     CLOTHING,
-    BOOTS,
-    GLOVES,
     GOGGLES,
-    NECKLACE,
+    BELT,
 }
 ```
 
@@ -296,14 +294,12 @@ When a tab is clicked or its hotkey is pressed, `notebook.gd` removes whatever i
 
 **Left page — Equipment**
 
-A pixel-art silhouette of Cream Bun in the centre, surrounded by six `EquipmentSlot` nodes positioned over their corresponding body region:
+A pixel-art silhouette of Cream Bun in the centre, surrounded by four `EquipmentSlot` nodes positioned over their corresponding body region. CreamBun's blob redesign has no limbs, so there are no paw/feet slots (issue #30):
 
 ```
   GOGGLES (head)
-  NECKLACE (collar)
 BACKPACK (back)   CLOTHING (torso)
-GLOVES (paws)
-  BOOTS (feet)
+  BELT (waist)
 ```
 
 Each `EquipmentSlot` is a `Control` with:

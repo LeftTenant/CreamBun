@@ -14,7 +14,13 @@ extends Resource
 
 
 ## Bump when the schema changes in a way that needs migration on load.
-const CURRENT_VERSION: int = 1
+## Issue #30: bumped 1 -> 2. The blob equipment slot redesign renumbered
+## ItemData.EquipSlot (BACKPACK/CLOTHING/BOOTS/GLOVES/GOGGLES/NECKLACE ->
+## NONE/BACKPACK/CLOTHING/GOGGLES/BELT), so raw equip_slot ints persisted in
+## pre-redesign saves no longer mean what they used to (old BOOTS=3 now
+## aliases GOGGLES). No migration code exists yet -- this bump only makes
+## pre-redesign save files identifiable as a different schema version.
+const CURRENT_VERSION: int = 2
 
 ## Schema stamp written into every save. Read on load to migrate older files.
 @export var save_version: int = CURRENT_VERSION
@@ -92,10 +98,13 @@ func _seed_starter_content() -> void:
 		"completed_objectives": [0, 1, 2],
 	}
 
-	# Starter bag: 3x Forest Leaf (stackable ingredient) + 1x Old Boots
+	# Starter bag: 3x Forest Leaf (stackable ingredient) + 1x Cozy Scarf
 	# (non-stackable, equippable). Field values mirror the sample ItemData
 	# previously constructed in InventoryTab._ready()
 	# (see ui/notebook/inventory/inventory_tab.gd).
+	# Issue #30: the old "Old Boots" starter item used the BOOTS slot, which
+	# was removed in the blob redesign (CreamBun has no legs/paws). A scarf
+	# fits the CLOTHING slot and suits a small round creature.
 	var leaf: ItemData = ItemData.new()
 	leaf.id = &"sample_leaf"
 	leaf.display_name = "Forest Leaf"
@@ -104,9 +113,9 @@ func _seed_starter_content() -> void:
 	leaf.max_stack = 99
 	inventory.add(leaf, 3)
 
-	var boots: ItemData = ItemData.new()
-	boots.id = &"sample_boots"
-	boots.display_name = "Old Boots"
-	boots.weight = 0.8
-	boots.equip_slot = ItemData.EquipSlot.BOOTS
-	inventory.add(boots, 1)
+	var scarf: ItemData = ItemData.new()
+	scarf.id = &"sample_scarf"
+	scarf.display_name = "Cozy Scarf"
+	scarf.weight = 0.3
+	scarf.equip_slot = ItemData.EquipSlot.CLOTHING
+	inventory.add(scarf, 1)

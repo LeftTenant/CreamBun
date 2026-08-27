@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://decnb3x78bgdc"
-path="res://.godot/imported/inventory_actions_step_02_boots_selected.png-c4ff232b80585b360069ab512ed364d3.ctex"
+uid="uid://5vql06d8d28js"
+path="res://.godot/imported/inventory_actions_step_03_scarf_equipped.png-9ec77ffa35e4ec46d3f96592de836161.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://tests/e2e/notebook/screenshots/inventory_actions_step_02_boots_selected.png"
-dest_files=["res://.godot/imported/inventory_actions_step_02_boots_selected.png-c4ff232b80585b360069ab512ed364d3.ctex"]
+source_file="res://tests/e2e/notebook/screenshots/inventory_actions_step_03_scarf_equipped.png"
+dest_files=["res://.godot/imported/inventory_actions_step_03_scarf_equipped.png-9ec77ffa35e4ec46d3f96592de836161.ctex"]
 
 [params]
 

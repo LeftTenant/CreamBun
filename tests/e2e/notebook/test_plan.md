@@ -41,7 +41,7 @@ Out of scope (deferred to dedicated future scenarios):
 |---|------|------------------|
 | 1 | `lifecycle.md`          | Open with I, world pauses, `GameState.NOTEBOOK`; toggle closes; M opens to map; Esc reopens to last tab; Esc closes |
 | 2 | `tab_navigation.md`     | PageUp cycles INVENTORY→MAP→QUESTS→SETTINGS→SESSIONS→INVENTORY; PageDown reverses; hotkey on different tab switches without closing |
-| 3 | `inventory_actions.md`  | Sample leaf and boots present; clicking a row selects it; `E` equips boots into BOOTS slot; `T` removes one leaf and updates the weight header |
+| 3 | `inventory_actions.md`  | Sample leaf and scarf present; clicking a row selects it; `E` equips the scarf into the CLOTHING slot; `T` removes one leaf and updates the weight header |
 | 4 | `quests_detail.md`      | "The Foraging Book" listed under "Completed"; clicking "View" renders title, description, and three `[x]` objective lines on the right page |
 | 5 | `settings_controls.md`  | Three volume sliders + text-speed slider on left; window-scale option on right; "Reset" buttons restore the underlying `GameSettings` values |
 

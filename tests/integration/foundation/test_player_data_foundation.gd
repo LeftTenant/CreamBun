@@ -100,7 +100,7 @@ func test_load_resource_swaps_resource_and_forwarded_reads_reflect_new_data() ->
 			"PlayerData.quest_log should reflect the newly-loaded resource's quest_log")
 	assert_eq(PlayerData.map_state, new_data.map_state,
 			"PlayerData.map_state should reflect the newly-loaded resource's map_state")
-	# reset_to_new_game() seeds the starter bag (3x sample_leaf + 1x sample_boots) —
+	# reset_to_new_game() seeds the starter bag (3x sample_leaf + 1x sample_scarf) —
 	# confirm the swapped-in inventory carries that seeded content through.
 	assert_eq(PlayerData.inventory.stacks.size(), 2,
 			"the newly-loaded resource's seeded starter bag should be visible via PlayerData.inventory")

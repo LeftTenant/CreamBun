@@ -46,13 +46,48 @@ func test_item_data_has_equip_slot_enum() -> void:
 	# EquipSlot is defined inside item_data.gd as an inner enum.
 	# GDScript inner enums are dictionaries, so we can check their keys.
 	# See: https://docs.godotengine.org/en/stable/tutorials/scripting/gdscript/gdscript_basics.html#enums
+	#
+	# Issue #30 ("more blob, less limbs"): CreamBun's current design has no
+	# limbs/paws, so BOOTS and GLOVES are removed entirely (not repurposed),
+	# and NECKLACE is renamed to BELT. We use .has() (a Dictionary lookup by
+	# name) rather than referencing e.g. ItemData.EquipSlot.BOOTS directly —
+	# a direct reference to a removed member would be a compile-time error
+	# and take down the whole test file instead of failing this one
+	# assertion cleanly.
 	assert_true(ItemData.EquipSlot.has("NONE"),     "EquipSlot must contain NONE")
-	assert_true(ItemData.EquipSlot.has("BACKPACK"),  "EquipSlot must contain BACKPACK")
-	assert_true(ItemData.EquipSlot.has("CLOTHING"),  "EquipSlot must contain CLOTHING")
-	assert_true(ItemData.EquipSlot.has("BOOTS"),     "EquipSlot must contain BOOTS")
-	assert_true(ItemData.EquipSlot.has("GLOVES"),    "EquipSlot must contain GLOVES")
-	assert_true(ItemData.EquipSlot.has("GOGGLES"),   "EquipSlot must contain GOGGLES")
-	assert_true(ItemData.EquipSlot.has("NECKLACE"),  "EquipSlot must contain NECKLACE")
+	assert_true(ItemData.EquipSlot.has("BACKPACK"), "EquipSlot must contain BACKPACK")
+	assert_true(ItemData.EquipSlot.has("CLOTHING"), "EquipSlot must contain CLOTHING")
+	assert_true(ItemData.EquipSlot.has("GOGGLES"),  "EquipSlot must contain GOGGLES")
+	assert_true(ItemData.EquipSlot.has("BELT"),
+			"EquipSlot must contain BELT (renamed from NECKLACE, issue #30)")
+	assert_false(ItemData.EquipSlot.has("BOOTS"),
+			"EquipSlot must NOT contain BOOTS — CreamBun has no legs to wear boots on (issue #30)")
+	assert_false(ItemData.EquipSlot.has("GLOVES"),
+			"EquipSlot must NOT contain GLOVES — CreamBun has no paws to wear gloves on (issue #30)")
+	assert_false(ItemData.EquipSlot.has("NECKLACE"),
+			"EquipSlot must NOT contain NECKLACE — renamed to BELT (issue #30)")
+
+
+func test_item_data_equip_slot_values_are_stable_after_blob_redesign() -> void:
+	# SAVE-COMPAT RISK (issue #30): EquipSlot is int-backed, and both
+	# ItemData.equip_slot and Inventory.equipped (keyed by this enum) are
+	# @export'd, so ResourceSaver persists these as raw ints in .tres save
+	# files (see autoloads/save_manager.gd). There is no version-keyed
+	# migration for equip_slot — PlayerDataResource.rehydrate() is a
+	# documented no-op. Removing BOOTS/GLOVES (which sat before GOGGLES) and
+	# renaming NECKLACE->BELT shifts GOGGLES's numeric value. This test does
+	# NOT fix old-save compatibility across the #30 change itself (that needs
+	# a real migration and is out of scope here) — it pins the resulting
+	# values so a FUTURE accidental reorder of this enum is caught by CI
+	# instead of silently reinterpreting saved equipment as the wrong slot.
+	#
+	assert_eq(ItemData.EquipSlot.NONE, 0,     "NONE must stay 0")
+	assert_eq(ItemData.EquipSlot.BACKPACK, 1, "BACKPACK must stay 1")
+	assert_eq(ItemData.EquipSlot.CLOTHING, 2, "CLOTHING must stay 2")
+	assert_eq(ItemData.EquipSlot.GOGGLES, 3,
+			"GOGGLES must be 3 now that BOOTS/GLOVES are removed ahead of it")
+	assert_eq(ItemData.EquipSlot.BELT, 4,
+			"BELT (renamed from NECKLACE) must be 4")
 
 
 func test_item_data_equip_slot_default_is_none() -> void:
@@ -235,23 +270,26 @@ func test_inventory_remove_returns_false_when_count_exceeds_stack() -> void:
 # ---------------------------------------------------------------------------
 
 func test_inventory_equip_moves_item_to_equipped_slot() -> void:
+	# Uses CLOTHING (a retained slot, not BOOTS/GLOVES) per issue #30 — the
+	# blob redesign removes BOOTS/GLOVES entirely, so equip/unequip coverage
+	# moves onto the slots that remain.
 	var inv: Inventory = Inventory.new()
 	autofree(inv)
 
-	var boots: ItemData = _make_item("old_boots", 0.5, ItemData.EquipSlot.BOOTS, false)
-	autofree(boots)
+	var cloak: ItemData = _make_item("worn_cloak", 0.5, ItemData.EquipSlot.CLOTHING, false)
+	autofree(cloak)
 
-	inv.add(boots, 1)
-	var displaced: ItemData = inv.equip(boots)
+	inv.add(cloak, 1)
+	var displaced: ItemData = inv.equip(cloak)
 
-	# With no previously equipped boots, equip() returns null.
+	# With no previously equipped clothing, equip() returns null.
 	assert_null(displaced,
 			"equip() should return null when the slot was previously empty")
 	# The item must have left stacks and entered equipped.
 	assert_eq(inv.stacks.size(), 0,
 			"stacks should be empty after equipping the only item")
-	assert_eq(inv.equipped.get(ItemData.EquipSlot.BOOTS), boots,
-			"equipped[BOOTS] should reference the boots ItemData after equip()")
+	assert_eq(inv.equipped.get(ItemData.EquipSlot.CLOTHING), cloak,
+			"equipped[CLOTHING] should reference the cloak ItemData after equip()")
 
 
 # ---------------------------------------------------------------------------
@@ -259,30 +297,32 @@ func test_inventory_equip_moves_item_to_equipped_slot() -> void:
 # ---------------------------------------------------------------------------
 
 func test_inventory_equip_returns_previously_equipped_item() -> void:
+	# Uses CLOTHING (a retained slot) per issue #30 — see the note on
+	# test_inventory_equip_moves_item_to_equipped_slot() above.
 	var inv: Inventory = Inventory.new()
 	autofree(inv)
 
-	var old_boots: ItemData = _make_item("worn_boots", 0.5, ItemData.EquipSlot.BOOTS, false)
-	var new_boots: ItemData = _make_item("leather_boots", 0.8, ItemData.EquipSlot.BOOTS, false)
-	autofree(old_boots)
-	autofree(new_boots)
+	var old_cloak: ItemData = _make_item("worn_cloak", 0.5, ItemData.EquipSlot.CLOTHING, false)
+	var new_cloak: ItemData = _make_item("fancy_cloak", 0.8, ItemData.EquipSlot.CLOTHING, false)
+	autofree(old_cloak)
+	autofree(new_cloak)
 
-	inv.add(old_boots, 1)
-	inv.equip(old_boots)
+	inv.add(old_cloak, 1)
+	inv.equip(old_cloak)
 
-	inv.add(new_boots, 1)
-	var displaced: ItemData = inv.equip(new_boots)
+	inv.add(new_cloak, 1)
+	var displaced: ItemData = inv.equip(new_cloak)
 
-	# The old boots should be returned (not null) and land back in stacks.
-	assert_eq(displaced, old_boots,
+	# The old cloak should be returned (not null) and land back in stacks.
+	assert_eq(displaced, old_cloak,
 			"equip() should return the previously equipped item when the slot was occupied")
-	# new_boots should now be in the slot.
-	assert_eq(inv.equipped.get(ItemData.EquipSlot.BOOTS), new_boots,
-			"equipped[BOOTS] should reference the new boots after swapping")
-	# old_boots should have been added back to stacks by equip().
+	# new_cloak should now be in the slot.
+	assert_eq(inv.equipped.get(ItemData.EquipSlot.CLOTHING), new_cloak,
+			"equipped[CLOTHING] should reference the new cloak after swapping")
+	# old_cloak should have been added back to stacks by equip().
 	var found_old: bool = false
 	for stack in inv.stacks:
-		if stack.item_id == old_boots.id:
+		if stack.item_id == old_cloak.id:
 			found_old = true
 	assert_true(found_old,
 			"the displaced item should be returned to stacks after being replaced by equip()")
@@ -293,34 +333,37 @@ func test_inventory_equip_returns_previously_equipped_item() -> void:
 # ---------------------------------------------------------------------------
 
 func test_inventory_unequip_removes_item_from_slot_and_returns_it() -> void:
+	# Uses GOGGLES (a retained slot, not GLOVES) per issue #30.
 	var inv: Inventory = Inventory.new()
 	autofree(inv)
 
-	var gloves: ItemData = _make_item("knit_gloves", 0.3, ItemData.EquipSlot.GLOVES, false)
-	autofree(gloves)
+	var goggles: ItemData = _make_item("scratched_goggles", 0.3, ItemData.EquipSlot.GOGGLES, false)
+	autofree(goggles)
 
-	inv.add(gloves, 1)
-	inv.equip(gloves)
+	inv.add(goggles, 1)
+	inv.equip(goggles)
 
-	var returned: ItemData = inv.unequip(ItemData.EquipSlot.GLOVES)
+	var returned: ItemData = inv.unequip(ItemData.EquipSlot.GOGGLES)
 
-	assert_eq(returned, gloves,
+	assert_eq(returned, goggles,
 			"unequip() should return the item that was in the slot")
-	assert_false(inv.equipped.has(ItemData.EquipSlot.GLOVES),
-			"equipped should no longer contain GLOVES after unequip()")
+	assert_false(inv.equipped.has(ItemData.EquipSlot.GOGGLES),
+			"equipped should no longer contain GOGGLES after unequip()")
 	# The item should have gone back into stacks.
 	assert_eq(inv.stacks.size(), 1,
 			"unequip() should add the item back to stacks")
 
 
 func test_inventory_unequip_returns_null_when_slot_is_empty() -> void:
+	# Uses BELT (the issue #30 rename of NECKLACE), now a real enum member so
+	# it can be referenced directly.
 	var inv: Inventory = Inventory.new()
 	autofree(inv)
 
-	var returned: ItemData = inv.unequip(ItemData.EquipSlot.NECKLACE)
+	var returned: ItemData = inv.unequip(ItemData.EquipSlot.BELT)
 
 	assert_null(returned,
-			"unequip() should return null when the slot is already empty")
+			"unequip() should return null when the slot is already empty (BELT, issue #30)")
 
 
 # ---------------------------------------------------------------------------

@@ -12,11 +12,14 @@
 ## It reads PlayerData.inventory directly (design §7.4, §13). Tests give the
 ## PlayerData autoload a clean, seeded resource in before_each() via
 ## PlayerData._load_resource(<resource>) where <resource>.reset_to_new_game()
-## has been applied — this seeds the same starter bag (3x sample_leaf,
-## 1x sample_boots) that PlayerDataResource._seed_starter_content() defines
-## (resources/data/player_data_resource.gd), so the tab renders the same
-## "starter bag" content the old _ready() sample-data block used to construct
-## locally.
+## has been applied — this seeds the same starter bag (3x sample_leaf plus
+## one equippable item) that PlayerDataResource._seed_starter_content()
+## defines (resources/data/player_data_resource.gd), so the tab renders the
+## same "starter bag" content the old _ready() sample-data block used to
+## construct locally. NOTE (issue #30): the equippable starter item's id/slot
+## changed from "Old Boots"/BOOTS to a retained slot — tests below assert on
+## sample_leaf specifically and on "some equippable item using a retained
+## slot" generically, not on the old name.
 ##
 ## Requires GUT: https://github.com/bitwes/Gut
 ## Install via Godot Asset Library (search "GUT - Godot Unit Testing").
@@ -44,8 +47,8 @@ const INVENTORY_TAB_SCENE: String = "res://ui/notebook/inventory/inventory_tab.t
 # ---------------------------------------------------------------------------
 
 ## Give PlayerData a freshly-seeded resource before every test so the tab
-## reads the same starter bag (3x sample_leaf, 1x sample_boots) the old
-## _ready() sample-data block used to construct locally. Per CLAUDE.md's
+## reads the same starter bag (3x sample_leaf plus one equippable item) the
+## old _ready() sample-data block used to construct locally. Per CLAUDE.md's
 ## dependency-injection guidance for autoload tests.
 func before_each() -> void:
 	var data: PlayerDataResource = PlayerDataResource.new()
@@ -118,9 +121,13 @@ func test_inventory_tab_is_a_notebook_tab() -> void:
 # test_inventory_row.gd — they exercised those components in isolation with
 # no PlayerData/tab wiring, so they belong at the unit level.
 
-func test_inventory_tab_populate_left_adds_six_slots() -> void:
+func test_inventory_tab_populate_left_adds_four_slots() -> void:
 	# One EquipmentSlot per non-NONE EquipSlot value (BACKPACK, CLOTHING,
-	# BOOTS, GLOVES, GOGGLES, NECKLACE). NONE is never rendered.
+	# GOGGLES, BELT). NONE is never rendered.
+	#
+	# Issue #30 ("more blob, less limbs"): BOOTS and GLOVES are removed
+	# entirely and NECKLACE is renamed BELT, shrinking the equipment page
+	# from 6 slots to 4 so it fits the page's height budget.
 	# Instantiate from scene so @onready refs resolve correctly.
 	var packed: PackedScene = load(INVENTORY_TAB_SCENE) as PackedScene
 	var tab: InventoryTab = add_child_autofree(packed.instantiate() as InventoryTab)
@@ -129,8 +136,8 @@ func test_inventory_tab_populate_left_adds_six_slots() -> void:
 	tab.populate_left(parent)
 
 	var slots: Array[Node] = _find_by_class(parent, "EquipmentSlot")
-	assert_eq(slots.size(), 6,
-			"populate_left() must add exactly 6 EquipmentSlot nodes (one per equip slot)")
+	assert_eq(slots.size(), 4,
+			"populate_left() must add exactly 4 EquipmentSlot nodes (one per equip slot, issue #30)")
 
 
 # ---------------------------------------------------------------------------
@@ -237,11 +244,17 @@ func test_populate_right_renders_player_data_inventory_directly() -> void:
 # ---------------------------------------------------------------------------
 
 func test_fresh_player_data_renders_starter_bag_and_equipment_silhouette() -> void:
-	# A fresh PlayerDataResource seeded via reset_to_new_game() (3x sample_leaf
-	# + 1x sample_boots, see _seed_starter_content()) must render as the
-	# starter bag on the right page and the equipment silhouette on the left
-	# page when the tab populates both. before_each() already performed the
-	# reset_to_new_game() seeding; this test asserts the rendered output.
+	# A fresh PlayerDataResource seeded via reset_to_new_game() must render as
+	# the starter bag on the right page and the equipment silhouette on the
+	# left page when the tab populates both. before_each() already performed
+	# the reset_to_new_game() seeding; this test asserts the rendered output.
+	#
+	# Issue #30 note: the starter bag's equippable item changed from
+	# "Old Boots"/BOOTS to a different retained slot, so we don't assert its
+	# exact id or slot — only that SOME equippable item exists and that its
+	# slot is one of the RETAINED slots (not BOOTS/GLOVES, which no longer
+	# exist). sample_leaf (not equippable) is still asserted exactly, since
+	# foraging/starter-ingredient content is untouched by this issue.
 	var packed: PackedScene = load(INVENTORY_TAB_SCENE) as PackedScene
 	var tab: InventoryTab = add_child_autofree(packed.instantiate() as InventoryTab)
 	var left_parent: Control = add_child_autofree(Control.new())
@@ -250,33 +263,44 @@ func test_fresh_player_data_renders_starter_bag_and_equipment_silhouette() -> vo
 	tab.populate_left(left_parent)
 	tab.populate_right(right_parent)
 
-	# Left page: 6 equipment slots regardless of what's equipped.
+	# Left page: 4 equipment slots regardless of what's equipped (issue #30
+	# shrinks this from 6 to 4 — BOOTS/GLOVES removed, NECKLACE renamed BELT).
 	var slots: Array[Node] = _find_by_class(left_parent, "EquipmentSlot")
-	assert_eq(slots.size(), 6,
-			"populate_left() must render all 6 equipment slots for a fresh starter game")
+	assert_eq(slots.size(), 4,
+			"populate_left() must render all 4 equipment slots for a fresh starter game (issue #30)")
 
-	# Right page: exactly 2 rows (sample_leaf x3, sample_boots x1).
+	# Right page: sample_leaf must still be present with its usual count, plus
+	# whatever equippable starter item exists.
+	var retained_slots: Array = [
+		ItemData.EquipSlot.BACKPACK,
+		ItemData.EquipSlot.CLOTHING,
+		ItemData.EquipSlot.GOGGLES,
+		ItemData.EquipSlot.BELT,
+	]
+
 	var rows: Array[Node] = _find_by_class(right_parent, "InventoryRow")
 	var leaf_row: InventoryRow = null
-	var boots_row: InventoryRow = null
+	var equippable_row: InventoryRow = null
 	for node in rows:
 		var row: InventoryRow = node as InventoryRow
 		if row._stack == null:
 			continue
 		if row._stack.item_id == &"sample_leaf":
 			leaf_row = row
-		elif row._stack.item_id == &"sample_boots":
-			boots_row = row
+		elif row._stack.item != null and row._stack.item.equip_slot != ItemData.EquipSlot.NONE:
+			equippable_row = row
 
 	assert_not_null(leaf_row, "the starter bag must render a sample_leaf row")
-	assert_not_null(boots_row, "the starter bag must render a sample_boots row")
+	assert_not_null(equippable_row,
+			"the starter bag must render an equippable item row (issue #30 changes its exact identity)")
 	if leaf_row != null:
 		assert_eq(leaf_row._stack.count, 3, "the starter sample_leaf row must show count 3")
-	if boots_row != null:
-		assert_eq(boots_row._stack.count, 1, "the starter sample_boots row must show count 1")
+	if equippable_row != null:
+		assert_true(retained_slots.has(equippable_row._stack.item.equip_slot),
+				"the starter equippable item must use a RETAINED slot (BACKPACK/CLOTHING/GOGGLES/BELT), not a removed one (issue #30)")
 
 	# Weight header must reflect the seeded bag's non-zero weight
-	# (3 x 0.5 + 1 x 0.8 = 2.3 kg per _seed_starter_content()).
+	# (3 x 0.5 + 1 x 0.3 = 1.8 kg per _seed_starter_content()).
 	var weight_labels: Array[Label] = _find_labels(right_parent,
 			func(lbl: Label) -> bool: return lbl.text.begins_with("Weight:"))
 	assert_true(weight_labels.size() >= 1,

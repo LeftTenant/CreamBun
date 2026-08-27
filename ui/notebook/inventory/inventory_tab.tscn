@@ -24,13 +24,9 @@ text = "Equipment"
 
 [node name="Slot_CLOTHING" parent="LeftPage" instance=ExtResource("2")]
 
-[node name="Slot_BOOTS" parent="LeftPage" instance=ExtResource("2")]
-
-[node name="Slot_GLOVES" parent="LeftPage" instance=ExtResource("2")]
-
 [node name="Slot_GOGGLES" parent="LeftPage" instance=ExtResource("2")]
 
-[node name="Slot_NECKLACE" parent="LeftPage" instance=ExtResource("2")]
+[node name="Slot_BELT" parent="LeftPage" instance=ExtResource("2")]
 
 [node name="RightPage" type="VBoxContainer" parent="."]
 offset_left = 136.0

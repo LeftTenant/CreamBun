@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://vhhioh2g3hq4"
-path="res://.godot/imported/inventory_actions_step_04_leaf_selected.png-4976b3b26dcf58619b7201b22683155d.ctex"
+uid="uid://0hnlv7rusli17"
+path="res://.godot/imported/inventory_actions_step_02_scarf_selected.png-ce9dd6f35b5364edf9004437b8073290.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://tests/e2e/notebook/screenshots/inventory_actions_step_04_leaf_selected.png"
-dest_files=["res://.godot/imported/inventory_actions_step_04_leaf_selected.png-4976b3b26dcf58619b7201b22683155d.ctex"]
+source_file="res://tests/e2e/notebook/screenshots/inventory_actions_step_02_scarf_selected.png"
+dest_files=["res://.godot/imported/inventory_actions_step_02_scarf_selected.png-ce9dd6f35b5364edf9004437b8073290.ctex"]
 
 [params]
 
