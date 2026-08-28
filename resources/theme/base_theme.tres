@@ -1,6 +1,32 @@
-[gd_resource type="Theme" format=3 uid="uid://bg4c10ok8o3vy"]
+[gd_resource type="Theme" load_steps=4 format=3 uid="uid://bg4c10ok8o3vy"]
 
 [ext_resource type="FontFile" uid="uid://ds600me37x61h" path="res://resources/theme/fonts/monogram-extended.ttf" id="1_monogram"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
+bg_color = Color(0.95686275, 0.9137255, 0.84705883, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.16470589, 0.1254902, 0.10980392, 1)
+corner_radius_top_left = 0
+corner_radius_top_right = 0
+corner_radius_bottom_right = 0
+corner_radius_bottom_left = 0
+anti_aliasing = false
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel_container"]
+bg_color = Color(0.8901961, 0.83137256, 0.7411765, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.16470589, 0.1254902, 0.10980392, 1)
+corner_radius_top_left = 0
+corner_radius_top_right = 0
+corner_radius_bottom_right = 0
+corner_radius_bottom_left = 0
+anti_aliasing = false
 
 [resource]
 default_font = ExtResource("1_monogram")
@@ -16,3 +42,6 @@ default_font_size = 8
 /colors/success = Color(0.43529412, 0.56078434, 0.2901961, 1)
 Heading/base_type = &"Label"
 Heading/font_sizes/font_size = 16
+Panel/styles/panel = SubResource("StyleBoxFlat_panel")
+PanelContainer/styles/panel = SubResource("StyleBoxFlat_panel_container")
+Label/colors/font_color = Color(0.23137255, 0.18431373, 0.16470589, 1)

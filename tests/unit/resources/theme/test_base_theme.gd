@@ -135,6 +135,205 @@ func test_palette_has_exactly_nine_colors_with_no_extras() -> void:
 
 
 # ---------------------------------------------------------------------------
+# Issue #47 — per-control-type application of the palette
+# ---------------------------------------------------------------------------
+# The nine §4 colors above are stored as generic type-"" named colors, which
+# scripts can read via Theme.get_color(name, "") but which Controls do NOT
+# pick up through normal theme cascade (Control.get_theme_color/get_theme_stylebox
+# resolve against the node's own class name, e.g. "Panel"/"Label"/"Button" —
+# never against the empty type). Issue #47 was exactly this gap: Book (a Panel)
+# rendered with Godot's built-in dark default style, and un-overridden Label
+# text rendered engine-default white, because no Panel/Label type entries
+# existed. The fix added concrete per-type entries for Panel, PanelContainer,
+# and Label; these tests are the regression guard for those entries.
+#
+# Button theming (styleboxes + font-color states) is deliberately deferred to
+# issue #48 — setting Button/colors/font_color alone without matching
+# styleboxes was a legibility regression (ink text on Godot's still-dark
+# default button background), so no Button coverage lives here yet.
+
+const EXPECTED_PAPER_BG: Color = Color(0.95686275, 0.9137255, 0.84705883, 1)
+const EXPECTED_PAPER_BG_SHADOW: Color = Color(0.8901961, 0.83137256, 0.7411765, 1)
+const EXPECTED_FRAME_LINE: Color = Color(0.16470589, 0.1254902, 0.10980392, 1)
+const EXPECTED_INK: Color = Color(0.23137255, 0.18431373, 0.16470589, 1)
+
+
+func test_panel_type_has_panel_stylebox_with_paper_bg_background() -> void:
+	var theme: Theme = load(THEME_PATH)
+
+	# Panel's built-in style slot is named "panel" under the "Panel" type.
+	# https://docs.godotengine.org/en/stable/classes/class_theme.html#class-theme-method-has-stylebox
+	assert_true(theme.has_stylebox("panel", "Panel"),
+			"theme should define a 'panel' stylebox for the 'Panel' type")
+	if not theme.has_stylebox("panel", "Panel"):
+		return
+
+	var box: StyleBox = theme.get_stylebox("panel", "Panel")
+	assert_true(box is StyleBoxFlat,
+			"Panel's 'panel' stylebox should be a StyleBoxFlat")
+	if not (box is StyleBoxFlat):
+		return
+
+	var flat: StyleBoxFlat = box as StyleBoxFlat
+	assert_eq(flat.bg_color, EXPECTED_PAPER_BG,
+			"Panel stylebox bg_color should equal the theme's paper_bg color exactly (got %s)" % flat.bg_color)
+
+
+func test_panel_stylebox_has_frame_line_border() -> void:
+	var theme: Theme = load(THEME_PATH)
+
+	if not theme.has_stylebox("panel", "Panel"):
+		fail_test("theme should define a 'panel' stylebox for the 'Panel' type")
+		return
+
+	var flat: StyleBoxFlat = theme.get_stylebox("panel", "Panel") as StyleBoxFlat
+	assert_not_null(flat, "Panel's 'panel' stylebox should be a StyleBoxFlat")
+	if flat == null:
+		return
+
+	assert_eq(flat.border_color, EXPECTED_FRAME_LINE,
+			"Panel stylebox border_color should equal the theme's frame_line color exactly (got %s)" % flat.border_color)
+
+	# A border color with zero width is invisible — require an actual border.
+	var has_border_width: bool = (flat.border_width_left > 0 or flat.border_width_top > 0
+			or flat.border_width_right > 0 or flat.border_width_bottom > 0)
+	assert_true(has_border_width,
+			"Panel stylebox should have a non-zero border width on at least one side")
+
+
+func test_panel_stylebox_has_zero_corner_radius() -> void:
+	var theme: Theme = load(THEME_PATH)
+
+	if not theme.has_stylebox("panel", "Panel"):
+		fail_test("theme should define a 'panel' stylebox for the 'Panel' type")
+		return
+
+	var flat: StyleBoxFlat = theme.get_stylebox("panel", "Panel") as StyleBoxFlat
+	assert_not_null(flat, "Panel's 'panel' stylebox should be a StyleBoxFlat")
+	if flat == null:
+		return
+
+	# Pixel-crisp per the fix plan: no rounded corners on any side.
+	assert_eq(flat.corner_radius_top_left, 0, "Panel stylebox corner_radius_top_left should be 0")
+	assert_eq(flat.corner_radius_top_right, 0, "Panel stylebox corner_radius_top_right should be 0")
+	assert_eq(flat.corner_radius_bottom_right, 0, "Panel stylebox corner_radius_bottom_right should be 0")
+	assert_eq(flat.corner_radius_bottom_left, 0, "Panel stylebox corner_radius_bottom_left should be 0")
+
+
+# ---------------------------------------------------------------------------
+# PanelContainer — issue #47 review follow-up
+# ---------------------------------------------------------------------------
+# PanelContainer does NOT inherit Panel's stylebox via Godot's theme type
+# chain (PanelContainer -> Container -> Control, never through Panel), so it
+# needs its own explicit "panel" stylebox entry or it falls through to the
+# engine's dark rounded default. equipment_slot.tscn's IconFrame nodes and
+# ui/notebook/shared/page_panel.tscn both use PanelContainer, which is why
+# this type needed its own coverage once the review caught the gap.
+#
+# The PanelContainer stylebox uses paper_bg_shadow (a slightly darker cream)
+# rather than paper_bg, so nested "boxes on a page" (e.g. equipment icon
+# frames sitting on the page background) read as a visually distinct layer.
+
+func test_panel_container_type_has_panel_stylebox_with_paper_bg_shadow_background() -> void:
+	var theme: Theme = load(THEME_PATH)
+
+	assert_true(theme.has_stylebox("panel", "PanelContainer"),
+			"theme should define a 'panel' stylebox for the 'PanelContainer' type")
+	if not theme.has_stylebox("panel", "PanelContainer"):
+		return
+
+	var box: StyleBox = theme.get_stylebox("panel", "PanelContainer")
+	assert_true(box is StyleBoxFlat,
+			"PanelContainer's 'panel' stylebox should be a StyleBoxFlat")
+	if not (box is StyleBoxFlat):
+		return
+
+	var flat: StyleBoxFlat = box as StyleBoxFlat
+	assert_eq(flat.bg_color, EXPECTED_PAPER_BG_SHADOW,
+			"PanelContainer stylebox bg_color should equal the theme's paper_bg_shadow color exactly (got %s)" % flat.bg_color)
+
+
+func test_panel_container_stylebox_has_frame_line_border() -> void:
+	var theme: Theme = load(THEME_PATH)
+
+	if not theme.has_stylebox("panel", "PanelContainer"):
+		fail_test("theme should define a 'panel' stylebox for the 'PanelContainer' type")
+		return
+
+	var flat: StyleBoxFlat = theme.get_stylebox("panel", "PanelContainer") as StyleBoxFlat
+	assert_not_null(flat, "PanelContainer's 'panel' stylebox should be a StyleBoxFlat")
+	if flat == null:
+		return
+
+	assert_eq(flat.border_color, EXPECTED_FRAME_LINE,
+			"PanelContainer stylebox border_color should equal the theme's frame_line color exactly (got %s)" % flat.border_color)
+
+	var has_border_width: bool = (flat.border_width_left > 0 or flat.border_width_top > 0
+			or flat.border_width_right > 0 or flat.border_width_bottom > 0)
+	assert_true(has_border_width,
+			"PanelContainer stylebox should have a non-zero border width on at least one side")
+
+
+func test_panel_container_stylebox_has_zero_corner_radius() -> void:
+	var theme: Theme = load(THEME_PATH)
+
+	if not theme.has_stylebox("panel", "PanelContainer"):
+		fail_test("theme should define a 'panel' stylebox for the 'PanelContainer' type")
+		return
+
+	var flat: StyleBoxFlat = theme.get_stylebox("panel", "PanelContainer") as StyleBoxFlat
+	assert_not_null(flat, "PanelContainer's 'panel' stylebox should be a StyleBoxFlat")
+	if flat == null:
+		return
+
+	assert_eq(flat.corner_radius_top_left, 0, "PanelContainer stylebox corner_radius_top_left should be 0")
+	assert_eq(flat.corner_radius_top_right, 0, "PanelContainer stylebox corner_radius_top_right should be 0")
+	assert_eq(flat.corner_radius_bottom_right, 0, "PanelContainer stylebox corner_radius_bottom_right should be 0")
+	assert_eq(flat.corner_radius_bottom_left, 0, "PanelContainer stylebox corner_radius_bottom_left should be 0")
+
+
+func test_panel_and_panel_container_styleboxes_have_anti_aliasing_disabled() -> void:
+	var theme: Theme = load(THEME_PATH)
+
+	# anti_aliasing defaults to true on StyleBoxFlat, which softens the 1px
+	# border with sub-pixel blending — at odds with the pixel-crisp look the
+	# rest of the theme aims for (§4). Both boxes must opt out explicitly.
+	# https://docs.godotengine.org/en/stable/classes/class_styleboxflat.html#class-styleboxflat-property-anti-aliasing
+	assert_true(theme.has_stylebox("panel", "Panel"),
+			"theme should define a 'panel' stylebox for the 'Panel' type")
+	if theme.has_stylebox("panel", "Panel"):
+		var panel_flat: StyleBoxFlat = theme.get_stylebox("panel", "Panel") as StyleBoxFlat
+		assert_not_null(panel_flat, "Panel's 'panel' stylebox should be a StyleBoxFlat")
+		if panel_flat != null:
+			assert_false(panel_flat.anti_aliasing, "Panel stylebox anti_aliasing should be false")
+
+	assert_true(theme.has_stylebox("panel", "PanelContainer"),
+			"theme should define a 'panel' stylebox for the 'PanelContainer' type")
+	if theme.has_stylebox("panel", "PanelContainer"):
+		var panel_container_flat: StyleBoxFlat = theme.get_stylebox("panel", "PanelContainer") as StyleBoxFlat
+		assert_not_null(panel_container_flat, "PanelContainer's 'panel' stylebox should be a StyleBoxFlat")
+		if panel_container_flat != null:
+			assert_false(panel_container_flat.anti_aliasing, "PanelContainer stylebox anti_aliasing should be false")
+
+
+func test_label_type_has_default_font_color_ink() -> void:
+	var theme: Theme = load(THEME_PATH)
+
+	# Per-type default colors live under their own type bucket ("Label"), not
+	# under the "" bucket the nine named palette roles use — that distinction
+	# is exactly what keeps test_palette_has_exactly_nine_colors_with_no_extras
+	# green.
+	assert_true(theme.has_color("font_color", "Label"),
+			"theme should define a default 'font_color' for the 'Label' type")
+	if not theme.has_color("font_color", "Label"):
+		return
+
+	var actual: Color = theme.get_color("font_color", "Label")
+	assert_eq(actual, EXPECTED_INK,
+			"Label default font_color should equal the theme's ink color exactly (got %s)" % actual)
+
+
+# ---------------------------------------------------------------------------
 # "Heading" Label type variation
 # ---------------------------------------------------------------------------
 

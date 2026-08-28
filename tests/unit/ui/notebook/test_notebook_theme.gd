@@ -64,6 +64,13 @@ const EXPECTED_FONT_PATH: String = "res://resources/theme/fonts/monogram-extende
 ## Expected default font size from §3 of the design doc (body/default = 8px).
 const EXPECTED_FONT_SIZE: int = 8
 
+## Issue #47 — exact float values from base_theme.tres's "" type color list
+## (see test_base_theme.gd), used to check live theme cascade resolves the
+## same per-control-type entries the resource-level tests check directly.
+const EXPECTED_PAPER_BG: Color = Color(0.95686275, 0.9137255, 0.84705883, 1)
+const EXPECTED_PAPER_BG_SHADOW: Color = Color(0.8901961, 0.83137256, 0.7411765, 1)
+const EXPECTED_INK: Color = Color(0.23137255, 0.18431373, 0.16470589, 1)
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -316,3 +323,159 @@ func test_tab_scene_root_is_not_required_to_carry_theme() -> void:
 			"No assertion about the tab scene root's theme is required — "
 			+ "the cascade comes from the notebook ancestor after reparenting "
 			+ "(proved by test_reparented_tab_content_resolves_base_theme_font_and_size).")
+
+
+# ---------------------------------------------------------------------------
+# Test 5 — Issue #47: Book resolves the paper_bg Panel stylebox via cascade
+# ---------------------------------------------------------------------------
+# base_theme.tres was originally wired onto Book as a Theme *resource* only
+# (test 2 above proves that assignment) without a matching Panel/styles/panel
+# entry for Book to resolve — Book fell through to the engine's built-in dark
+# default Panel style instead of the documented paper background. This test
+# drives the real runtime lookup Godot uses to paint the Panel, and is the
+# regression guard for the fix that added that stylebox.
+
+func test_book_panel_resolves_paper_bg_stylebox_via_cascade() -> void:
+	var notebook: Notebook = _make_notebook()
+
+	var left_page: Control = notebook.get_node_or_null("Book/Pages/LeftPage") as Control
+	assert_not_null(left_page, "notebook.tscn must contain a node at path Book/Pages/LeftPage")
+	if left_page == null:
+		return
+
+	var cascade_ancestor: Control = _find_theme_ancestor(left_page)
+	assert_not_null(cascade_ancestor,
+			"A Control ancestor of LeftPage must have 'theme' set (the cascade point)")
+	if cascade_ancestor == null:
+		return
+
+	# get_theme_stylebox("panel", "") resolves against the node's own class
+	# (Panel) when the type argument is the default empty string — the same
+	# resolution Godot performs when actually painting this Panel on screen.
+	# https://docs.godotengine.org/en/stable/classes/class_control.html#class-control-method-get-theme-stylebox
+	var resolved: StyleBox = cascade_ancestor.get_theme_stylebox("panel", "")
+	assert_not_null(resolved,
+			"Book (a Panel) must resolve a 'panel' stylebox via theme cascade")
+	if resolved == null:
+		return
+
+	assert_true(resolved is StyleBoxFlat,
+			"Book's resolved 'panel' stylebox should be a StyleBoxFlat, not the engine's built-in default Panel style")
+	if not (resolved is StyleBoxFlat):
+		return
+
+	var flat: StyleBoxFlat = resolved as StyleBoxFlat
+	assert_eq(flat.bg_color, EXPECTED_PAPER_BG,
+			("Book's resolved 'panel' stylebox bg_color should equal paper_bg (%s) — got %s. "
+			+ "This is the documented cream page background; a mismatch here means Book is "
+			+ "still rendering the engine's default dark Panel style."
+			) % [EXPECTED_PAPER_BG, flat.bg_color])
+
+
+# ---------------------------------------------------------------------------
+# Test 6 — Issue #47: reparented, un-overridden Label text resolves ink
+# ---------------------------------------------------------------------------
+# WeightLabel (RightPage) is a plain Label node in inventory_tab.tscn with NO
+# per-node font_color override — unlike SlotLabel/ItemNameLabel in
+# equipment_slot.tscn, which already hardcode ink/ink_muted and would pass
+# this assertion even with the bug present. WeightLabel is the honest proof
+# that the *default* cascade (not a per-node override) delivers ink, matching
+# base_theme.tres's Label/colors/font_color addition.
+#
+# Button theming (an equivalent EquipButton test) is deliberately out of
+# scope here — deferred to issue #48 along with Button styleboxes; see
+# test_base_theme.gd's issue #47 section header for the rationale.
+
+func test_reparented_label_with_no_override_resolves_default_font_color_ink() -> void:
+	PlayerData._load_resource(PlayerDataResource.new())
+
+	var notebook: Notebook = _make_notebook()
+	notebook._switch_tab(Notebook.NotebookTab.INVENTORY)
+
+	# populate_right() nests InventoryTab's own "RightPage" VBoxContainer
+	# inside notebook's "RightPage" Control (Book/Pages/RightPage/RightPage/...),
+	# so a recursive find_child() is used rather than a hardcoded depth — same
+	# robustness reasoning as _find_theme_ancestor()/_find_first_label() above:
+	# this test should not break if that nesting depth ever changes.
+	var right_page: Control = notebook.get_node_or_null("Book/Pages/RightPage") as Control
+	assert_not_null(right_page, "notebook.tscn must contain a node at path Book/Pages/RightPage")
+	if right_page == null:
+		return
+
+	var weight_label: Label = right_page.find_child("WeightLabel", true, false) as Label
+	assert_not_null(weight_label,
+			"RightPage must contain a WeightLabel after _switch_tab(INVENTORY) — "
+			+ "InventoryTab.populate_right() reparents RightPage's static chrome, including WeightLabel")
+	if weight_label == null:
+		return
+
+	# get_theme_color("font_color", "") resolves against the node's own class
+	# (Label) when theme_type is the default empty string — the same
+	# resolution Godot performs when actually drawing this Label's text.
+	# https://docs.godotengine.org/en/stable/classes/class_control.html#class-control-method-get-theme-color
+	var resolved: Color = weight_label.get_theme_color("font_color", "")
+	assert_eq(resolved, EXPECTED_INK,
+			("WeightLabel has no per-node font_color override, so it must resolve the theme's default "
+			+ "Label font_color (ink, %s) via cascade — got %s. A mismatch (commonly engine-default "
+			+ "white, Color(1,1,1,1)) means base_theme.tres has no Label/colors/font_color entry."
+			) % [EXPECTED_INK, resolved])
+
+
+# ---------------------------------------------------------------------------
+# Test 7 — Issue #47 review follow-up: reparented PanelContainer resolves
+# the paper_bg_shadow stylebox via cascade, not a per-node override
+# ---------------------------------------------------------------------------
+# PanelContainer does not inherit Panel's stylebox through Godot's theme type
+# chain (PanelContainer -> Container -> Control, never through Panel), so it
+# needed its own base_theme.tres entry — added alongside this test during
+# code review. IconFrame (a PanelContainer, child of each EquipmentSlot in
+# equipment_slot.tscn) has no per-node stylebox override, so it is the honest
+# proof that the cascade — not a per-node override — delivers the themed box.
+# Reached the same way test 6 reaches WeightLabel: drive _switch_tab(INVENTORY)
+# so InventoryTab.populate_left() reparents the real EquipmentSlot nodes into
+# Book/Pages/LeftPage, then locate IconFrame recursively underneath.
+
+func test_reparented_panel_container_with_no_override_resolves_default_stylebox() -> void:
+	PlayerData._load_resource(PlayerDataResource.new())
+
+	var notebook: Notebook = _make_notebook()
+	notebook._switch_tab(Notebook.NotebookTab.INVENTORY)
+
+	var left_page: Control = notebook.get_node_or_null("Book/Pages/LeftPage") as Control
+	assert_not_null(left_page, "notebook.tscn must contain a node at path Book/Pages/LeftPage")
+	if left_page == null:
+		return
+
+	# find_child(..., true, false) searches recursively; owned=false is
+	# required — populate_left() reparents EquipmentSlot nodes that LeftPage
+	# does not own, and the default owned=true would prune them. IconFrame
+	# lives at EquipmentSlot/HBox/IconFrame inside each of the four equipment
+	# slots populate_left() reparents into LeftPage.
+	var icon_frame: PanelContainer = left_page.find_child("IconFrame", true, false) as PanelContainer
+	assert_not_null(icon_frame,
+			"LeftPage must contain an EquipmentSlot IconFrame after _switch_tab(INVENTORY) — "
+			+ "InventoryTab.populate_left() reparents the four EquipmentSlot nodes, each with an IconFrame PanelContainer child")
+	if icon_frame == null:
+		return
+
+	# get_theme_stylebox("panel", "") resolves against the node's own class
+	# (PanelContainer) when the type argument is the default empty string —
+	# the same resolution Godot performs when actually painting this box.
+	# https://docs.godotengine.org/en/stable/classes/class_control.html#class-control-method-get-theme-stylebox
+	var resolved: StyleBox = icon_frame.get_theme_stylebox("panel", "")
+	assert_not_null(resolved,
+			"IconFrame (a PanelContainer) must resolve a 'panel' stylebox via theme cascade")
+	if resolved == null:
+		return
+
+	assert_true(resolved is StyleBoxFlat,
+			"IconFrame's resolved 'panel' stylebox should be a StyleBoxFlat, not the engine's built-in default PanelContainer style")
+	if not (resolved is StyleBoxFlat):
+		return
+
+	var flat: StyleBoxFlat = resolved as StyleBoxFlat
+	assert_eq(flat.bg_color, EXPECTED_PAPER_BG_SHADOW,
+			("IconFrame's resolved 'panel' stylebox bg_color should equal paper_bg_shadow (%s) — got %s. "
+			+ "IconFrame has no per-node stylebox override, so a mismatch means base_theme.tres has no "
+			+ "PanelContainer/styles/panel entry (or it does not cascade)."
+			) % [EXPECTED_PAPER_BG_SHADOW, flat.bg_color])

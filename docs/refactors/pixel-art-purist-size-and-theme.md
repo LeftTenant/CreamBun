@@ -290,6 +290,18 @@ Notes:
   reads the same whether the player is in the notebook or a dialog.
 - This is the **starter** set. Adding a dialog box later means reusing these roles, not
   inventing new ones — extend the palette only when a genuinely new role appears.
+- The `/colors/*` entries above are named **roles** — they exist so a value can be looked up or
+  retuned by name, but declaring a color role does not by itself make anything render with it.
+  Each Control type needs its own concrete theme property pointing at a role before the palette
+  is visible: `Panel/styles/panel` and `PanelContainer/styles/panel` (both `StyleBoxFlat`
+  sub-resources) apply `paper_bg` / `paper_bg_shadow` as backgrounds with a `frame_line` border,
+  and `Label/colors/font_color` applies `ink` as the default text color. `PanelContainer` needs
+  its **own** stylebox entry — Godot's theme type inheritance chain is
+  `PanelContainer → Container → Control`, which never passes through `Panel`, so a
+  `Panel/styles/panel` entry alone does not theme `PanelContainer` nodes (e.g. the equipment
+  slot icon frames, `page_panel.tscn`). `Button` theming (styleboxes and all font states) is
+  intentionally **not yet applied** — see issue #48 — because Button's built-in dark stylebox
+  needs matching stylebox work before a font color change would stay legible.
 
 ---
 
