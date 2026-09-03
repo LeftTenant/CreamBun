@@ -22,6 +22,27 @@ never-null guarantee.
 This is an approved interim placement (to move to a main-menu New/Continue flow later); don't
 flag it as a layering violation.
 
+## Enums reachable from `PlayerDataResource` are a save schema
+
+Anything `@export`ed on `PlayerDataResource` or its sub-resources is written to
+`user://slots/slot_*.tres` by `ResourceSaver`, and **enums serialize as raw ints**. Two live
+examples in `Inventory`: `equipped: Dictionary` is *keyed* by `ItemData.EquipSlot`, and each
+stored `ItemData.equip_slot` is itself an int. So **reordering or removing a member of any
+enum used as an exported value or a Dictionary key is a save-schema change**, even though
+nothing in the source looks like a file format.
+
+Failure mode when the numbering shifts: old keys silently re-alias (an item saved under the
+old slot 3 renders in whatever slot is 3 now), and keys past the new maximum become orphans —
+`inventory_tab.gd`'s `SLOT_NODE_NAMES` never resolves them, so the item is invisible in the
+notebook and can never be unequipped. `equipment_slot.gd::_slot_name()` degrades to `"—"`
+rather than erroring, so nothing fails loudly.
+
+The migration hooks are `PlayerDataResource.CURRENT_VERSION` (+ the `save_version` stamp) and
+`rehydrate()`, which is still a documented no-op. **How to apply:** on any enum change under
+`resources/data/`, ask whether `CURRENT_VERSION` should be bumped — leaving it means pre- and
+post-change files are indistinguishable forever, foreclosing a future migration. Slot 1
+(`BACKPACK`) is load-bearing for `Inventory.capacity()`; keep it at 1.
+
 ## Resource caching / persistence facts
 
 - **`ResourceSaver.save(res, path)` mutates `res.resource_path = path`** as a side effect. Since

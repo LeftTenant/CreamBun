@@ -1,6 +1,6 @@
 ---
 name: gotcha-gut-helper-silent-passes
-description: Four ways a GUT test silently passes — a fetch helper returning a failed cast without asserting, a "+" concatenated assert message whose % binds to the wrong literal, a sentinel return value that a scene could legitimately hold, and a parse error that drops the whole script while the run still reports "All tests passed!"
+description: Six ways a GUT test silently passes — a failed cast swallowed by a fetch helper, "%" binding to the wrong literal in a concatenated message, a reachable sentinel return, a parse error that drops the whole script, leftover RED-phase Enum.get() scaffolding, and a bare `if resource.has_x()` guard that goes Risky-but-passing
 type: project
 ---
 
@@ -79,6 +79,43 @@ own script, not to untype everything.
 project `class_name`, check (a) the cast isn't swallowed — see pattern 1 — and (b) no test in
 that file is *about* the existence of that `class_name`. To prove a guard test still catches its
 regression, mutate the source and re-run; do not reason about it.
+
+## 5. TDD-era `Enum.get("NAME", -1)` scaffolding left in place after the fix lands
+
+When tests are written RED-first against an identifier that does not exist yet, the house
+workaround is a Dictionary lookup with a sentinel — `ItemData.EquipSlot.get("BELT", -1)` — because
+a direct `ItemData.EquipSlot.BELT` reference would be a parse error and silently drop the whole
+script (pattern 4). That is correct *while red*. Once the enum member exists, the same line is a
+vacuous assertion: `inv.unequip(EquipSlot.get("BELT", -1))` asserting `null` passes identically
+whether BELT is `4` or missing (`-1` is just an empty slot), so the guard no longer guards.
+
+The tell is the comment, which stays in pre-fix tense: "BELT does not exist in the enum yet",
+"is being changed independently of this file", "FAILS pre-fix". Those phrases are also the
+cheapest grep for finding the scaffolding.
+
+**How to apply:** on the GREEN review pass of a TDD change, grep the diff for `.get("` on an enum
+and for pre-fix tense in comments. Convert each back to a direct member reference (`EquipSlot.BELT`)
+unless the file is *specifically* the existence guard for that member — in which case it belongs
+in its own script per pattern 4, with an explicit `assert_true(Enum.has("BELT"))`.
+
+## 6. An `if resource.has_x(...)` presence guard with no `assert_true` on the presence
+
+A test whose *whole body* is wrapped in `if theme.has_stylebox("panel", "Panel"):` (or
+`has_color`, `has_font`, `has_meta`, …) asserts nothing when the entry is missing. GUT marks it
+`[Risky]: <name> did not assert` — but **Risky is not Failing**: the test is still counted in
+`Passing Tests` and the run still exits 0. So deleting the very theme entry the test is about
+turns it green-with-a-yellow-line, which no CI gate catches.
+
+Verified on `tests/unit/resources/theme/test_base_theme.gd`'s
+`test_panel_and_panel_container_styleboxes_have_anti_aliasing_disabled`: removing both
+`Panel/styles/panel` and `PanelContainer/styles/panel` from `base_theme.tres` made 10 sibling
+tests fail and that one go Risky-but-passing.
+
+**How to apply:** the sibling tests in the same file show the correct shape — `assert_true(
+theme.has_stylebox(...), "...")` *then* `if not theme.has_stylebox(...): return`. Whenever a test
+guards a resource entry behind a bare `if …has_*()`, require the presence itself be asserted.
+Mutating the resource and re-running is the cheap proof, and the `Risky` line in GUT's per-test
+output is the tell.
 
 ## Related
 

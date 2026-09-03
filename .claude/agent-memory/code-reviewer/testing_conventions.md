@@ -26,9 +26,21 @@ they only surface by comparing against sibling test files.
   Universal in this repo, including for files with no external callers.
 - **Long header docstring** is the norm: what/why, the issue or slice reference, the GUT
   link, and both editor and `-gselect=` CLI run instructions.
-- **Test plans live at `docs/features/<area>/<name>-test-plan.md`** as `- [ ]` / `- [x]`
-  checklists grouped by `### E2E` / `### Integration` / `### Unit`. Boxes are ticked once
-  the corresponding test exists and passes — an unticked box on a delivered test is stale.
+- **Test plans live in two places depending on the workflow.** Feature slices use
+  `docs/features/<area>/<name>-test-plan.md`; the `/fix-issue` flow commits either
+  `tests/<suite>/<area>/test_plan_issue_<N>.md` (e.g.
+  `tests/integration/notebook/test_plan_issue_26.md`) or, when the fix is unit-only /
+  spans no single suite, `docs/features/<area>/issue-<N>-<slug>-test-plan.md` (e.g.
+  `docs/features/testing-sandbox/issue-41-mouse-input-test-plan.md`). Both forms are in use
+  for issue fixes — don't flag the location, but *do* check the plan file is `git add`ed
+  (a plan left untracked is the common miss). All are `- [ ]` / `- [x]` checklists
+  grouped by `### E2E` / `### Integration` / `### Unit`. Boxes are ticked once the
+  corresponding test exists and passes — an unticked box on a delivered test is stale.
+  The issue plans are *authored in the red phase*, so before commit they also need their
+  "not edited by this pass" / "flagged, not fixed by this pass" / "Expected: tests above FAIL
+  against current code" framing rewritten past-tense. `test_plan_issue_26.md` is the
+  correctly-finalised exemplar to diff against. See [[gotcha_gut_helper_silent_passes]] §5
+  for the matching pre-fix-tense problem inside the `.gd` test files.
 - **"RED STATE, EXPECTED" header sections go stale.** The TDD workflow here writes the test
   first, so new test files often carry a header paragraph saying the implementation "does not
   exist yet / this script will not parse". Once the implementation lands that paragraph is
@@ -48,6 +60,13 @@ they only surface by comparing against sibling test files.
   that moves a node changes those paths and silently breaks the scenarios — GUT will still
   be green. **Grep `tests/e2e/` for the affected node names in every review of a structural
   scene change** and require the paths be updated in the same slice.
+  The same applies to **content**, not just node paths: the scenarios name concrete seeded
+  items ("`sample_boots` — Old Boots, weight 0.8"), assert specific UI element counts, and
+  compare against committed `screenshots/*.png`. Any change to
+  `PlayerDataResource._seed_starter_content()` or to how many widgets a page renders
+  invalidates both the scenario text and every reference screenshot for it. "Full
+  unit+integration suite passes" is not evidence the e2e suite survived — it runs under the
+  testing-sandbox MCP server, not GUT. See [[vocabulary-rename-stragglers]].
 - **Textual guards read a specific file.** `test_tile_geometry.gd` scans one scene's raw text
   (for a banished placeholder texture name, and to check every `ext_resource` path exists).
   Its subject has already moved once — `world/world.tscn` → `world/areas/meadow.tscn` when the
