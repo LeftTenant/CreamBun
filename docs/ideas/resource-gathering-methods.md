@@ -19,7 +19,8 @@ straightforward, some are more whimsical — include them anyway and cut later.
 ## Living things, gently
 
 - **Beekeeping** — tend a hive for honey and wax; smoke or calm the bees
-  rather than fight them off.
+  rather than fight them off; secondary effect—pollenators can improve the
+  speed or quantity of fruiting from plants in the nearby area
 - **Silk/fiber insects** — silkworms, spiders (if not too creepy-crawly for
   the tone) that produce thread over time in a kept enclosure.
 - **Sap and resin tapping** — tap trees for syrup or pine resin, similar to
@@ -31,10 +32,9 @@ straightforward, some are more whimsical — include them anyway and cut later.
   that sniffs out or fetches hidden resources you couldn't find alone.
 - **Wild animal gifting** — befriend a wild animal (fox, crow) to a high
   enough affinity and it periodically "gifts" you shiny or rare trinkets.
-- **Nesting boxes / birdhouses** — place structures in the world that
-  passively yield feathers or eggs on a timer once occupied.
-- **Milking, shearing, egg collecting** — your original idea, worth keeping
-  explicit: livestock or tamed wildlife tended at a farm/coop.
+- **Gardening** - plant herbs, vegetables, flowers and pick them then process
+  picked items to derive more ingredients
+  - Could include a greenhouse for expanding growing season
 
 ## Terrain and environment
 
@@ -42,10 +42,8 @@ straightforward, some are more whimsical — include them anyway and cut later.
   swinging a pick; a calmer alternative to mining.
 - **Beachcombing** — shells, driftwood, sea glass, kelp; ideal for a
   tide-gated collection window (see below).
-- **Tide pooling** — only accessible at low tide, encourages players to
-  track a tide clock/schedule.
 - **Cave/underground foraging without mining** — glowing fungi, crystal
-  clusters, blind cave critters, root vegetables found by digging with
+  clusters, bat droppings, root vegetables found by digging with
   hands rather than a pickaxe.
 - **Hot spring / geyser minerals** — salts or clays that deposit near
   geothermal features, safe to collect at a distance.
@@ -59,11 +57,10 @@ straightforward, some are more whimsical — include them anyway and cut later.
 
 - **Rain and dew collection** — barrels or leaves that only produce water
   (or infused water) after rain; a passive structure the player checks
-  after storms.
-- **Snow and frost harvesting** — frost berries that only ripen in winter,
-  packed snow for an ice resource, icicle shards.
-- **Storm windfall** — branches, nuts, or rare items knocked loose by
-  storms, appearing the morning after bad weather.
+  after storms; built rainwater collection system to increase yield
+- **Seasonal crops and wild plants** - frost berries that only ripen in winter,
+  squash in late summer, apples in fall, spring ephemerals, late spring rhubarb
+  or asparagus
 - **Moonlight/night-only blooms** — flowers that only open at night or
   under a full moon, rewarding players who return at the right time.
 - **Migratory windows** — certain animals or birds only pass through during
@@ -73,27 +70,39 @@ straightforward, some are more whimsical — include them anyway and cut later.
 
 - **Bulletin board / notice board requests** — NPCs post "I need X"
   requests; fulfilling them nets rarer resources instead of gold.
+  - **Lost and found** — return a lost item to an NPC for a resource reward
+  (also a nice light narrative hook).
 - **Apprenticeship / working alongside an NPC** — help at the mill, tannery,
-  or bakery for a day and learn to source a new material, plus get a cut.
-- **Repair and odd jobs** — fixing an NPC's fence, roof, or cart pays out in
-  materials instead of currency.
-- **Renting land or tools** — pay to use someone's orchard, apiary, or
-  plot rather than owning one yet.
+  or bakery for a day and learn to source a new material or level up a skill,
+  plus get a cut.
 - **Community garden** — contribute labor to a shared plot, get a share of
   the harvest proportional to effort.
-- **Lost and found** — return a lost item to an NPC for a resource reward
-  (also a nice light narrative hook).
 - **Gift-triggered rewards** — as friendship with an NPC deepens, they
   start giving you access to resources they wouldn't sell to a stranger.
 
 ## Passive and structural
 
 - **Drying racks, smokers, presses** — crafting stations that convert one
-  gathered resource into a different, more refined one over time.
+  gathered resource into a different, more refined one over time. More examples
+  include:
+  - Kettle for making teas
+  - Pantry for storing ingredients
+  - Brewing or distilling equipment
+  - Stove for cooking down
+  - Pressure cooker
 - **Rain barrels / wind catchers** — small placeable structures that
   passively accumulate a resource for the player to collect on return.
 - **Compost bins** — a placed structure version of the composting idea
   above, so it's a base-building element too.
+
+## Magical sources and processing
+
+- **Alchemy for transmuting substances** — use mystical means combined with
+  scientific means to turn one ingredient into another more valuable ingredient
+- **Potion brewing** – use a cauldron and incantation to prepare potions from
+  ingredients with surprising properties
+- **Enchanting** - craft more effective tools or items by applying magic spells
+  or ingredients to existing equipment or facilities
 
 ## Exploration and events
 
@@ -121,3 +130,22 @@ straightforward, some are more whimsical — include them anyway and cut later.
 - Which gathering methods should feed which craft category (potions vs.
   food vs. tools vs. structures) — is there a clean mapping, or should most
   resources be multi-purpose?
+
+## Rejecting ideas
+
+- **Nesting boxes / birdhouses** — place structures in the world that
+  passively yield feathers or eggs on a timer once occupied. Rejected
+  because it involves stealing things from animals
+- **Milking, shearing, egg collecting** — livestock or tamed wildlife
+  tended at a farm/coop. Rejected because this involves taking things
+  from animals and milking requires depriving infant animals of milk
+- **Tide pooling** — only accessible at low tide, encourages players to
+  track a tide clock/schedule. Rejected because not many things that
+  come out of a tide pool come out unharmed
+- **Storm windfall** — branches, nuts, or rare items knocked loose by
+  storms, appearing the morning after bad weather. Rejected because this
+  is too random
+- **Renting land or tools** — pay to use someone's orchard, apiary, or
+  plot rather than owning one yet. Rejected because this adds an element
+  of stress and management to the game that reminds the player of their
+  own personal problems IRL
