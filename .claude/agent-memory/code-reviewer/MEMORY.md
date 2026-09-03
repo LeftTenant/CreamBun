@@ -2,7 +2,7 @@
 
 - [CreamBun Code Patterns](project_patterns.md) — durable Godot 4 / GDScript / Control / theme conventions; the "this is intentional, don't re-flag it" list
 - [Scene Migration Pattern](scene_migration_pattern.md) — notebook-tab `_ensure_pages_built()` page-extraction pattern, orphan trade-off, owner-clear, re-entrancy guards
-- [Testing Conventions](testing_conventions.md) — GUT conventions: `.uid`/`.import` companions, mirrored dirs, mirror-vs-relate file split, movement-test corridor rule, headless facts
+- [Testing Conventions](testing_conventions.md) — GUT conventions: test-plan locations + red-phase staleness, `.uid`/`.import` companions, mirrored dirs, corridor rule, headless facts
 - [Game Data Conventions](game_data_conventions.md) — PlayerData/SaveManager persistence: autoload never-null guarantee, ResourceSaver/CACHE_MODE_REPLACE facts, shared-settings-by-reference, hermetic user:// test I/O
 - [Perspective Terminology](project_perspective_terminology.md) — three-quarter top-down, never "isometric"; never name the projection in identifiers; square 32×16 grid
 - [.tscn Editor Drift](gotcha_tscn_editor_drift.md) — editor writes stray root-node `position` into scene files; `;` comments are dropped on re-save; audit every .tscn hunk against `main`
@@ -13,7 +13,7 @@
 - [find_child owned flag](gotcha_find_child_owned_flag.md) — `owned=true` prunes whole subtrees under script-instanced nodes; the `type` filter DOES resolve `class_name` (claims otherwise are false)
 - [LOADING guard masks the re-entry guard](gotcha_loading_guard_masks_reentry_guard.md) — ignore-set unobservable behind the LOADING early-return; physics_frame emission order; a LOADING bracket leaks the autoload if freed mid-await
 - [Invalid TileMap source_id paints silently](gotcha_tilemap_invalid_source_id_paints_silently.md) — `set_cell` with an undefined source still fills `get_used_rect()`; first TileSet source id is 1, not 0
-- [GUT helper silent passes](gotcha_gut_helper_silent_passes.md) — `return node as T` swallows a failed cast; `%` binds tighter than `+`; sentinel returns; a parse error drops a script yet still reports "All tests passed!"
+- [GUT helper silent passes](gotcha_gut_helper_silent_passes.md) — swallowed casts; `%` vs `+`; sentinel returns; a parse error drops a script yet reports "All tests passed!"; leftover `Enum.get("X",-1)`; bare `if has_x()` goes Risky-but-passing
 - [Player Sprite Geometry](reference_player_sprite_geometry.md) — measured opaque union is 26×27 at x[-13,13] y[-31,-4]; the "5px padding on every side / 22×22" claim is false
 - [Camera edge lock vs tall sprite](gotcha_camera_edge_lock_vs_tall_sprite.md) — the north headroom inset is DELETED; a flush north wall clips 17 of the sprite's 27 rows, now a per-area content decision
 - [Corner-gap wall test is inert](gotcha_perimeter_corner_gap_test_inert.md) — span-coverage can't prove corner closure on a wall ring; use the per-corner point-containment check instead
@@ -24,6 +24,10 @@
 - [@export_file String paths break on rename](gotcha_export_file_string_not_rename_tracked.md) — String paths aren't dependencies, so the editor never rewrites them; PackedScene isn't an option (loader deadlock)
 - [Sub-resource mutation leaks](gotcha_test_subresource_mutation_leak.md) — instantiate() shares [sub_resource]s process-wide; tests must assign not mutate, template scenes need resource_local_to_scene
 - [Synthetic clicks need a motion event](gotcha_synthetic_mouse_click_needs_motion.md) — inject motion before press AND release; button_down/up counters don't prove a click completed
+- [Stale-prose stragglers](gotcha_vocabulary_rename_stragglers.md) — the 7 places stale prose hides: README, design folder-tree, .gd comments, e2e md + screenshots, slice plans, test prose, "only/never" scope claims
 - [Control size vs theme min size](gotcha_control_size_vs_theme_min_size.md) — a .tscn's `size` grows to the theme minimum; measure e2e click rects, don't copy them from the scene
+- [Runtime theme override vs scene guard](gotcha_runtime_theme_override_vs_scene_guard.md) — `_ready()` overrides make .tscn color guards vacuous; removal falls through to white; hex == .tres floats exactly
+- [Theme type partial coverage](gotcha_theme_type_partial_coverage.md) — `Panel/styles/panel` never reaches `PanelContainer`; `Button/colors/font_color` alone is a contrast regression (3.9:1 → 2.5:1)
+- [Theme palette roles & contrast](reference_theme_palette_roles.md) — per-color roles live in the pixel-art-purist doc; `disabled` is a button color at ~1.9:1, `ink_muted` is the dimmed-text one
 
 Per-developer profile memories live in `.claude/agent-memory-local/code-reviewer/` (gitignored). Check there for any local context before reviewing.
